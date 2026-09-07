@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="hu" translate="no" class="notranslate">
+  <head>
+    <script>
+      (function() {
+        var CURRENT_BUILD = "v5.7_20260829_173300_cloudflare_real_file_dataurl";
+        try {
+          var savedBuild = localStorage.getItem("ilolit_build_id");
+          if (savedBuild !== CURRENT_BUILD) {
+            localStorage.setItem("ilolit_build_id", CURRENT_BUILD);
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistrations().then(function(regs) {
+                for (var i = 0; i < regs.length; i++) regs[i].unregister();
+              });
+            }
+            if ('caches' in window) {
+              caches.keys().then(function(names) {
+                for (var i = 0; i < names.length; i++) caches.delete(names[i]);
+              });
+            }
+            window.location.reload();
+          }
+        } catch(e) {}
+      })();
+    </script>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <title>ILOLIT – Piactér, Szolgáltatások, Szépségápolás & ILOLIT OKTATÁS</title>
+    <meta name="description" content="Lolit – Magyar második kézből árulós piactér. Adj el és vegyél használt tárgyakat könnyedén." />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:title" content="Lolit – Piactér" />
+    <meta property="og:description" content="Lolit – Magyar második kézből árulós piactér. Adj el és vegyél használt tárgyakat könnyedén." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Lolit – Piactér" />
+    <meta name="twitter:description" content="Lolit – Magyar második kézből árulós piactér. Adj el és vegyél használt tárgyakat könnyedén." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700&family=Poppins:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Cormorant+Garamond:wght@400;500;600;700&family=Dancing+Script:wght@400;600;700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

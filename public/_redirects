@@ -1,0 +1,2 @@
+# SPA fallback — minden route az index.html-t tölti be (React Router)
+/*  /index.html  200

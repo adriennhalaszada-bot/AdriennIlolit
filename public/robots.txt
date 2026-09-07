@@ -1,0 +1,25 @@
+# ==============================================
+# ILOLIT robots.txt
+# https://www.ilolit.com
+# ==============================================
+
+User-agent: *
+Allow: /
+
+# Privát / auth-only oldalak — nem kell indexelni
+Disallow: /auth/
+Disallow: /dashboard/
+Disallow: /settings/
+Disallow: /admin/
+Disallow: /checkout/
+Disallow: /username-setup
+Disallow: /messages/
+Disallow: /notifications
+Disallow: /media-manager
+Disallow: /sell
+Disallow: /hirdetesfigyelo
+Disallow: /kedvenc-eladok
+Disallow: /interactive-calendar
+
+# Sitemap
+Sitemap: https://www.ilolit.com/sitemap-index.xml

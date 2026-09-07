@@ -1,0 +1,85 @@
+# ==============================================
+# Cloudflare Pages _headers – ILOLIT
+# ==============================================
+
+# Default: SPA oldalak ne legyenek CDN-cachelve (friss React build-ek miatt)
+/*
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0, s-maxage=0
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+  Pragma: no-cache
+  Expires: 0
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# Hashed static assets – hosszú cache (Vite hashelt fájlneveket generál)
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# ── NOINDEX ZÓNÁK (auth, private, admin) ──
+# HTTP header szinten is noindex – nem csak React hook
+
+/auth/*
+  X-Robots-Tag: noindex, follow
+
+/dashboard/*
+  X-Robots-Tag: noindex, follow
+
+/settings/*
+  X-Robots-Tag: noindex, follow
+
+/admin/*
+  X-Robots-Tag: noindex, follow
+
+/checkout/*
+  X-Robots-Tag: noindex, follow
+
+/messages/*
+  X-Robots-Tag: noindex, follow
+
+/notifications
+  X-Robots-Tag: noindex, follow
+
+/username-setup
+  X-Robots-Tag: noindex, follow
+
+/media-manager
+  X-Robots-Tag: noindex, follow
+
+/sell
+  X-Robots-Tag: noindex, follow
+
+/beauty/register
+  X-Robots-Tag: noindex, follow
+
+/beauty/dashboard
+  X-Robots-Tag: noindex, follow
+
+/beauty/bookings
+  X-Robots-Tag: noindex, follow
+
+/providers/register
+  X-Robots-Tag: noindex, follow
+
+/providers/dashboard
+  X-Robots-Tag: noindex, follow
+
+/real-estate/dashboard
+  X-Robots-Tag: noindex, follow
+
+/vehicles/dashboard
+  X-Robots-Tag: noindex, follow
+
+# ── SITEMAP és robots.txt ──
+/sitemap-index.xml
+  Content-Type: application/xml; charset=utf-8
+  Cache-Control: public, max-age=3600
+
+/sitemap-pages.xml
+  Content-Type: application/xml; charset=utf-8
+  Cache-Control: public, max-age=3600
+
+/robots.txt
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: public, max-age=3600
