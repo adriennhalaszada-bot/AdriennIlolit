@@ -312,9 +312,14 @@ function AppRouterInner() {
       <Route path="/education" component={EducationPage} />
       <Route path="/oktatas" component={EducationPage} />
       <Route path="/kurzusok" component={EducationPage} />
+      {/* Keep the concrete dashboard routes before the dashboard root.
+          These used to live behind a catch-all route, which left direct
+          Cloudflare page loads such as /dashboard/listings completely blank. */}
+      <Route path="/dashboard/listings" component={DashboardListings} />
+      <Route path="/dashboard/favorites" component={DashboardFavorites} />
+      <Route path="/dashboard/transactions" component={DashboardTransactions} />
       <Route path="/account" component={Dashboard} />
       <Route path="/dashboard" component={Dashboard} />
-      <Route path="/dashboard/favorites" component={DashboardFavorites} />
       <Route path="/notifications" component={Hirdetesfigyelo} />
       <Route path="/hirdetesfigyelo" component={Hirdetesfigyelo} />
       <Route path="/messages" component={Messages} />
