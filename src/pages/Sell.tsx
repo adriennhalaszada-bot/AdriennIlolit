@@ -399,7 +399,10 @@ export function Sell() {
         />
       )}
 
-      <div className="container mx-auto px-4 py-8 max-w-2xl">
+      <div className={cn(
+        "container mx-auto px-4 py-8 max-w-2xl",
+        isEdit ? "pb-28 sm:pb-8" : "pb-24 sm:pb-8"
+      )}>
         <h1 className="text-2xl font-bold mb-2">{isEdit ? "Hirdetés szerkesztése" : "Új hirdetés feladása"}</h1>
 
         {/* Magánszemély hirdetési keret (Max 50 termék) */}
@@ -837,7 +840,7 @@ export function Sell() {
 
             {/* Navigation buttons */}
             {!isEdit ? (
-              <div className="flex gap-3 pt-2">
+              <div className="sticky bottom-0 z-30 -mx-4 flex gap-3 border-t bg-background/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:pt-2 sm:shadow-none">
                 {step > 0 && (
                   <Button type="button" variant="outline" onClick={goPrev} className="flex items-center gap-2">
                     <ChevronLeft className="w-4 h-4" /> Vissza
@@ -854,9 +857,13 @@ export function Sell() {
                 )}
               </div>
             ) : (
-              <Button type="submit" className="w-full" disabled={updateListing.isPending}>
-                {updateListing.isPending ? "Mentés..." : "Mentés"}
-              </Button>
+              <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:shadow-none">
+                <div className="mx-auto max-w-2xl">
+                  <Button type="submit" className="w-full min-h-12 text-base font-bold" disabled={updateListing.isPending}>
+                    {updateListing.isPending ? "Mentés..." : "Módosítások mentése"}
+                  </Button>
+                </div>
+              </div>
             )}
           </form>
         </Form>
