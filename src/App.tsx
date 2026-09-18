@@ -397,7 +397,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v4.3_20260918_real_clerk_auth";
+    const CURRENT_VER = "v4.4_20260918_clerk_provider_fix";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);
@@ -413,6 +413,16 @@ function AutoCacheInvalidator() {
 }
 
 function App() {
+  if (!clerkPubKey) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center p-6 text-center">
+        <p className="max-w-md font-semibold text-rose-700">
+          A bejelentkezési szolgáltatás nincs konfigurálva. Kérjük, próbáld újra később.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -423,9 +433,15 @@ function App() {
               <ComparisonProvider>
                 <WouterRouter base={basePath}>
                   <ErrorBoundary>
-                    <SafeClerkProvider>
+                    <ClerkProvider
+                      publishableKey={clerkPubKey}
+                      proxyUrl={clerkProxyUrl}
+                      signInUrl={`${basePath}/auth/login`}
+                      signUpUrl={`${basePath}/auth/register`}
+                    >
+                      <SafeClerkTokenSetter />
                       <AppRouterInner />
-                    </SafeClerkProvider>
+                    </ClerkProvider>
                   </ErrorBoundary>
                 </WouterRouter>
                 <Toaster />
