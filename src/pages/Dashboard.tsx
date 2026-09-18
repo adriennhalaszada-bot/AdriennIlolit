@@ -90,12 +90,17 @@ export function Dashboard() {
               ))}
 
               <button
-                onClick={() => {
-                  try { signOut(); } catch (e) {}
-                  localStorage.removeItem("ilolit_auth");
-                  window.dispatchEvent(new Event("ilolit_auth_change"));
-                  toast({ title: "Kijelentkezve" });
-                  setLocation("/");
+                onClick={async () => {
+                  try {
+                    await signOut({ redirectUrl: "/" });
+                  } catch (error) {
+                    console.error("Clerk sign-out failed:", error);
+                  } finally {
+                    localStorage.removeItem("ilolit_auth");
+                    localStorage.removeItem("ilolit_user");
+                    window.dispatchEvent(new Event("ilolit_auth_change"));
+                    window.location.assign("/");
+                  }
                 }}
                 className="w-full flex items-center gap-3 p-3 rounded-2xl text-rose-600 hover:bg-rose-50 font-bold transition-all mt-4 cursor-pointer"
               >
