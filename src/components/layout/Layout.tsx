@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { useUser } from "@clerk/react";
+import { useUser, UserButton } from "@clerk/react";
 import { Home, PlusCircle, MessageCircle, User, Store, Sparkles, Cloud, Car, GraduationCap, Wrench, Search, Heart, BookmarkPlus, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -79,6 +79,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 function DesktopNav({ onOpenTestModal }: { onOpenTestModal?: () => void }) {
   const [, navigate] = useLocation();
   const [location] = useLocation();
+  const { isSignedIn, isLoaded } = useUser();
 
   const navItems = [
     { href: "/marketplace", label: "Piactér", icon: Store },
@@ -164,12 +165,29 @@ function DesktopNav({ onOpenTestModal }: { onOpenTestModal?: () => void }) {
 
           <NotificationDropdown />
 
-          <Button asChild size="default" className="h-10 px-4 rounded-xl font-extrabold text-xs md:text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm cursor-pointer">
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <User className="w-4 h-4" />
-              <span className="hidden sm:inline">Fiókom</span>
-            </Link>
-          </Button>
+          {isLoaded && isSignedIn ? (
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5">
+              <UserButton
+                afterSignOutUrl="/"
+                appearance={{
+                  elements: {
+                    avatarBox: "h-7 w-7",
+                    userButtonPopoverActionButton: "cursor-pointer",
+                  },
+                }}
+              />
+              <Link href="/dashboard" className="hidden sm:inline text-xs md:text-sm font-extrabold text-emerald-700">
+                Fiókom
+              </Link>
+            </div>
+          ) : (
+            <Button asChild size="default" className="h-10 px-4 rounded-xl font-extrabold text-xs md:text-sm bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm cursor-pointer">
+              <Link href="/auth/login" className="flex items-center gap-2">
+                <User className="w-4 h-4" />
+                <span className="hidden sm:inline">Belépés</span>
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
     </header>
