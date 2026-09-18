@@ -21,6 +21,7 @@ import { Gavel, Handshake, ShoppingBag, Truck, MapPin, Package, ChevronRight, Ch
 import { ImageUploader } from "@/components/shared/ImageUploader";
 import { cn } from "@/lib/utils";
 import { validateListingContent } from "@/lib/contentValidator";
+import { getSortedCategoryTree } from "@/data/categoriesData";
 
 const COLORS = [
   { value: "fehér", label: "Fehér", hex: "#F9FAFB", border: true },
@@ -271,7 +272,24 @@ export function Sell() {
   const selectedColor = form.watch("color");
   const selectedCategoryId = form.watch("categoryId");
 
-  const selectedCategory = (allCategories as any[])?.find((c: any) => c.id === selectedCategoryId);
+  // The categories endpoint can return either a plain array or a paginated
+  // object.  Older mobile sessions may also have a non-array response cached.
+  // Never call Array methods on the raw response directly.
+  const apiCategoryItems = Array.isArray(allCategories)
+    ? allCategories
+    : Array.isArray((allCategories as any)?.items)
+      ? (allCategories as any).items
+      : Array.isArray((allCategories as any)?.data)
+        ? (allCategories as any).data
+        : [];
+  const categories = apiCategoryItems.length > 0
+    ? apiCategoryItems
+    : getSortedCategoryTree().map((category) => ({
+        ...category,
+        subcategories: category.children ?? [],
+      }));
+
+  const selectedCategory = categories.find((c: any) => c.id === selectedCategoryId);
   const subcategories: any[] = (selectedCategory as any)?.subcategories ?? [];
   const showSize = CLOTHING_SLUGS.includes(selectedCategory?.slug ?? "");
   const isShoeCategory = selectedCategory?.slug === "cipo";
@@ -489,7 +507,7 @@ export function Sell() {
                     <Select onValueChange={(v) => { field.onChange(v); form.setValue("subcategoryId", null); }} value={field.value}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Válassz kategóriát" /></SelectTrigger></FormControl>
                       <SelectContent>
-                        {(allCategories as any[] || []).map((c: any) => (
+                        {categories.map((c: any) => (
                           <SelectItem key={c.id} value={c.id}>{c.icon} {c.name}</SelectItem>
                         ))}
                       </SelectContent>

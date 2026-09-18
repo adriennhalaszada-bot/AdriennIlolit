@@ -457,7 +457,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v3.7_20260918_dashboard_route_fix";
+    const CURRENT_VER = "v3.8_20260918_mobile_category_fix";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);
