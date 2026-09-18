@@ -112,8 +112,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   }
 }
 
-const defaultClerkKey = "pk_test_cG9zc2libGUtb3Bvc3N1bS04NC5jbGVyay5hY2NvdW50cy5kZXYk";
-const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || defaultClerkKey;
+const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
 const basePath = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
@@ -431,6 +430,10 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
   }
   render() {
     if (this.state.hasError) {
+      return <>{this.props.children}</>;
+    }
+    if (!clerkPubKey) {
+      console.error("VITE_CLERK_PUBLISHABLE_KEY is not configured.");
       return <>{this.props.children}</>;
     }
     return (

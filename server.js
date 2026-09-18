@@ -226,7 +226,6 @@ const server = http.createServer((req, res) => {
         }
 
         // Daily upload quota check
-        const items = loadMediaItems().filter(m => !m.deletedAt);
         const today = new Date().toISOString().split('T')[0];
         const uploadsTodayCount = items.filter(m => m.createdAt && m.createdAt.startsWith(today)).length;
         if (uploadsTodayCount >= 50) {

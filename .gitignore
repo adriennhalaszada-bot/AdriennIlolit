@@ -1,6 +1,7 @@
 node_modules
+.tsbuildinfo
+.wrangler
 dist
 .env
 .cache
 .wrangler
-
