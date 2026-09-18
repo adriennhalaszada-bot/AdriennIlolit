@@ -46,9 +46,9 @@ export function BeautyProviderProfile() {
   let isSignedIn = false;
   try {
     const userRes = useUser();
-    isSignedIn = !!userRes?.isSignedIn || localStorage.getItem("ilolit_auth") === "logged_in";
+    isSignedIn = !!userRes?.isSignedIn;
   } catch (e) {
-    isSignedIn = localStorage.getItem("ilolit_auth") === "logged_in";
+    isSignedIn = false;
   }
   const { toast } = useToast();
   const [reviewPage] = useState(1);
