@@ -1,15 +1,14 @@
-import { Switch, Route, Redirect, Router as WouterRouter, useLocation, Link } from "wouter";
+import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
 import { ClerkProvider, SignIn, SignUp, Show, useUser, useAuth } from '@clerk/react';
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { queryClient } from "@/lib/queryClient";
-import { useEffect, useState, Component } from "react";
+import { useEffect, Component } from "react";
 import type { ReactNode } from "react";
 import { useSyncUser, useGetMe, getGetMeQueryKey, setAuthTokenGetter } from "@workspace/api-client-react";
 import { useSeoHead } from "@/hooks/useSeoHead";
 import { Layout } from "@/components/layout/Layout";
-import { Button } from "@/components/ui/button";
 
 import { Home } from "./pages/Home";
 import { Search } from "./pages/Search";
@@ -45,7 +44,6 @@ import { ShopPage } from "./pages/ShopPage";
 import { BusinessCommissionDashboard } from "./pages/BusinessCommissionDashboard";
 import { AdminCategoriesPage } from "./pages/AdminCategories";
 import { AdminDisputes } from "./pages/AdminDisputes";
-import { RegisterPage } from "./pages/RegisterPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { InteractiveCalendarBookingApp } from "./pages/InteractiveCalendarBookingApp";
 import { MediaManagerPage } from "./pages/MediaManagerPage";
@@ -124,6 +122,9 @@ function ClerkTokenSetter() {
   try {
     const { getToken } = useAuth();
     useEffect(() => {
+      // Remove the legacy demo-login flag. Authentication must come from a
+      // real Clerk session so protected API requests receive a valid JWT.
+      localStorage.removeItem("ilolit_auth");
       setAuthTokenGetter(() => getToken());
       return () => setAuthTokenGetter(null);
     }, [getToken]);
@@ -172,94 +173,33 @@ function SyncUserWrapper({ children }: { children: React.ReactNode }) {
 }
 
 function SignInPage() {
-  const [, navigate] = useLocation();
-  const [email, setEmail] = useState("janos.kiss@example.com");
-  const [password, setPassword] = useState("DemoPass123!");
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    localStorage.setItem("ilolit_auth", "logged_in");
-    window.dispatchEvent(new Event("ilolit_auth_change"));
-    navigate("/dashboard");
-  };
-
-  const handleQuickLogin = (target: "/dashboard" | "/beauty/dashboard") => {
-    localStorage.setItem("ilolit_auth", "logged_in");
-    window.dispatchEvent(new Event("ilolit_auth_change"));
-    navigate(target);
-  };
-
   return (
     <Layout>
       <div className="flex min-h-[75vh] items-center justify-center bg-slate-50 dark:bg-slate-950 px-4 py-12">
-        <div className="w-full max-w-md p-8 space-y-6 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-          <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 font-extrabold text-xl flex items-center justify-center mx-auto border-2 border-emerald-500">
-              🔑
-            </div>
-            <h2 className="text-2xl font-black text-slate-900 dark:text-slate-100">ILOLIT Bejelentkezés</h2>
-            <p className="text-xs text-slate-500 font-medium">Lépj be a fiókodba a funkciók eléréséhez!</p>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">E-mail cím</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full mt-1 px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-background text-sm font-medium focus:ring-2 focus:ring-emerald-500 outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Jelszó</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full mt-1 px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-background text-sm font-medium focus:ring-2 focus:ring-emerald-500 outline-none"
-              />
-            </div>
-
-            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-6 rounded-2xl text-base shadow-md">
-              Bejelentkezés ➔
-            </Button>
-          </form>
-
-          <div className="relative border-t my-4 text-center">
-            <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-900 px-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-              Gyors Belépés Demó Fiókkal
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Button variant="outline" type="button" onClick={() => handleQuickLogin("/dashboard")} className="rounded-2xl text-xs font-extrabold border-slate-300 hover:bg-slate-100 py-5">
-              👤 Vendég Fiók
-            </Button>
-            <Button variant="outline" type="button" onClick={() => handleQuickLogin("/beauty/dashboard")} className="rounded-2xl text-xs font-extrabold border-emerald-300 text-emerald-700 hover:bg-emerald-50 py-5">
-              💼 Szolgáltatói Fiók
-            </Button>
-          </div>
-
-          <div className="text-center pt-3 border-t">
-            <p className="text-xs text-slate-500 font-medium">
-              Még nincs fiókod?{" "}
-              <Link href="/auth/register" className="font-extrabold text-emerald-600 hover:underline">
-                Regisztrálj most!
-              </Link>
-            </p>
-          </div>
-        </div>
+        <SignIn
+          routing="path"
+          path="/auth/login"
+          signUpUrl="/auth/register"
+          forceRedirectUrl="/dashboard"
+        />
       </div>
     </Layout>
   );
 }
 
 function SignUpPage() {
-  return <RegisterPage />;
+  return (
+    <Layout>
+      <div className="flex min-h-[75vh] items-center justify-center bg-slate-50 dark:bg-slate-950 px-4 py-12">
+        <SignUp
+          routing="path"
+          path="/auth/register"
+          signInUrl="/auth/login"
+          forceRedirectUrl="/dashboard"
+        />
+      </div>
+    </Layout>
+  );
 }
 
 function UsernameGuardRoute({ component: Component, ...rest }: any) {
@@ -352,7 +292,7 @@ function AppRouterInner() {
       <Route path="/checkout/success" component={CheckoutSuccess} />
       <Route path="/checkout/cancel" component={CheckoutCancel} />
 
-      <Route path="/auth/register" component={RegisterPage} />
+      <Route path="/auth/register" component={SignUpPage} />
       <Route path="/auth/login" component={SignInPage} />
       <Route path="/auth/forgot-password" component={ForgotPasswordPage} />
       <Route path="/auth/reset-password" component={ForgotPasswordPage} />
@@ -457,7 +397,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v4.2_20260918_clerk_user_button";
+    const CURRENT_VER = "v4.3_20260918_real_clerk_auth";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);
