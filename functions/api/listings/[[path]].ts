@@ -1,5 +1,3 @@
-import { verifyToken } from "@clerk/backend";
-
 interface Env {
   MEDIA_BUCKET: R2Bucket;
   CLERK_SECRET_KEY: string;
@@ -35,15 +33,71 @@ function routeParts(context: PagesContext): string[] {
 
 async function currentUserId(context: PagesContext): Promise<string | null> {
   const authorization = context.request.headers.get("Authorization");
-  const token = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
-  if (!token || !context.env.CLERK_SECRET_KEY) return null;
+  const bearerToken = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const sessionCookie = context.request.headers.get("Cookie")
+    ?.split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith("__session="))
+    ?.slice("__session=".length);
+  const token = bearerToken || sessionCookie;
+  if (!token) return null;
 
   try {
-    const claims = await verifyToken(token, {
-      secretKey: context.env.CLERK_SECRET_KEY,
-      authorizedParties: ["https://ilolit.com", "https://www.ilolit.com"],
-    });
-    return typeof claims.sub === "string" ? claims.sub : null;
+    const [encodedHeader, encodedPayload, encodedSignature] = token.split(".");
+    if (!encodedHeader || !encodedPayload || !encodedSignature) return null;
+
+    const decodePart = (value: string) => {
+      const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+      return JSON.parse(new TextDecoder().decode(
+        Uint8Array.from(atob(padded), (character) => character.charCodeAt(0)),
+      ));
+    };
+    const toBytes = (value: string) => {
+      const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+      return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+    };
+
+    const header = decodePart(encodedHeader);
+    const claims = decodePart(encodedPayload);
+    if (header.alg !== "RS256" || typeof header.kid !== "string") return null;
+    if (typeof claims.iss !== "string" || typeof claims.sub !== "string") return null;
+
+    const issuer = new URL(claims.iss);
+    const trustedIssuer = issuer.protocol === "https:" && (
+      issuer.hostname.endsWith(".clerk.accounts.dev") ||
+      issuer.hostname === "clerk.ilolit.com"
+    );
+    if (!trustedIssuer) return null;
+
+    const now = Math.floor(Date.now() / 1000);
+    if (typeof claims.exp !== "number" || claims.exp <= now - 30) return null;
+    if (typeof claims.nbf === "number" && claims.nbf > now + 30) return null;
+    if (claims.azp && !["https://ilolit.com", "https://www.ilolit.com"].includes(claims.azp)) {
+      return null;
+    }
+
+    const jwksResponse = await fetch(`${issuer.origin}/.well-known/jwks.json`);
+    if (!jwksResponse.ok) return null;
+    const jwks = await jwksResponse.json<any>();
+    const jwk = jwks.keys?.find((key: any) => key.kid === header.kid);
+    if (!jwk) return null;
+
+    const publicKey = await crypto.subtle.importKey(
+      "jwk",
+      jwk,
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["verify"],
+    );
+    const valid = await crypto.subtle.verify(
+      "RSASSA-PKCS1-v1_5",
+      publicKey,
+      toBytes(encodedSignature),
+      new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`),
+    );
+    return valid ? claims.sub : null;
   } catch {
     return null;
   }
