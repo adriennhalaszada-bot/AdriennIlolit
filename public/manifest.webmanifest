@@ -1,16 +1,16 @@
 {
-  "short_name": "Beauty Lolit",
-  "name": "Beauty Lolit - Szépségápolási & Szolgáltatói Platform",
+  "short_name": "ILOLIT",
+  "name": "ILOLIT – Minden, amire szükséged lehet egy helyen",
   "icons": [
     {
-      "src": "/favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
     }
   ],
   "start_url": "/",
   "background_color": "#ffffff",
-  "theme_color": "#f43f5e",
+  "theme_color": "#059669",
   "display": "standalone",
   "orientation": "portrait"
 }
