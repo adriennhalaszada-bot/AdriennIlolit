@@ -1,12 +1,12 @@
 import { Layout } from "@/components/layout/Layout";
 import { useGetFeaturedListings } from "@workspace/api-client-react";
 import { Link } from "wouter";
-import { UnifiedModuleHeader } from "@/components/shared/UnifiedModuleHeader";
 import { UnifiedListingCard } from "@/components/shared/UnifiedListingCard";
 import { Button } from "@/components/ui/button";
 import {
   Store, Sparkles, Home as HomeIcon, Car,
-  GraduationCap, Wrench, Play, X, Check, ArrowRight
+  GraduationCap, Wrench, Play, X, Check, ArrowRight, Search, MapPin,
+  ShieldCheck, CalendarCheck, BadgeCheck, PlusCircle
 } from "lucide-react";
 import { useState } from "react";
 import { AuthModal } from "@/components/auth/AuthModal";
@@ -19,6 +19,33 @@ const VERTICALS = [
   { id: "real-estate", title: "Ingatlanok", desc: "Eladó és kiadó lakások, házak, telek keresővel", icon: HomeIcon, href: "/real-estate" },
   { id: "vehicles", title: "Járművek", desc: "Személyautók, motorkerékpárok és alkatrészek", icon: Car, href: "/vehicles" },
   { id: "education", title: "Oktatás", desc: "Szakmai továbbképzések, tanfolyamok és kvízek", icon: GraduationCap, href: "/education" },
+];
+
+const USER_JOURNEYS = [
+  {
+    title: "Vásárolnék",
+    description: "Termékek, ingatlanok és járművek egy helyen.",
+    href: "/marketplace",
+    icon: Search,
+  },
+  {
+    title: "Eladnék",
+    description: "Adj fel hirdetést átlátható, vezetett folyamatban.",
+    href: "/sell",
+    icon: PlusCircle,
+  },
+  {
+    title: "Időpontot foglalnék",
+    description: "Szépségápolási szolgáltatók és szabad időpontok.",
+    href: "/beauty",
+    icon: CalendarCheck,
+  },
+  {
+    title: "Szakembert keresek",
+    description: "Ellenőrzött szolgáltatók, értékelések és ajánlatok.",
+    href: "/providers",
+    icon: BadgeCheck,
+  },
 ];
 
 const MOCK_SHOWCASE_DATA = {
@@ -80,27 +107,97 @@ export function Home() {
         initialMode={authMode}
       />
 
-      {/* ── 1. UNIFIED PAGE HEADER SCHEMA ── */}
-      <UnifiedModuleHeader
-        title="ILOLIT Komplex Platform"
-        subtitle="Vásárolj, foglalj szépségápolási időpontot, keress szakembert, találd meg leendő ingatlanodat vagy járművedet, és tanulj – egyetlen professzionális felületen."
-        searchPlaceholder="Mit keresel ma? (pl. bőrdzseki, fodrász, 2 szobás lakás, BMW)"
-        searchValue={searchValue}
-        onSearchChange={setSearchValue}
-        locationValue={locationValue}
-        onLocationChange={setLocationValue}
-        onSearchSubmit={() => {
-          window.location.href = `/universal-search?q=${encodeURIComponent(searchValue)}`;
-        }}
-      />
+      {/* ── 1. CLEAR VALUE PROPOSITION AND PRIMARY ACTIONS ── */}
+      <section className="border-b border-slate-200 bg-[radial-gradient(circle_at_top_left,_#ecfdf5_0,_#ffffff_48%)] px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="max-w-4xl space-y-6">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-bold text-emerald-800 shadow-sm">
+              <ShieldCheck className="h-4 w-4" />
+              Egy fiók. Hat terület. Átlátható ügyintézés.
+            </div>
+            <div className="space-y-4">
+              <h1 className="max-w-4xl text-4xl font-black tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
+                Amit keresel, intézd el egy helyen.
+              </h1>
+              <p className="max-w-3xl text-base leading-relaxed text-slate-600 sm:text-lg">
+                Vásárolj és adj el, foglalj időpontot, találj szakembert, ingatlant,
+                járművet vagy képzést – külön oldalak és felesleges regisztrációk nélkül.
+              </p>
+            </div>
+
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                const params = new URLSearchParams();
+                if (searchValue.trim()) params.set("q", searchValue.trim());
+                if (locationValue.trim()) params.set("location", locationValue.trim());
+                window.location.href = `/universal-search?${params.toString()}`;
+              }}
+              className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg shadow-slate-200/60 md:grid-cols-[minmax(0,1fr)_240px_auto]"
+            >
+              <label className="flex min-w-0 items-center gap-3 rounded-xl px-3 py-3 focus-within:bg-slate-50">
+                <Search className="h-5 w-5 shrink-0 text-emerald-600" />
+                <span className="sr-only">Keresett termék vagy szolgáltatás</span>
+                <input
+                  value={searchValue}
+                  onChange={(event) => setSearchValue(event.target.value)}
+                  className="w-full bg-transparent text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
+                  placeholder="Mit keresel? Például fodrász, kanapé vagy lakás"
+                />
+              </label>
+              <label className="flex items-center gap-3 rounded-xl border-t border-slate-100 px-3 py-3 focus-within:bg-slate-50 md:border-l md:border-t-0">
+                <MapPin className="h-5 w-5 shrink-0 text-emerald-600" />
+                <span className="sr-only">Település</span>
+                <input
+                  value={locationValue}
+                  onChange={(event) => setLocationValue(event.target.value)}
+                  className="w-full bg-transparent text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
+                  placeholder="Település"
+                />
+              </label>
+              <Button type="submit" className="h-12 rounded-xl bg-emerald-600 px-7 font-bold text-white hover:bg-emerald-700">
+                Keresés
+              </Button>
+            </form>
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button asChild className="h-12 rounded-xl bg-emerald-600 px-6 font-bold text-white hover:bg-emerald-700">
+                <Link href="/sell">Hirdetést adok fel <ArrowRight className="ml-2 h-4 w-4" /></Link>
+              </Button>
+              <Button asChild variant="outline" className="h-12 rounded-xl border-slate-300 px-6 font-bold text-slate-800 hover:bg-white">
+                <Link href="/providers">Szolgáltatást keresek</Link>
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {USER_JOURNEYS.map((journey) => {
+              const Icon = journey.icon;
+              return (
+                <Link key={journey.title} href={journey.href} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="font-extrabold text-slate-900 group-hover:text-emerald-700">{journey.title}</h2>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-500">{journey.description}</p>
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
       {/* ── 2. 6 MAIN VERTICALS GRID ── */}
       <section className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Fő Kategóriák
+            Fő területek
           </h2>
-          <span className="text-xs text-slate-500 font-medium">6 Fő Modul</span>
+          <span className="text-xs text-slate-500 font-medium">Minden szolgáltatás egy fiókkal</span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
