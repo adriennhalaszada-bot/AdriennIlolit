@@ -5,10 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.config.ts --host 0.0.0.0",
+    "build:api-client": "tsc -b lib/api-client-react",
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "deploy": "wrangler pages deploy dist/public --project-name ilolit",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "pretypecheck": "pnpm build:api-client",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check": "pnpm typecheck && pnpm build"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",
