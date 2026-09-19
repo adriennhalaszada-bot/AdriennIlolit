@@ -22,7 +22,8 @@ import {
   PackageCheck
 } from "lucide-react";
 import { formatPrice } from "@/lib/constants";
-import { calculateSafetyFee } from "@/lib/feeCalculator";\nimport { useGetListings } from "@workspace/api-client-react";
+import { calculateSafetyFee } from "@/lib/feeCalculator";
+import { useGetListings } from "@workspace/api-client-react";
 
 export interface MarketplaceItem {
   id: string;
@@ -394,6 +395,7 @@ export function Search() {
       );
     });
   }, [
+    marketplaceItems,
     searchQuery,
     categorySlug,
     conditionFilter,
