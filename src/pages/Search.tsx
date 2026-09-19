@@ -22,7 +22,7 @@ import {
   PackageCheck
 } from "lucide-react";
 import { formatPrice } from "@/lib/constants";
-import { calculateSafetyFee } from "@/lib/feeCalculator";
+import { calculateSafetyFee } from "@/lib/feeCalculator";\nimport { useGetListings } from "@workspace/api-client-react";
 
 export interface MarketplaceItem {
   id: string;
@@ -278,6 +278,54 @@ export function Search() {
 
   const [showCategoryTree, setShowCategoryTree] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MarketplaceItem | null>(null);
+  const { data: liveListingPage } = useGetListings({ limit: 100 });
+
+  const liveMarketplaceItems = useMemo<MarketplaceItem[]>(() => {
+    const items = Array.isArray((liveListingPage as any)?.items) ? (liveListingPage as any).items : [];
+    const conditionLabels: Record<string, string> = {
+      NEW_WITH_TAG: "Új, címkés",
+      NEW_WITHOUT_TAG: "Új, címke nélkül",
+      VERY_GOOD: "Nagyon jó állapotú",
+      GOOD: "Jó állapotú",
+      ACCEPTABLE: "Elfogadható állapotú",
+    };
+    const conditionValues: Record<string, MarketplaceItem["condition"]> = {
+      NEW_WITH_TAG: "new",
+      NEW_WITHOUT_TAG: "new",
+      VERY_GOOD: "like_new",
+      GOOD: "good",
+      ACCEPTABLE: "used",
+    };
+
+    return items
+      .filter((listing: any) => listing?.status === "ACTIVE" && !listing?.isSold)
+      .map((listing: any) => ({
+        id: listing.id,
+        title: listing.title || "Névtelen hirdetés",
+        categorySlug: listing.category?.slug || "egyeb",
+        categoryName: listing.category?.name || "Egyéb",
+        price: Number(listing.price) || 0,
+        originalPrice: listing.originalPrice ?? undefined,
+        listingType: listing.listingType || "DIRECT",
+        listingTypeLabel: listing.listingType === "AUCTION" ? "Lolit Licit" : listing.listingType === "NEGOTIABLE" ? "Lolit Deal" : "Fix áras",
+        condition: conditionValues[listing.condition] || "used",
+        conditionLabel: conditionLabels[listing.condition] || "Állapot nincs megadva",
+        brand: listing.brand || "",
+        location: listing.user?.location || "Magyarország",
+        image: Array.isArray(listing.images) && listing.images[0]?.url ? listing.images[0].url : "https://placehold.co/800x800/e2e8f0/1e293b?text=Nincs+kép",
+        seller: listing.user?.username || listing.user?.fullName || "Eladó",
+        sellerType: "PRIVATE",
+        sellerRating: Number(listing.user?.rating) || 0,
+        sellerReviewsCount: Number(listing.user?.reviewCount) || 0,
+        description: listing.description || "",
+        createdAt: listing.createdAt || new Date().toISOString(),
+      }));
+  }, [liveListingPage]);
+
+  const marketplaceItems = useMemo(() => {
+    const liveIds = new Set(liveMarketplaceItems.map((item) => item.id));
+    return [...liveMarketplaceItems, ...MOCK_MARKETPLACE_ITEMS.filter((item) => !liveIds.has(item.id))];
+  }, [liveMarketplaceItems]);
 
   // Clean Categories list
   const quickCategories = [
@@ -307,7 +355,7 @@ export function Search() {
 
   // Filter items
   const filteredItems = useMemo(() => {
-    return MOCK_MARKETPLACE_ITEMS.filter((item) => {
+    return marketplaceItems.filter((item) => {
       const matchesSearch =
         searchQuery === "" ||
         item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
