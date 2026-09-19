@@ -704,7 +704,7 @@ export function Product() {
                   </Link>
 
                   <div className="flex gap-2 w-full sm:w-auto flex-wrap">
-                    <FollowSellerButton sellerId={listing.user.id || listing.user.username} sellerName={listing.user.username} compact={true} />
+                    <FollowSellerButton sellerId={listing.user.id || listing.user.username} sellerName={listing.user.username || "Eladó"} compact={true} />
                     <Button variant="outline" size="sm" onClick={() => setIsReviewModalOpen(true)} className="flex-1 text-xs font-bold border-amber-300 text-amber-700 hover:bg-amber-50">
                       <Star className="w-3.5 h-3.5 mr-1 fill-amber-400 text-amber-400" /> Értékelés
                     </Button>
@@ -725,12 +725,12 @@ export function Product() {
                 sellerName={listing.user.username}
                 currentProduct={{ id: listing.id, title: listing.title, priceNum: listing.price, image: imageUrl }}
                 otherItemsBySeller={
-                  similarListings?.map(s => ({
+                  (Array.isArray(similarListings) ? similarListings : []).map(s => ({
                     id: s.id,
                     title: s.title,
                     priceNum: s.price,
-                    image: s.images?.[0]?.url || "https://placehold.co/300x300"
-                  })) || []
+                    image: Array.isArray(s.images) ? s.images[0]?.url || "https://placehold.co/300x300" : "https://placehold.co/300x300"
+                  }))
                 }
               />
             )}
@@ -878,7 +878,7 @@ export function Product() {
           size: listing.size || undefined,
           brand: listing.brand || undefined,
           description: listing.description || "",
-          images: listing.images?.map((i) => i.url) || [],
+          images: Array.isArray(listing.images) ? listing.images.map((i) => i.url) : [],
           status: (listing as any).status || "active",
         }}
         onSaveListing={(updated) => {
