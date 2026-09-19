@@ -1,6 +1,6 @@
 # ==============================================
 # ILOLIT robots.txt
-# https://www.ilolit.com
+# https://ilolit.com
 # ==============================================
 
 User-agent: *
@@ -22,4 +22,4 @@ Disallow: /kedvenc-eladok
 Disallow: /interactive-calendar
 
 # Sitemap
-Sitemap: https://www.ilolit.com/sitemap-index.xml
+Sitemap: https://ilolit.com/sitemap-index.xml
