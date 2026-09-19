@@ -136,7 +136,7 @@ export function Hirdetesfigyelo() {
       ...VEHICLE_ITEMS.map((i) => ({
         id: i.id,
         title: i.title,
-        price: i.priceNum,
+        price: i.price,
         location: i.location,
         image: i.image,
         module: "vehicles",
@@ -148,7 +148,7 @@ export function Hirdetesfigyelo() {
         return {
           id: i.id,
           title: `${i.name} - ${i.profession}`,
-          price: i.startingPrice || 0,
+          price: i.services.length > 0 ? Math.min(...i.services.map((service) => service.price)) : 0,
           location: i.city,
           image: i.avatar,
           module: isBeauty ? "beauty" : "providers",
