@@ -171,7 +171,6 @@ function DesktopNav({ onOpenTestModal }: { onOpenTestModal?: () => void }) {
           {isLoaded && isSignedIn ? (
             <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 py-1.5">
               <UserButton
-                afterSignOutUrl="/"
                 appearance={{
                   elements: {
                     avatarBox: "h-7 w-7",
