@@ -25,7 +25,7 @@ interface SavedSearchConfigModalProps {
   defaultTitle?: string;
   defaultQuery?: string;
   defaultLocation?: string;
-  defaultModule?: "universal" | "marketplace" | "vehicles" | "realestate" | "beauty" | "services" | "education";
+  defaultModule?: "universal" | "marketplace" | "vehicles" | "realestate" | "beauty" | "providers" | "education";
 }
 
 export function SavedSearchConfigModal({
