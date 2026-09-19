@@ -80,6 +80,7 @@ function DesktopNav({ onOpenTestModal }: { onOpenTestModal?: () => void }) {
   const [, navigate] = useLocation();
   const [location] = useLocation();
   const { isSignedIn, isLoaded } = useUser();
+  const showTestControls = import.meta.env.DEV;
 
   const navItems = [
     { href: "/marketplace", label: "Piactér", icon: Store },
@@ -128,15 +129,17 @@ function DesktopNav({ onOpenTestModal }: { onOpenTestModal?: () => void }) {
         {/* Action Buttons */}
         <div className="flex items-center gap-2 md:gap-3 shrink-0">
           {/* Test Control Panel Button */}
-          <button
-            type="button"
-            onClick={onOpenTestModal}
-            className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
-            title="Platform Tesztelő & Demó Vezérlőpult"
-          >
-            <FlaskConical className="w-4 h-4 text-emerald-600" />
-            <span className="hidden lg:inline">Tesztelő Pult</span>
-          </button>
+          {showTestControls && (
+            <button
+              type="button"
+              onClick={onOpenTestModal}
+              className="px-3 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+              title="Platform Tesztelő & Demó Vezérlőpult"
+            >
+              <FlaskConical className="w-4 h-4 text-emerald-600" />
+              <span className="hidden lg:inline">Tesztelő Pult</span>
+            </button>
+          )}
 
           {/* Hirdetésfigyelő Button */}
           <Link
