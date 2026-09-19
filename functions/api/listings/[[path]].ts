@@ -11,6 +11,49 @@ interface PagesContext {
 
 const LISTING_PREFIX = "data/listings/";
 
+const CATEGORY_META: Record<string, { name: string; slug: string }> = {
+  cat_ingatlan: { name: "Ingatlanok", slug: "ingatlanok" },
+  cat_jarmuvek: { name: "Járművek", slug: "jarmuvek" },
+  cat_oktatas: { name: "ILOLIT Oktatás", slug: "oktatas" },
+  cat_elektronika: { name: "Elektronika", slug: "elektronika" },
+  cat_ferfi: { name: "Férfi divat", slug: "ferfi-divat" },
+  cat_gyerek: { name: "Játék és gyerek", slug: "gyerek" },
+  cat_hobbi: { name: "Hobbi és gyűjtemény", slug: "hobbi" },
+  cat_konyvek: { name: "Könyvek és média", slug: "konyvek-media" },
+  cat_noi: { name: "Női divat", slug: "noi-divat" },
+  cat_otthon: { name: "Otthon és kert", slug: "otthon-kert" },
+  cat_sport: { name: "Sport és szabadidő", slug: "sport" },
+};
+
+function categoryMeta(id: string | null | undefined) {
+  if (!id) return null;
+  const rootId = Object.keys(CATEGORY_META).find((key) => id === key || id.startsWith(`${key}_`));
+  return rootId ? { id, ...CATEGORY_META[rootId] } : { id, name: "Egyéb", slug: "egyeb" };
+}
+
+function subcategoryMeta(id: string | null | undefined, name?: string, slug?: string) {
+  if (!id) return null;
+  return {
+    id,
+    name: name || "Alkategória",
+    slug: slug || id.replace(/^cat_/, "").replace(/_/g, "-"),
+  };
+}
+
+function hydrateListing(listing: any) {
+  if (!listing) return listing;
+  const fallbackCategory = categoryMeta(listing.categoryId);
+  return {
+    ...listing,
+    category: listing.category?.slug
+      ? listing.category
+      : fallbackCategory,
+    subcategory: listing.subcategory?.slug
+      ? listing.subcategory
+      : subcategoryMeta(listing.subcategoryId, listing.subcategory?.name, listing.subcategory?.slug),
+  };
+}
+
 function json(data: unknown, status = 200): Response {
   return Response.json(data, {
     status,
@@ -107,7 +150,7 @@ async function readListing(env: Env, id: string): Promise<any | null> {
   const object = await env.MEDIA_BUCKET.get(`${LISTING_PREFIX}${id}.json`);
   if (!object) return null;
   try {
-    return await object.json();
+    return hydrateListing(await object.json());
   } catch {
     return null;
   }
@@ -154,12 +197,16 @@ function normalizeListing(input: any, id: string, userId: string, existing?: any
       reviewCount: 0,
       isVerified: false,
     },
-    category: existing?.category ?? (input.categoryId
-      ? { id: input.categoryId, name: null, slug: null }
-      : null),
-    subcategory: existing?.subcategory ?? (input.subcategoryId
-      ? { id: input.subcategoryId, name: null, slug: null }
-      : null),
+    category: input.categoryId
+      ? {
+          ...(categoryMeta(input.categoryId) || {}),
+          name: input.categoryName || categoryMeta(input.categoryId)?.name || "Egyéb",
+          slug: input.categorySlug || categoryMeta(input.categoryId)?.slug || "egyeb",
+        }
+      : existing?.category ?? null,
+    subcategory: input.subcategoryId
+      ? subcategoryMeta(input.subcategoryId, input.subcategoryName, input.subcategorySlug)
+      : input.subcategoryId === null ? null : existing?.subcategory ?? null,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
@@ -184,7 +231,7 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit")) || 24));
     const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
     const listed = await context.env.MEDIA_BUCKET.list({ prefix: LISTING_PREFIX, limit: 1000 });
-    const records = (await Promise.all(
+    let records = (await Promise.all(
       listed.objects.map((object) => readListing(
         context.env,
         object.key.slice(LISTING_PREFIX.length, -".json".length),
@@ -192,6 +239,24 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     )).filter(Boolean).sort((a: any, b: any) =>
       String(b.createdAt).localeCompare(String(a.createdAt)),
     );
+    const categorySlug = url.searchParams.get("categorySlug");
+    const subcategorySlug = url.searchParams.get("subcategorySlug");
+    const search = url.searchParams.get("search")?.trim().toLocaleLowerCase("hu");
+    const condition = url.searchParams.get("condition");
+    const listingType = url.searchParams.get("listingType");
+    records = records.filter((listing: any) => {
+      if (listing.status !== "ACTIVE" || listing.isSold) return false;
+      if (categorySlug && listing.category?.slug !== categorySlug) return false;
+      if (subcategorySlug && listing.subcategory?.slug !== subcategorySlug) return false;
+      if (condition && listing.condition !== condition) return false;
+      if (listingType && listing.listingType !== listingType) return false;
+      if (search) {
+        const haystack = [listing.title, listing.description, listing.brand, listing.user?.username]
+          .filter(Boolean).join(" ").toLocaleLowerCase("hu");
+        if (!haystack.includes(search)) return false;
+      }
+      return true;
+    });
     const start = (page - 1) * limit;
     return json({
       items: records.slice(start, start + limit),
