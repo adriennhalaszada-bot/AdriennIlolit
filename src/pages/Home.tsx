@@ -48,7 +48,21 @@ const USER_JOURNEYS = [
   },
 ];
 
-const MOCK_SHOWCASE_DATA = {
+interface ShowcaseItem {
+  id: string;
+  title: string;
+  price: string | number;
+  location: string;
+  imageUrl: string;
+  subtitle: string;
+  badgeText?: string;
+  rating?: number;
+  reviewCount?: number;
+  isVerified?: boolean;
+  specs?: string[];
+}
+
+const MOCK_SHOWCASE_DATA: Record<ShowcaseTab, ShowcaseItem[]> = {
   marketplace: [
     { id: "m1", title: "Zara Elegáns Bőrdzseki M-es", price: 14500, location: "Budapest", imageUrl: "https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=600&q=80", subtitle: "Alig használt női bőrdzseki", badgeText: "Eladó" },
     { id: "m2", title: "Canon AE-1 Analog Kamera", price: 45000, location: "Győr", imageUrl: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=600&q=80", subtitle: "Kiváló állapotú vintage kamera", badgeText: "Aukció" },
