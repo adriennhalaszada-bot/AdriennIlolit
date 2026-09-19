@@ -367,15 +367,10 @@ export function UniversalSearch() {
                           <img src={item.image} alt={item.title} className="w-24 h-24 rounded-xl object-cover shrink-0" />
                           <div className="flex-1 space-y-1 min-w-0">
                             <div className="flex items-center justify-between">
-                              <span className="text-xs font-black text-emerald-600">{item.price.toLocaleString("hu-HU")} Ft</span>
-                              {item.originalPrice && item.originalPrice > item.price && (
-                                <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-rose-100 text-rose-700">
-                                  🔥 Árcsökkenés
-                                </span>
-                              )}
+                              <span className="text-xs font-black text-emerald-600">{item.price}</span>
                             </div>
                             <h4 className="font-extrabold text-xs md:text-sm text-slate-900 dark:text-white line-clamp-1">{item.title}</h4>
-                            <p className="text-[11px] font-semibold text-slate-500">📍 {item.location} · {item.areaSqm} m²</p>
+                            <p className="text-[11px] font-semibold text-slate-500">📍 {item.location} · {item.area} m²</p>
                             <div className="flex items-center gap-2 pt-1">
                               <Link
                                 href={`/real-estate?id=${item.id}`}
@@ -385,7 +380,7 @@ export function UniversalSearch() {
                               </Link>
                               <button
                                 type="button"
-                                onClick={() => addToCompare({ id: item.id, module: "realestate", title: item.title, subtitle: `${item.areaSqm} m² · ${item.rooms} szoba`, image: item.image, url: "/real-estate", specs: { price: item.price, pricePerSqm: item.pricePerSqm, areaSqm: item.areaSqm, rooms: item.rooms, condition: item.condition, location: item.location, energyRating: item.energyRating, heating: item.heating, elevator: item.elevator, balcony: item.balcony } })}
+                                onClick={() => addToCompare({ id: item.id, module: "realestate", title: item.title, subtitle: `${item.area} m² · ${item.rooms} szoba`, image: item.image, url: "/real-estate", specs: { price: item.priceNum, pricePerSqm: Math.round(item.priceNum / item.area), areaSqm: item.area, rooms: String(item.rooms), condition: "Nincs megadva", location: item.location, energyRating: "Nincs megadva", heating: "Nincs megadva", elevator: false, balcony: false } })}
                                 className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition ${isInCompare(item.id) ? "bg-emerald-600 text-white border-transparent" : "border-slate-300 text-slate-600 hover:bg-slate-100"}`}
                               >
                                 <Layers className="w-3 h-3 inline mr-1" />
