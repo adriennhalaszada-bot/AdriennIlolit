@@ -788,10 +788,10 @@ export function Search() {
                       <div className="px-4 pb-4 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                         <div>
                           <span className="text-base font-black text-purple-600 dark:text-purple-400 block">
-                            {formatPrice(item.price)} Ft
+                            {formatPrice(item.price)}
                           </span>
                           <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium block">
-                            + Biztonsági díj: {formatPrice(safetyFee)} Ft
+                            + Biztonsági díj: {formatPrice(safetyFee)}
                           </span>
                         </div>
 
@@ -851,10 +851,10 @@ export function Search() {
                 </div>
                 <div className="text-left md:text-right">
                   <div className="text-2xl font-black text-purple-600 dark:text-purple-400">
-                    {formatPrice(selectedItem.price)} Ft
+                    {formatPrice(selectedItem.price)}
                   </div>
                   <span className="text-xs font-extrabold text-slate-500 block">
-                    + {formatPrice(calculateSafetyFee(selectedItem.price))} Ft Biztonsági díj
+                    + {formatPrice(calculateSafetyFee(selectedItem.price))} Biztonsági díj
                   </span>
                 </div>
               </div>
