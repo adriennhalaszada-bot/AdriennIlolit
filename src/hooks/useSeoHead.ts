@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 
-const BASE_URL = "https://www.ilolit.com";
+const BASE_URL = "https://ilolit.com";
 
 /**
  * Routes that should NEVER be indexed by search engines.
