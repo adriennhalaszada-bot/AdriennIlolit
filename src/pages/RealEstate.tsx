@@ -523,7 +523,7 @@ export default function RealEstate() {
                   lat: 48.1035 + ((idx * 0.015) % 0.1),
                   lng: 20.7784 + ((idx * 0.02) % 0.1)
                 }))}
-                currentCity={locationState.selectedCity || "Miskolc"}
+                currentCity={locationState.cityInput || "Miskolc"}
                 onSelectProperty={(prop) => {
                   const found = filteredProperties.find((p) => p.id === prop.id);
                   if (found) setSelectedProperty(found);
@@ -965,7 +965,7 @@ export default function RealEstate() {
           onClose={() => setIsReportModalOpen(false)}
           targetTitle={selectedProperty.title}
           targetId={selectedProperty.id}
-          targetType="hirdetes"
+          targetType="hirdetés"
         />
       )}
     </Layout>
