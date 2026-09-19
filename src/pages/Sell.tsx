@@ -290,7 +290,9 @@ export function Sell() {
       }));
 
   const selectedCategory = categories.find((c: any) => c.id === selectedCategoryId);
-  const subcategories: any[] = (selectedCategory as any)?.subcategories ?? [];\n  const selectedSubcategoryId = form.watch("subcategoryId");\n  const selectedSubcategory = subcategories.find((c: any) => c.id === selectedSubcategoryId);
+  const subcategories: any[] = (selectedCategory as any)?.subcategories ?? [];
+  const selectedSubcategoryId = form.watch("subcategoryId");
+  const selectedSubcategory = subcategories.find((c: any) => c.id === selectedSubcategoryId);
   const showSize = CLOTHING_SLUGS.includes(selectedCategory?.slug ?? "");
   const isShoeCategory = selectedCategory?.slug === "cipo";
 
@@ -340,7 +342,11 @@ export function Sell() {
       ...rest,
       images,
       videoUrl: videoUrl || undefined,
-      subcategoryId: subcategoryId || null,\n      categoryName: selectedCategory?.name || undefined,\n      categorySlug: selectedCategory?.slug || undefined,\n      subcategoryName: selectedSubcategory?.name || undefined,\n      subcategorySlug: selectedSubcategory?.slug || undefined,
+      subcategoryId: subcategoryId || null,
+      categoryName: selectedCategory?.name || undefined,
+      categorySlug: selectedCategory?.slug || undefined,
+      subcategoryName: selectedSubcategory?.name || undefined,
+      subcategorySlug: selectedSubcategory?.slug || undefined,
       brand: rest.brand || undefined,
       size: rest.size || undefined,
       color: rest.color || undefined,
