@@ -685,7 +685,7 @@ export function Product() {
                   <Link href={`/profile/${listing.user.username}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
                     <Avatar className="w-12 h-12 border-2 border-amber-400">
                       <AvatarImage src={listing.user.avatarUrl || ""} />
-                      <AvatarFallback>{listing.user.username.substring(0, 2).toUpperCase()}</AvatarFallback>
+                      <AvatarFallback>{(listing.user?.username || "EL").substring(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div>
                       <div className="font-bold flex items-center gap-2">
