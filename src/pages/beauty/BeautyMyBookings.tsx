@@ -2,11 +2,6 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout/Layout";
 import { BeautyHeaderNav } from "@/components/beauty/BeautyHeaderNav";
-import {
-  useGetMyBeautyBookings, getGetMyBeautyBookingsQueryKey,
-  useCancelBeautyBooking,
-  useCreateBeautyReview,
-} from "@workspace/api-client-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,30 +9,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
 import { formatPrice } from "@/lib/constants";
 import { BOOKING_STATUS_LABELS, BOOKING_STATUS_COLORS, createGoogleCalendarUrl, downloadICalFile } from "@/lib/beautyConstants";
-import { Star, MapPin, Sparkles, Calendar, Clock, Bell, AlertTriangle, ExternalLink, Download, CreditCard } from "lucide-react";
-import { queryClient } from "@/lib/queryClient";
+import { MapPin, Sparkles, Calendar, Clock, Bell, AlertTriangle, ExternalLink, Download, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cancelProviderBooking, getMyProviderBookings, getProviderAvailability, rescheduleProviderBooking, type ProviderBookingRecord } from "@/lib/providerBookingApi";
 import { confirmBookingDeposit, createBookingDepositCheckout } from "@/lib/billingApi";
 
-const AVAILABLE_TIME_SLOTS = [
-  "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
-  "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30",
-  "16:00", "16:30", "17:00", "17:30", "18:00"
-];
-
 export function BeautyMyBookings() {
   const { toast } = useToast();
-  const { data: bookings, isLoading } = useGetMyBeautyBookings(
-    { role: "customer" },
-    { query: { queryKey: getGetMyBeautyBookingsQueryKey({ role: "customer" }) } },
-  );
-
-  const cancelBooking = useCancelBeautyBooking();
-  const createReview = useCreateBeautyReview();
   const [providerBookings, setProviderBookings] = useState<ProviderBookingRecord[]>([]);
   const [isLoadingProviderBookings, setIsLoadingProviderBookings] = useState(true);
   const [cancellingProviderBookingId, setCancellingProviderBookingId] = useState<string | null>(null);
@@ -94,15 +74,11 @@ export function BeautyMyBookings() {
   const [newDate, setNewDate] = useState("");
   const [newTime, setNewTime] = useState("");
   const [isRescheduling, setIsRescheduling] = useState(false);
-  const [rescheduleSlots, setRescheduleSlots] = useState<string[]>(AVAILABLE_TIME_SLOTS);
+  const [rescheduleSlots, setRescheduleSlots] = useState<string[]>([]);
   const [isLoadingRescheduleSlots, setIsLoadingRescheduleSlots] = useState(false);
 
   useEffect(() => {
     if (!rescheduleBooking || !newDate) return;
-    if (!rescheduleBooking.isProviderBooking) {
-      setRescheduleSlots(AVAILABLE_TIME_SLOTS);
-      return;
-    }
     let active = true;
     setIsLoadingRescheduleSlots(true);
     getProviderAvailability(rescheduleBooking.providerId, newDate)
@@ -117,79 +93,35 @@ export function BeautyMyBookings() {
     return () => { active = false; };
   }, [rescheduleBooking, newDate]);
 
-  const [reviewBookingId, setReviewBookingId] = useState<string | null>(null);
-  const [rating, setRating] = useState(5);
-  const [reviewText, setReviewText] = useState("");
-
   const [cancelTargetBooking, setCancelTargetBooking] = useState<any | null>(null);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetMyBeautyBookingsQueryKey({ role: "customer" }) });
-
   const confirmCancel = async (booking: any) => {
-    if (booking.isProviderBooking) {
-      setCancellingProviderBookingId(booking.id);
-      try {
-        const updated = await cancelProviderBooking(booking.id);
-        setProviderBookings((current) => current.map((item) => item.id === updated.id ? updated : item));
-        toast({ title: "Foglalás lemondva" });
-        setCancelTargetBooking(null);
-      } catch (error) {
-        toast({ title: "Nem sikerült lemondani", description: error instanceof Error ? error.message : "Ismeretlen hiba történt.", variant: "destructive" });
-      } finally {
-        setCancellingProviderBookingId(null);
-      }
-      return;
+    setCancellingProviderBookingId(booking.id);
+    try {
+      const updated = await cancelProviderBooking(booking.id);
+      setProviderBookings((current) => current.map((item) => item.id === updated.id ? updated : item));
+      toast({ title: "Foglalás lemondva" });
+      setCancelTargetBooking(null);
+    } catch (error) {
+      toast({ title: "Nem sikerült lemondani", description: error instanceof Error ? error.message : "Ismeretlen hiba történt.", variant: "destructive" });
+    } finally {
+      setCancellingProviderBookingId(null);
     }
-    cancelBooking.mutate({ id: booking.id }, {
-      onSuccess: () => {
-        toast({ title: "Foglalás lemondva" });
-        setCancelTargetBooking(null);
-        invalidate();
-      },
-      onError: (err: any) => {
-        toast({ title: "Nem sikerült lemondani", description: err?.message, variant: "destructive" });
-      },
-    });
   };
 
   const handleRescheduleSubmit = async () => {
     if (!rescheduleBooking || !newDate || !newTime) return;
     setIsRescheduling(true);
     try {
-      if (rescheduleBooking.isProviderBooking) {
-        const updated = await rescheduleProviderBooking(rescheduleBooking.id, newDate, newTime);
-        setProviderBookings((current) => current.map((item) => item.id === updated.id ? updated : item));
-        toast({ title: "Átfoglalási kérés elküldve", description: `Új időpont: ${newDate} ${newTime}. A szolgáltató új visszaigazolása szükséges.` });
-        setRescheduleBooking(null);
-        return;
-      }
-      await fetch(`/api/beauty/bookings/${rescheduleBooking.id}/reschedule`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newBookingDate: newDate, newBookingTime: newTime }),
-      });
-      toast({ title: "Sikeres átidőzítés!", description: `Új időpont: ${newDate} ${newTime}` });
+      const updated = await rescheduleProviderBooking(rescheduleBooking.id, newDate, newTime);
+      setProviderBookings((current) => current.map((item) => item.id === updated.id ? updated : item));
+      toast({ title: "Átfoglalási kérés elküldve", description: `Új időpont: ${newDate} ${newTime}. A szolgáltató új visszaigazolása szükséges.` });
       setRescheduleBooking(null);
-      invalidate();
     } catch (err: any) {
       toast({ title: "Nem sikerült az átidőzítés", description: err?.message || "Kérjük válassz másik időpontot!", variant: "destructive" });
     } finally {
       setIsRescheduling(false);
     }
-  };
-
-  const handleReviewSubmit = () => {
-    if (!reviewBookingId) return;
-    createReview.mutate({ id: reviewBookingId, data: { rating, reviewText: reviewText || undefined } }, {
-      onSuccess: () => {
-        toast({ title: "Köszönjük az értékelést!" });
-        setReviewBookingId(null);
-        setRating(5);
-        setReviewText("");
-        invalidate();
-      },
-      onError: (err: any) => toast({ title: "Nem sikerült az értékelés", description: err?.message, variant: "destructive" }),
-    });
   };
 
   const isWithin24Hours = (dateStr: string, timeStr: string): boolean => {
@@ -211,7 +143,7 @@ export function BeautyMyBookings() {
     serviceOffering: { name: booking.serviceName },
     provider: { displayName: booking.providerName },
   }));
-  const rawList = [...persistentBookings, ...(bookings ?? [])];
+  const rawList = persistentBookings;
 
   const filteredBookings = rawList.filter((b: any) => {
     if (activeTabFilter === "cancelled") return b.status === "CANCELLED" || b.status === "REJECTED";
@@ -250,13 +182,13 @@ export function BeautyMyBookings() {
           ))}
         </div>
 
-        {(isLoading || isLoadingProviderBookings) && (
+        {isLoadingProviderBookings && (
           <div className="space-y-3">
             {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
           </div>
         )}
 
-        {!isLoading && !isLoadingProviderBookings && filteredBookings.length === 0 && (
+        {!isLoadingProviderBookings && filteredBookings.length === 0 && (
           <div className="text-center py-16 bg-slate-50 dark:bg-slate-900 border rounded-3xl p-8">
             <p className="text-lg font-extrabold mb-1">Nincs megjeleníthető foglalás ebben a kategóriában.</p>
             <p className="text-muted-foreground text-xs mb-4">Böngéssz az elérhető szépségipari szolgáltatók között!</p>
@@ -416,11 +348,6 @@ export function BeautyMyBookings() {
                       </>
                     )}
 
-                    {b.status === "COMPLETED" && (
-                      <Button size="sm" variant="outline" onClick={() => setReviewBookingId(b.id)} className="w-full">
-                        <Star className="w-3.5 h-3.5 mr-1 fill-amber-400 text-amber-400" /> Értékelés írása
-                      </Button>
-                    )}
                   </div>
                 </div>
               </Card>
@@ -501,35 +428,13 @@ export function BeautyMyBookings() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setCancelTargetBooking(null)}>Mégse, megtartom</Button>
-            <Button variant="destructive" onClick={() => confirmCancel(cancelTargetBooking)} disabled={cancelBooking.isPending || cancellingProviderBookingId === cancelTargetBooking?.id}>
-              {cancelBooking.isPending || cancellingProviderBookingId === cancelTargetBooking?.id ? "Lemondás..." : "Igen, lemondom"}
+            <Button variant="destructive" onClick={() => confirmCancel(cancelTargetBooking)} disabled={cancellingProviderBookingId === cancelTargetBooking?.id}>
+              {cancellingProviderBookingId === cancelTargetBooking?.id ? "Lemondás..." : "Igen, lemondom"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Review Dialog */}
-      <Dialog open={!!reviewBookingId} onOpenChange={(open) => !open && setReviewBookingId(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Értékelés írása</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="flex items-center gap-1">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <button key={i} type="button" onClick={() => setRating(i + 1)}>
-                  <Star className={`w-7 h-7 ${i < rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground"}`} />
-                </button>
-              ))}
-            </div>
-            <Textarea placeholder="Milyen volt a tapasztalatod? (opcionális)" value={reviewText} onChange={(e) => setReviewText(e.target.value)} rows={4} maxLength={1000} />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReviewBookingId(null)}>Mégse</Button>
-            <Button onClick={handleReviewSubmit} disabled={createReview.isPending}>
-              {createReview.isPending ? "Küldés..." : "Értékelés küldése"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Layout>
   );
 }
