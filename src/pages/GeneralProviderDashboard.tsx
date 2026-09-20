@@ -496,11 +496,11 @@ export function GeneralProviderDashboard() {
                 <Textarea value={bio} onChange={(e) => setBio(e.target.value)} className="mt-1 text-xs font-medium rounded-xl h-24" />
               </div>
 
-              {/* Cloudflare Video Stream URL */}
+              {/* Optional external video URL */}
               <div className="p-4 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-2">
                 <label className="text-xs font-bold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
                   <Video className="w-4 h-4 text-emerald-600" />
-                  <span>Bemutatkozó Videó (Cloudflare Stream / YouTube / Vimeo URL)</span>
+                  <span>Külső bemutatkozó videó (YouTube / Vimeo URL)</span>
                 </label>
                 <Input
                   value={videoUrl}
@@ -509,14 +509,21 @@ export function GeneralProviderDashboard() {
                   className="py-4 text-xs font-mono rounded-xl bg-white dark:bg-slate-900"
                 />
                 <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
-                  A vevők a profiloldaladon HD felbontásban megtekinthetik a bemutatkozó videódat és munkáidat!
+                  URL helyett lent közvetlenül is feltölthetsz egy rövid videót a Cloudflare tárhelyre.
                 </p>
               </div>
 
               {/* Cloudflare Image Uploader */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Profil & Portfólió Képek (Cloudflare R2 Storage)</label>
-                <ImageUploader value={profileImages} onChange={setProfileImages} maxImages={6} />
+                <ImageUploader
+                  value={profileImages}
+                  onChange={setProfileImages}
+                  maxImages={6}
+                  folder="beauty"
+                  videoUrl={videoUrl}
+                  onVideoChange={setVideoUrl}
+                />
                 <p className="text-[11px] text-slate-500">Az első kép a profil főképe, a további képek a nyilvános portfólióban jelennek meg. Legfeljebb 6 kép tölthető fel.</p>
                 <label className="flex items-start gap-2 rounded-xl border bg-slate-50 p-3 text-xs text-slate-700">
                   <input type="checkbox" checked={publishPortfolio} onChange={(e) => setPublishPortfolio(e.target.checked)} className="mt-0.5 h-4 w-4" />
