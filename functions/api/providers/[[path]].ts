@@ -160,7 +160,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     if (!provider || !provider.isPublished) return json({ error: "A szolgáltató nem található." }, 404);
     // Contact details and the exact address remain private by default. A later
     // explicit provider opt-in may expose selected business contact channels.
-    const { ownerId: _ownerId, email: _email, phone: _phone, address: _address, profileImages: _profileImages, ...publicProvider } = provider;
+    const { ownerId: _ownerId, email: _email, phone: _phone, address: _address, profileImages: _profileImages, subscription: _subscription, ...publicProvider } = provider;
     return json(provider.publishPortfolio ? { ...publicProvider, profileImages: provider.profileImages } : publicProvider);
   }
 
@@ -168,7 +168,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     const listed = await context.env.MEDIA_BUCKET.list({ prefix: PREFIX, limit: 500 });
     const providers = (await Promise.all(listed.objects.map((object) =>
       readProvider(context.env, object.key.slice(PREFIX.length, -5)),
-    ))).filter((provider) => provider?.isPublished).map(({ ownerId: _ownerId, email: _email, phone: _phone, address: _address, profileImages: _profileImages, ...provider }) => provider);
+    ))).filter((provider) => provider?.isPublished).map(({ ownerId: _ownerId, email: _email, phone: _phone, address: _address, profileImages: _profileImages, subscription: _subscription, ...provider }) => provider);
     return json({ items: providers, total: providers.length });
   }
 
