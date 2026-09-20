@@ -88,50 +88,54 @@ export function ImageUploader({
   const handleVideoFile = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const file = files[0];
-    if (!file.type.startsWith("video/")) {
-      toast({ title: "Nem videó fájl!", description: "Kérjük válassz érvényes videó fájlt.", variant: "destructive" });
+    const supportedTypes = ["video/mp4", "video/webm", "video/quicktime"];
+    if (!supportedTypes.includes(file.type)) {
+      toast({ title: "Nem támogatott videó", description: "MP4, WebM vagy MOV fájlt válassz.", variant: "destructive" });
+      return;
+    }
+    if (file.size > 100 * 1024 * 1024) {
+      toast({ title: "A videó túl nagy", description: "A videó legfeljebb 100 MB lehet.", variant: "destructive" });
       return;
     }
 
     setVideoUploading(true);
 
     try {
-      // Validate video duration <= 10.5 seconds using HTML5 video metadata
       const tempUrl = URL.createObjectURL(file);
-      const video = document.createElement("video");
-      video.preload = "metadata";
-      video.src = tempUrl;
-
-      video.onloadedmetadata = async () => {
+      const duration = await new Promise<number>((resolve, reject) => {
+        const video = document.createElement("video");
+        video.preload = "metadata";
+        video.src = tempUrl;
+        video.onloadedmetadata = () => resolve(video.duration);
+        video.onerror = () => reject(new Error("A videó adatai nem olvashatók."));
+      }).finally(() => {
         URL.revokeObjectURL(tempUrl);
-        const duration = video.duration;
+      });
 
-        if (duration > 10.5) {
-          setVideoUploading(false);
-          toast({
-            title: "⚠️ A videó túl hosszú!",
-            description: `A feltöltött videó ${Math.round(duration)} másodperces. Maximum 10 másodperces videót tölthetsz fel!`,
-            variant: "destructive",
-          });
-          return;
-        }
+      if (!Number.isFinite(duration) || duration > 20.5) {
+        toast({
+          title: "A videó túl hosszú",
+          description: `A feltöltött videó ${Number.isFinite(duration) ? Math.round(duration) : "ismeretlen"} másodperces. Legfeljebb 20 másodperces videót tölthetsz fel.`,
+          variant: "destructive",
+        });
+        return;
+      }
 
-        // Convert video to DataURL for preview & storage
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const vUrl = e.target?.result as string;
-          if (onVideoChange) onVideoChange(vUrl);
-          setVideoUploading(false);
-          toast({ title: "✅ 10mp-es Videó sikeresen hozzáadva!" });
-        };
-        reader.readAsDataURL(file);
-      };
-
-      video.onerror = () => {
-        setVideoUploading(false);
-        toast({ title: "Videó beolvasási hiba", variant: "destructive" });
-      };
-    } catch (e) {
+      const uploaded = await customFetch<{ url: string }>("/api/media/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": file.type,
+          "X-File-Name": encodeURIComponent(file.name),
+          "X-Media-Folder": folder,
+        },
+        body: file,
+      });
+      if (!uploaded.url) throw new Error("A Cloudflare nem adott vissza videó URL-t.");
+      onVideoChange?.(uploaded.url);
+      toast({ title: "A videó sikeresen feltöltve a Cloudflare tárhelyre." });
+    } catch (e: any) {
+      toast({ title: "Videófeltöltési hiba", description: e?.message || "Próbáld újra a videó kiválasztását.", variant: "destructive" });
+    } finally {
       setVideoUploading(false);
     }
   };
@@ -258,23 +262,23 @@ export function ImageUploader({
         </div>
 
         <p className="text-[11px] text-slate-500 font-medium">
-          Maximum 5 fotó adható hozzá. Az első kép lesz a hirdetés borítóképe.
+          Maximum {maxImages} fotó adható hozzá. Az első kép lesz a hirdetés borítóképe.
         </p>
       </div>
 
-      {/* 2. VIDEO UPLOADER SECTION (MAX 1 VIDEO, MAX 10 SECONDS) */}
+      {/* 2. VIDEO UPLOADER SECTION (MAX 1 VIDEO, MAX 20 SECONDS) */}
       {onVideoChange && (
         <div className="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-4">
           <div className="flex items-center justify-between">
             <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
               <Video className="w-4 h-4 text-purple-600" />
-              <span>🎬 Termékvideó (Legfeljebb 10 mp)</span>
+              <span>🎬 Bemutatkozó videó (legfeljebb 20 mp)</span>
             </label>
           </div>
 
           {videoUrl ? (
             <div className="relative aspect-video rounded-2xl overflow-hidden border border-purple-300 bg-black group max-w-sm">
-              <video src={videoUrl} controls className="w-full h-full object-cover" />
+              <video src={videoUrl} controls playsInline preload="metadata" className="w-full h-full object-cover" />
               <button
                 type="button"
                 onClick={() => onVideoChange("")}
@@ -283,7 +287,7 @@ export function ImageUploader({
                 <X className="w-4 h-4" />
               </button>
               <span className="absolute bottom-2 left-2 text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded-full font-black flex items-center gap-1">
-                <Play className="w-2.5 h-2.5 fill-white" /> 10 mp Videó
+                <Play className="w-2.5 h-2.5 fill-white" /> Bemutatkozó videó
               </span>
             </div>
           ) : (
@@ -295,17 +299,17 @@ export function ImageUploader({
                 {videoUploading ? (
                   <div className="flex items-center gap-2 text-xs font-bold text-purple-600">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Videó hossza ellenőrzése...</span>
+                    <span>Videó ellenőrzése és feltöltése...</span>
                   </div>
                 ) : (
                   <>
                     <Video className="w-6 h-6 text-purple-600 shrink-0" />
                     <div className="text-left">
                       <span className="text-xs font-extrabold block text-slate-900 dark:text-white">
-                        1 db legfeljebb 10 mp-es videó hozzáadása
+                        1 db legfeljebb 20 mp-es videó hozzáadása
                       </span>
                       <span className="text-[10px] text-slate-500 font-medium">
-                        Mutasd be a terméket működés közben! (Max. 10 másodperc)
+                        MP4, WebM vagy MOV, legfeljebb 100 MB
                       </span>
                     </div>
                   </>
@@ -315,7 +319,7 @@ export function ImageUploader({
               <input
                 id="ilolit-video-upload-input"
                 type="file"
-                accept="video/mp4,video/webm,video/quicktime,video/*"
+                accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov"
                 className="hidden"
                 disabled={videoUploading}
                 onChange={e => {
