@@ -38,6 +38,8 @@ export function GeneralProviderDashboard() {
   const [themeId, setThemeId] = useState("emerald");
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>("inactive");
   const [subscriptionPlan, setSubscriptionPlan] = useState<string>("");
+  const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string>("");
+  const [subscriptionCancels, setSubscriptionCancels] = useState(false);
   const [isOpeningBilling, setIsOpeningBilling] = useState(false);
 
   // Services list
@@ -61,6 +63,14 @@ export function GeneralProviderDashboard() {
   const isBeautyProvider = category === "Szépség- és egészségipar";
   const hasActiveSubscription = subscriptionStatus === "active" || subscriptionStatus === "trialing";
   const mayPublish = canPublish && (!isBeautyProvider || hasActiveSubscription);
+  const subscriptionStatusLabel: Record<string, string> = {
+    active: "aktív",
+    trialing: "próbaidőszak",
+    past_due: "fizetési késedelem",
+    unpaid: "rendezetlen",
+    cancelled: "lemondva",
+    inactive: "inaktív",
+  };
 
   useEffect(() => {
     let active = true;
@@ -82,6 +92,8 @@ export function GeneralProviderDashboard() {
         setThemeId(profile.themeId);
         setSubscriptionStatus(profile.subscription?.status || "inactive");
         setSubscriptionPlan(profile.subscription?.plan || "");
+        setSubscriptionEndsAt(profile.subscription?.currentPeriodEnd || "");
+        setSubscriptionCancels(profile.subscription?.cancelAtPeriodEnd === true);
         setServices(profile.services.map((service) => ({
           id: service.id,
           name: service.name,
@@ -291,7 +303,7 @@ export function GeneralProviderDashboard() {
             {isLoadingProfile
               ? "A korábban mentett szolgáltatói adatok betöltése…"
               : isBeautyProvider && !hasActiveSubscription
-                ? `A szépségipari profil nem publikálható aktív előfizetés nélkül. Jelenlegi állapot: ${subscriptionStatus}.`
+                ? `A szépségipari profil nem publikálható aktív előfizetés nélkül. Jelenlegi állapot: ${subscriptionStatusLabel[subscriptionStatus] || subscriptionStatus}.`
                 : canPublish
                   ? "A profil publikálható: minden kötelező adat, szolgáltatás és aktív idősáv rendelkezésre áll."
                   : "A publikáláshoz töltsd ki a kötelező adatokat, majd adj hozzá szolgáltatást és aktív idősávot."}
@@ -299,11 +311,21 @@ export function GeneralProviderDashboard() {
           {isBeautyProvider && (
             <div className="flex items-center gap-2">
               <Badge className={hasActiveSubscription ? "bg-emerald-600 text-white" : "bg-amber-500 text-slate-950"}>
-                Előfizetés: {hasActiveSubscription ? `aktív${subscriptionPlan ? ` (${subscriptionPlan === "yearly" ? "éves" : "havi"})` : ""}` : subscriptionStatus}
+                Előfizetés: {hasActiveSubscription ? `aktív${subscriptionPlan ? ` (${subscriptionPlan === "yearly" ? "éves" : "havi"})` : ""}` : subscriptionStatusLabel[subscriptionStatus] || subscriptionStatus}
               </Badge>
+              {subscriptionCancels && subscriptionEndsAt && (
+                <span className="text-xs font-bold text-amber-800">
+                  Megszűnik: {new Date(subscriptionEndsAt).toLocaleDateString("hu-HU")}
+                </span>
+              )}
               {hasActiveSubscription && (
                 <Button type="button" variant="outline" size="sm" onClick={handleOpenBillingPortal} disabled={isOpeningBilling} className="rounded-xl text-xs font-bold">
                   {isOpeningBilling ? "Megnyitás…" : "Előfizetés kezelése"}
+                </Button>
+              )}
+              {!hasActiveSubscription && (
+                <Button asChild type="button" variant="outline" size="sm" className="rounded-xl text-xs font-bold">
+                  <Link href="/beauty/register">Előfizetés rendezése</Link>
                 </Button>
               )}
             </div>
