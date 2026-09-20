@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,14 @@ import { ALL_PROVIDER_CATEGORIES } from "@/data/allProvidersData";
 import { Sparkles, Eye, Briefcase, CalendarDays, Bell, Check, X, Video, ShieldCheck, Clock, Settings, Palette, Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/lib/constants";
+import { getMyProviderProfile, saveMyProviderProfile } from "@/lib/providerApi";
 
 export function GeneralProviderDashboard() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const [providerId, setProviderId] = useState<string | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   // Demo provider state
   const [displayName, setDisplayName] = useState("Vasszerkezet & Lakatos Műhely Kft.");
@@ -54,6 +58,66 @@ export function GeneralProviderDashboard() {
 
   const [newSlotStart, setNewSlotStart] = useState("09:00");
   const [newSlotEnd, setNewSlotEnd] = useState("10:00");
+
+  useEffect(() => {
+    let active = true;
+    getMyProviderProfile()
+      .then((profile) => {
+        if (!active || !profile?.displayName) return;
+        setProviderId(profile.id || null);
+        setDisplayName(profile.displayName);
+        setCategory(profile.category);
+        setSubCategory(profile.subCategory);
+        setCity(profile.city);
+        setAddress(profile.address);
+        setPhone(profile.phone);
+        setEmail(profile.email);
+        setBio(profile.bio);
+        setVideoUrl(profile.videoUrl);
+        setProfileImage(profile.profileImage);
+        setThemeId(profile.themeId);
+        setServices(profile.services.map((service) => ({
+          id: service.id,
+          name: service.name,
+          price: service.price,
+          durationMinutes: service.durationMinutes,
+          deposit: service.requiresDeposit
+            ? Math.round(service.price * Number(service.depositPercentage || 0) / 100)
+            : 0,
+        })));
+        setCustomSlots(profile.slots);
+      })
+      .catch(() => {})
+      .finally(() => active && setIsLoadingProfile(false));
+    return () => { active = false; };
+  }, []);
+
+  const handleSaveProfile = async () => {
+    if (!displayName.trim() || !city.trim() || !email.trim()) {
+      toast({ title: "Hiányzó kötelező adatok", description: "A vállalkozás neve, települése és e-mail-címe kötelező.", variant: "destructive" });
+      return;
+    }
+    setIsSavingProfile(true);
+    try {
+      const saved = await saveMyProviderProfile({
+        displayName, category, subCategory, city, address, phone, email, bio,
+        videoUrl, profileImage, themeId, slots: customSlots,
+        services: services.map((service) => ({
+          ...service,
+          requiresDeposit: service.deposit > 0,
+          depositPercentage: service.price > 0 ? Math.round(service.deposit / service.price * 100) : 0,
+          isAvailable: true,
+        })),
+        isPublished: true,
+      });
+      setProviderId(saved.id || null);
+      toast({ title: "A szolgáltatói adatok mentve", description: "A profil, az árlista és az idősávok tartósan a Cloudflare tárhelyre kerültek." });
+    } catch (error) {
+      toast({ title: "A mentés nem sikerült", description: error instanceof Error ? error.message : "Ismeretlen hiba történt.", variant: "destructive" });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   const handleAddSlot = (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,11 +229,25 @@ export function GeneralProviderDashboard() {
             size="lg"
             className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-2xl text-xs py-5 px-6 shadow-lg whitespace-nowrap"
           >
-            <Link href="/beauty/prov-gen-1">
+            <Link href={providerId ? `/providers/${providerId}` : "/providers"}>
               <span className="flex items-center gap-2">
                 <Eye className="w-4 h-4" /> 👁️ Saját Bemutatkozó Oldal (Vevő Nézet) ➔
               </span>
             </Link>
+          </Button>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <div className="text-xs text-slate-700">
+            {isLoadingProfile ? "A korábban mentett szolgáltatói adatok betöltése…" : "A mentés a profilt, az árlistát és az összes idősávot együtt frissíti."}
+          </div>
+          <Button
+            type="button"
+            onClick={handleSaveProfile}
+            disabled={isLoadingProfile || isSavingProfile}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl"
+          >
+            {isSavingProfile ? "Mentés folyamatban…" : "Minden módosítás mentése"}
           </Button>
         </div>
 
@@ -393,7 +471,7 @@ export function GeneralProviderDashboard() {
                 <ImageUploader value={profileImage ? [profileImage] : []} onChange={(urls) => setProfileImage(urls[0] || "")} maxImages={6} />
               </div>
 
-              <Button onClick={() => toast({ title: "Profil Sikeresen Frissítve!" })} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-5 rounded-2xl text-xs shadow-md">
+              <Button onClick={handleSaveProfile} disabled={isSavingProfile} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-5 rounded-2xl text-xs shadow-md">
                 Profil Módosítások Mentése ➔
               </Button>
             </Card>
