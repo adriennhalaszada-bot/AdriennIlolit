@@ -23,25 +23,20 @@ export function GeneralProviderDashboard() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isLoadingBookings, setIsLoadingBookings] = useState(true);
 
-  // Demo provider state
-  const [displayName, setDisplayName] = useState("Vasszerkezet & Lakatos Műhely Kft.");
-  const [category, setCategory] = useState("Acél- és fémipar");
-  const [subCategory, setSubCategory] = useState("Lakatos – biztonsági zárak, rácsok, rosta");
-  const [city, setCity] = useState("Budapest");
-  const [address, setAddress] = useState("1037 Budapest, Bécsi út 240.");
-  const [phone, setPhone] = useState("+36 30 987 6543");
-  const [email, setEmail] = useState("lakatos.vasszerkezet@email.hu");
-  const [bio, setBio] = useState("Több mint 15 éves tapasztalattal vállaljuk lakossági és ipari fém szerkezetek, kapuk, kerítések, korlátok és biztonsági rácsok egyedi gyártását és telepítését garanciával!");
-  const [videoUrl, setVideoUrl] = useState("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
-  const [profileImage, setProfileImage] = useState("https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=500&h=500&fit=crop");
-  const [themeId, setThemeId] = useState("steel");
+  const [displayName, setDisplayName] = useState("");
+  const [category, setCategory] = useState("");
+  const [subCategory, setSubCategory] = useState("");
+  const [city, setCity] = useState("");
+  const [address, setAddress] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [bio, setBio] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [profileImage, setProfileImage] = useState("");
+  const [themeId, setThemeId] = useState("emerald");
 
   // Services list
-  const [services, setServices] = useState([
-    { id: "s1", name: "Biztonsági Rács Gyártása & Helyszíni Szerelése", price: 45000, durationMinutes: 120, deposit: 10000 },
-    { id: "s2", name: "Kovácsoltvas Kapu és Korlát Felmérés", price: 15000, durationMinutes: 60, deposit: 5000 },
-    { id: "s3", name: "Ajtózár / Zárszerkezet Csere & Beállítás", price: 18000, durationMinutes: 45, deposit: 5000 },
-  ]);
+  const [services, setServices] = useState<Array<{ id: string; name: string; price: number; durationMinutes: number; deposit: number }>>([]);
 
   const [newSrvName, setNewSrvName] = useState("");
   const [newSrvPrice, setNewSrvPrice] = useState("");
@@ -49,17 +44,15 @@ export function GeneralProviderDashboard() {
 
   // Interactive Custom Slots State
   const [selectedDay, setSelectedDay] = useState("Hétfő");
-  const [customSlots, setCustomSlots] = useState<{ id: string; day: string; startTime: string; endTime: string; isAvailable: boolean }[]>([
-    { id: "slot-1", day: "Hétfő", startTime: "08:00", endTime: "10:00", isAvailable: true },
-    { id: "slot-2", day: "Hétfő", startTime: "10:00", endTime: "12:00", isAvailable: false },
-    { id: "slot-3", day: "Hétfő", startTime: "13:00", endTime: "15:00", isAvailable: true },
-    { id: "slot-4", day: "Hétfő", startTime: "15:00", endTime: "17:00", isAvailable: true },
-    { id: "slot-5", day: "Kedd", startTime: "09:00", endTime: "11:00", isAvailable: true },
-    { id: "slot-6", day: "Kedd", startTime: "14:00", endTime: "16:00", isAvailable: true },
-  ]);
+  const [customSlots, setCustomSlots] = useState<{ id: string; day: string; startTime: string; endTime: string; isAvailable: boolean }[]>([]);
 
   const [newSlotStart, setNewSlotStart] = useState("09:00");
   const [newSlotEnd, setNewSlotEnd] = useState("10:00");
+  const selectedCategory = ALL_PROVIDER_CATEGORIES.find((item) => item.name === category);
+  const canPublish = Boolean(
+    displayName.trim() && category && subCategory && city.trim() && phone.trim() && email.trim() &&
+    services.length > 0 && customSlots.some((slot) => slot.isAvailable),
+  );
 
   useEffect(() => {
     let active = true;
@@ -95,8 +88,12 @@ export function GeneralProviderDashboard() {
   }, []);
 
   const handleSaveProfile = async () => {
-    if (!displayName.trim() || !city.trim() || !email.trim()) {
-      toast({ title: "Hiányzó kötelező adatok", description: "A vállalkozás neve, települése és e-mail-címe kötelező.", variant: "destructive" });
+    if (!displayName.trim() || !category || !subCategory || !city.trim() || !phone.trim() || !email.trim()) {
+      toast({ title: "Hiányzó kötelező adatok", description: "A név, kategória, szakterület, település, telefonszám és e-mail-cím kötelező.", variant: "destructive" });
+      return;
+    }
+    if (!services.length || !customSlots.some((slot) => slot.isAvailable)) {
+      toast({ title: "A profil még nem publikálható", description: "Adj hozzá legalább egy szolgáltatást és egy aktív, foglalható idősávot.", variant: "destructive" });
       return;
     }
     setIsSavingProfile(true);
@@ -110,7 +107,7 @@ export function GeneralProviderDashboard() {
           depositPercentage: service.price > 0 ? Math.round(service.deposit / service.price * 100) : 0,
           isAvailable: true,
         })),
-        isPublished: true,
+        isPublished: canPublish,
       });
       setProviderId(saved.id || null);
       toast({ title: "A szolgáltatói adatok mentve", description: "A profil, az árlista és az idősávok tartósan a Cloudflare tárhelyre kerültek." });
@@ -123,6 +120,14 @@ export function GeneralProviderDashboard() {
 
   const handleAddSlot = (e: React.FormEvent) => {
     e.preventDefault();
+    if (newSlotStart >= newSlotEnd) {
+      toast({ title: "Hibás idősáv", description: "A befejezési időnek későbbinek kell lennie a kezdésnél.", variant: "destructive" });
+      return;
+    }
+    if (customSlots.some((slot) => slot.day === selectedDay && slot.startTime === newSlotStart && slot.endTime === newSlotEnd)) {
+      toast({ title: "Ez az idősáv már létezik", variant: "destructive" });
+      return;
+    }
     const newSlot = {
       id: `slot-${Date.now()}`,
       day: selectedDay,
@@ -169,13 +174,18 @@ export function GeneralProviderDashboard() {
 
   const handleAddService = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSrvName.trim() || !newSrvPrice) return;
+    const price = Number(newSrvPrice);
+    const duration = Number(newSrvDuration);
+    if (!newSrvName.trim() || !Number.isFinite(price) || price < 0 || !Number.isFinite(duration) || duration < 5) {
+      toast({ title: "Hibás szolgáltatási adat", description: "Adj meg nevet, érvényes árat és legalább 5 perces időtartamot.", variant: "destructive" });
+      return;
+    }
     const srv = {
       id: `s-${Date.now()}`,
-      name: newSrvName,
-      price: parseInt(newSrvPrice),
-      durationMinutes: parseInt(newSrvDuration),
-      deposit: Math.round(parseInt(newSrvPrice) * 0.2),
+      name: newSrvName.trim(),
+      price: Math.round(price),
+      durationMinutes: Math.round(duration),
+      deposit: Math.round(price * 0.2),
     };
     setServices([...services, srv]);
     setNewSrvName("");
@@ -232,7 +242,7 @@ export function GeneralProviderDashboard() {
             </div>
             <h1 className="text-2xl sm:text-3xl font-black">{displayName}</h1>
             <p className="text-xs text-slate-300 font-medium">
-              📍 {city}, {address} • 📞 {phone}
+              {city ? `📍 ${city}${address ? `, ${address}` : ""}` : "A profil adatai még nincsenek kitöltve"}{phone ? ` • 📞 ${phone}` : ""}
             </p>
           </div>
 
@@ -241,7 +251,7 @@ export function GeneralProviderDashboard() {
             size="lg"
             className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-2xl text-xs py-5 px-6 shadow-lg whitespace-nowrap"
           >
-            <Link href={providerId ? `/providers/${providerId}` : "/providers"}>
+            <Link href={providerId ? `/providers/${providerId}` : "/provider-dashboard"}>
               <span className="flex items-center gap-2">
                 <Eye className="w-4 h-4" /> 👁️ Saját Bemutatkozó Oldal (Vevő Nézet) ➔
               </span>
@@ -251,7 +261,7 @@ export function GeneralProviderDashboard() {
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
           <div className="text-xs text-slate-700">
-            {isLoadingProfile ? "A korábban mentett szolgáltatói adatok betöltése…" : "A mentés a profilt, az árlistát és az összes idősávot együtt frissíti."}
+            {isLoadingProfile ? "A korábban mentett szolgáltatói adatok betöltése…" : canPublish ? "A profil publikálható: minden kötelező adat, szolgáltatás és aktív idősáv rendelkezésre áll." : "A publikáláshoz töltsd ki a kötelező adatokat, majd adj hozzá szolgáltatást és aktív idősávot."}
           </div>
           <Button
             type="button"
@@ -438,12 +448,34 @@ export function GeneralProviderDashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Vállalkozás Neve *</label>
-                  <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="py-4 text-xs font-bold rounded-xl mt-1" />
+                  <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Saját vállalkozásod neve" className="py-4 text-xs font-bold rounded-xl mt-1" />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Telefonszám *</label>
-                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} className="py-4 text-xs font-bold rounded-xl mt-1" />
+                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+36…" className="py-4 text-xs font-bold rounded-xl mt-1" />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Főkategória *</label>
+                  <select value={category} onChange={(e) => { setCategory(e.target.value); setSubCategory(""); }} className="mt-1 h-10 w-full rounded-xl border bg-background px-3 text-xs font-bold">
+                    <option value="">Válassz főkategóriát</option>
+                    {ALL_PROVIDER_CATEGORIES.map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Szakterület *</label>
+                  <select value={subCategory} disabled={!selectedCategory} onChange={(e) => setSubCategory(e.target.value)} className="mt-1 h-10 w-full rounded-xl border bg-background px-3 text-xs font-bold disabled:opacity-50">
+                    <option value="">Válassz szakterületet</option>
+                    {selectedCategory?.subcategories.map((item) => <option key={item} value={item}>{item}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Kapcsolattartási e-mail *</label>
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="vallalkozas@pelda.hu" className="py-4 text-xs font-bold rounded-xl mt-1" />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
