@@ -144,7 +144,7 @@ export function Home() {
                 event.preventDefault();
                 const params = new URLSearchParams();
                 if (searchValue.trim()) params.set("q", searchValue.trim());
-                if (locationValue.trim()) params.set("location", locationValue.trim());
+                if (locationValue.trim()) params.set("city", locationValue.trim());
                 window.location.href = `/universal-search?${params.toString()}`;
               }}
               className="grid gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg shadow-slate-200/60 md:grid-cols-[minmax(0,1fr)_240px_auto]"
