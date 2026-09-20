@@ -234,6 +234,7 @@ function AppRouterInner() {
       <Route path="/booking" component={InteractiveCalendarBookingApp} />
       <Route path="/providers/register" component={GeneralProviderRegister} />
       <Route path="/providers/dashboard" component={GeneralProviderDashboard} />
+      <Route path="/providers/:id" component={BeautyProviderProfile} />
       <Route path="/providers" component={ProvidersHome} />
       <Route path="/szolgaltatasok" component={ProvidersHome} />
 
