@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback } from "react";
-import { useGetUploadUrl } from "@workspace/api-client-react";
+import { customFetch } from "@workspace/api-client-react";
 import { X, ImagePlus, Loader2, GripVertical, Video, Play } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -26,54 +26,6 @@ export function ImageUploader({
   const [videoUploading, setVideoUploading] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
-  const getUploadUrl = useGetUploadUrl();
-
-  const compressImage = (file: File, maxDimension = 1920, quality = 0.85): Promise<string> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      const objectUrl = URL.createObjectURL(file);
-
-      img.onload = () => {
-        URL.revokeObjectURL(objectUrl);
-        let { width, height } = img;
-
-        if (width > maxDimension || height > maxDimension) {
-          if (width > height) {
-            height = Math.round((height * maxDimension) / width);
-            width = maxDimension;
-          } else {
-            width = Math.round((width * maxDimension) / height);
-            height = maxDimension;
-          }
-        }
-
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
-          resolve(compressedDataUrl);
-        } else {
-          const reader = new FileReader();
-          reader.onload = (e) => resolve((e.target?.result as string) || objectUrl);
-          reader.readAsDataURL(file);
-        }
-      };
-
-      img.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        const reader = new FileReader();
-        reader.onload = (e) => resolve((e.target?.result as string) || objectUrl);
-        reader.readAsDataURL(file);
-      };
-
-      img.src = objectUrl;
-    });
-  };
-
   const isImageFile = (file: File): boolean => {
     if (!file) return false;
     if (file.type && file.type.startsWith("image/")) return true;
@@ -83,42 +35,18 @@ export function ImageUploader({
   };
 
   const processFileToUrl = async (file: File): Promise<string> => {
-    // 1. Try presigned upload if available
-    try {
-      if (getUploadUrl?.mutateAsync) {
-        const presign = await getUploadUrl.mutateAsync({
-          data: { filename: file.name, contentType: file.type || "image/jpeg", folder }
-        });
-        if (presign?.uploadUrl && presign?.url) {
-          if (presign.uploadUrl.startsWith("/api/upload/")) {
-            const compressed = await compressImage(file);
-            const res = await fetch(presign.uploadUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ image: compressed, filename: file.name }),
-            });
-            if (res.ok) {
-              const data = await res.json();
-              return data.url || presign.url;
-            }
-          } else {
-            const cfRes = await fetch(presign.uploadUrl, {
-              method: "PUT",
-              headers: { "Content-Type": file.type || "image/jpeg" },
-              body: file,
-            });
-            if (cfRes.ok) {
-              return presign.url;
-            }
-          }
-        }
-      }
-    } catch (e) {
-      // Ignore network presign error and use robust compressed DataURL fallback
-    }
-
-    // 2. Guaranteed compressed DataURL fallback (works offline, low payload size)
-    return await compressImage(file);
+    if (file.size > 20 * 1024 * 1024) throw new Error("A kép legfeljebb 20 MB lehet.");
+    const uploaded = await customFetch<{ url: string }>("/api/media/upload", {
+      method: "POST",
+      headers: {
+        "Content-Type": file.type || "application/octet-stream",
+        "X-File-Name": encodeURIComponent(file.name),
+        "X-Media-Folder": folder,
+      },
+      body: file,
+    });
+    if (!uploaded.url) throw new Error("A Cloudflare nem adott vissza kép URL-t.");
+    return uploaded.url;
   };
 
   const handleFiles = async (files: FileList | null) => {
@@ -151,7 +79,7 @@ export function ImageUploader({
         toast({ title: "Fotók sikeresen hozzáadva!" });
       }
     } catch (err: any) {
-      toast({ title: "Feltöltési hiba", description: "Kérjük próbáld újra a fotók kiválasztását.", variant: "destructive" });
+      toast({ title: "Feltöltési hiba", description: err?.message || "Kérjük próbáld újra a fotók kiválasztását.", variant: "destructive" });
     } finally {
       setUploading(false);
     }
