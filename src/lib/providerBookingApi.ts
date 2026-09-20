@@ -44,6 +44,16 @@ export function getMyProviderBookings() {
   return customFetch<{ items: ProviderBookingRecord[]; total: number }>("/api/bookings/me");
 }
 
+export function getProviderAvailability(providerId: string, date: string) {
+  const query = new URLSearchParams({ providerId, date });
+  return customFetch<{
+    providerId: string;
+    bookingDate: string;
+    weekday: string;
+    slots: Array<{ id: string; startTime: string; endTime: string; time: string }>;
+  }>(`/api/bookings/availability?${query.toString()}`);
+}
+
 export function respondToProviderBooking(id: string, status: "CONFIRMED" | "REJECTED") {
   return customFetch<ProviderBookingRecord>(`/api/bookings/${encodeURIComponent(id)}/respond`, {
     method: "PATCH",
