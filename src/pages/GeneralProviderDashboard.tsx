@@ -406,6 +406,22 @@ export function GeneralProviderDashboard() {
                         <span>📞 {b.customerPhone}</span>
                         <span className="font-extrabold text-emerald-600">{formatPrice(b.price)}</span>
                       </div>
+                      {b.depositAmount > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          <Badge variant="outline" className={
+                            b.depositPayment?.status === "paid"
+                              ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                              : "border-amber-300 bg-amber-50 text-amber-900"
+                          }>
+                            {b.depositPayment?.status === "paid"
+                              ? `Előleg beérkezett: ${formatPrice(b.depositAmount)}`
+                              : `Előleg még nem érkezett meg: ${formatPrice(b.depositAmount)}`}
+                          </Badge>
+                          {b.depositPayment?.refundStatus === "required" && (
+                            <Badge className="bg-rose-600 text-white">Visszatérítés rendezendő</Badge>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {b.status === "PENDING" && (
