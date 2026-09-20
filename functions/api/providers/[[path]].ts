@@ -110,6 +110,7 @@ function normalize(input: any, id: string, ownerId: string, existing?: any) {
     themeId: text(input.themeId, 40) || "emerald",
     services,
     slots,
+    subscription: existing?.subscription,
     isPublished: input.isPublished !== false,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
