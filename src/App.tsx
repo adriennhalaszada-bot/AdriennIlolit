@@ -173,13 +173,20 @@ function SyncUserWrapper({ children }: { children: React.ReactNode }) {
 function SignInPage() {
   return (
     <Layout>
-      <div className="flex min-h-[75vh] items-center justify-center bg-slate-50 dark:bg-slate-950 px-4 py-12">
-        <SignIn
-          routing="path"
-          path="/auth/login"
-          signUpUrl="/auth/register"
-          forceRedirectUrl="/dashboard"
-        />
+      <div className="flex min-h-[75vh] items-center justify-center bg-slate-50 px-4 py-12">
+        <div className="w-full max-w-md">
+          <AuthBrand title="Belépés az ILOLIT fiókba" subtitle="Egyetlen fiók minden ILOLIT szolgáltatáshoz." />
+          <SignIn
+            routing="path"
+            path="/auth/login"
+            signUpUrl="/auth/register"
+            forceRedirectUrl="/dashboard"
+            appearance={ilolitAuthAppearance}
+          />
+          <p className="mt-5 text-center text-sm text-slate-600">
+            Még nincs fiókod? <a href="/auth/register" className="font-bold text-emerald-700 hover:underline">Regisztráció</a>
+          </p>
+        </div>
       </div>
     </Layout>
   );
@@ -188,15 +195,58 @@ function SignInPage() {
 function SignUpPage() {
   return (
     <Layout>
-      <div className="flex min-h-[75vh] items-center justify-center bg-slate-50 dark:bg-slate-950 px-4 py-12">
-        <SignUp
-          routing="path"
-          path="/auth/register"
-          signInUrl="/auth/login"
-          forceRedirectUrl="/dashboard"
-        />
+      <div className="flex min-h-[75vh] items-center justify-center bg-slate-50 px-4 py-12">
+        <div className="w-full max-w-md">
+          <AuthBrand title="ILOLIT regisztráció" subtitle="Hozd létre a saját ILOLIT fiókodat." />
+          <SignUp
+            routing="path"
+            path="/auth/register"
+            signInUrl="/auth/login"
+            forceRedirectUrl="/dashboard"
+            appearance={ilolitAuthAppearance}
+          />
+          <p className="mt-5 text-center text-sm text-slate-600">
+            Már van fiókod? <a href="/auth/login" className="font-bold text-emerald-700 hover:underline">Belépés</a>
+          </p>
+        </div>
       </div>
     </Layout>
+  );
+}
+
+const ilolitAuthAppearance = {
+  elements: {
+    rootBox: "w-full",
+    cardBox: "w-full shadow-none",
+    card: "w-full rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60",
+    header: "hidden",
+    footer: "hidden",
+    footerAction: "hidden",
+    footerPages: "hidden",
+    formButtonPrimary: "bg-emerald-600 hover:bg-emerald-700 normal-case text-sm font-bold shadow-none",
+    formFieldInput: "rounded-xl border-slate-300 focus:border-emerald-600 focus:ring-emerald-600",
+    socialButtonsBlockButton: "rounded-xl border-slate-300 hover:bg-slate-50",
+    identityPreviewEditButton: "text-emerald-700",
+    formFieldAction: "text-emerald-700",
+  },
+  variables: {
+    colorPrimary: "#059669",
+    colorText: "#0f172a",
+    colorTextSecondary: "#475569",
+    colorBackground: "#ffffff",
+    borderRadius: "0.875rem",
+  },
+} as const;
+
+function AuthBrand({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="mb-6 text-center">
+      <a href="/" className="inline-flex rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black tracking-wide text-white">
+        ILOLIT
+      </a>
+      <h1 className="mt-5 text-2xl font-black text-slate-950">{title}</h1>
+      <p className="mt-2 text-sm text-slate-600">{subtitle}</p>
+    </div>
   );
 }
 
@@ -396,7 +446,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v7.2_20260920_clerk_only_auth";
+    const CURRENT_VER = "v7.3_20260920_ilolit_auth_brand";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);
