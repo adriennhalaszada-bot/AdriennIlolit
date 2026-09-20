@@ -120,6 +120,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         stripeCustomerId: object.customer || "",
         stripeSubscriptionId: object.id || "",
         currentPeriodEnd: typeof object.current_period_end === "number" ? new Date(object.current_period_end * 1000).toISOString() : undefined,
+        cancelAtPeriodEnd: object.cancel_at_period_end === true,
         updatedAt: new Date().toISOString(),
       });
     }
@@ -161,13 +162,19 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       const email = typeof body.email === "string" ? body.email.trim().slice(0, 180) : "";
       if (!plan || !email) return json({ error: "Érvénytelen előfizetési adatok." }, 400);
 
+      const providerObject = await context.env.MEDIA_BUCKET.get(`${PROVIDER_PREFIX}provider_${userId}.json`);
+      const provider = providerObject ? await providerObject.json<any>() : null;
+      const currentStatus = provider?.subscription?.status;
+      if (currentStatus === "active" || currentStatus === "trialing") {
+        return json({ error: "Ehhez a fiókhoz már tartozik aktív előfizetés. A módosításhoz használd az előfizetés-kezelőt." }, 409);
+      }
+
       const amount = plan === "yearly" ? 9999 : 999;
       const interval = plan === "yearly" ? "year" : "month";
       const origin = new URL(context.request.url).origin;
       const form = new URLSearchParams({
         mode: "subscription",
         client_reference_id: userId,
-        customer_email: email,
         "line_items[0][quantity]": "1",
         "line_items[0][price_data][currency]": "huf",
         // HUF is a zero-decimal Stripe currency: unit_amount is expressed in whole forints.
@@ -181,6 +188,12 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         success_url: `${origin}/beauty/register?payment=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${origin}/beauty/register?payment=cancelled`,
       });
+      const existingCustomerId = provider?.subscription?.stripeCustomerId;
+      if (typeof existingCustomerId === "string" && existingCustomerId.startsWith("cus_")) {
+        form.set("customer", existingCustomerId);
+      } else {
+        form.set("customer_email", email);
+      }
       const response = await stripeRequest(context.env, "/checkout/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
