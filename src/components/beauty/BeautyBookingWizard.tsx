@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { X, Calendar as CalendarIcon, Clock, Check, ShieldCheck, CreditCard, ArrowLeft, ArrowRight, Sparkles, BellRing, Smartphone, Info } from "lucide-react";
+import { X, Clock, Check, Sparkles, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { formatPrice } from "@/lib/constants";
 import { useToast } from "@/hooks/use-toast";
+import { createProviderBooking } from "@/lib/providerBookingApi";
 
 export interface BeautyBookingWizardProps {
   isOpen: boolean;
@@ -45,7 +46,8 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
   const [customerEmail, setCustomerEmail] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [termsAccepted, setTermsAccepted] = useState<boolean>(false);
-  const [paymentMethod, setPaymentMethod] = useState<"card" | "paypal" | "applepay" | "googlepay">("card");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [bookingReference, setBookingReference] = useState("");
 
   useEffect(() => {
     if (!isOpen) return;
@@ -57,6 +59,8 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
     setCustomerEmail("");
     setNotes("");
     setTermsAccepted(false);
+    setIsSubmitting(false);
+    setBookingReference("");
   }, [isOpen, service.id, tomorrow]);
 
   if (!isOpen) return null;
@@ -74,7 +78,7 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
     { time: "16:00 - 18:00", recommended: false },
   ];
 
-  const handleCompleteBooking = () => {
+  const handleCompleteBooking = async () => {
     if (!selectedDate || !selectedSlot || !customerName.trim() || !customerPhone.trim() || !customerEmail.trim()) {
       toast({ title: "Hiányzó foglalási adatok", description: "Töltsd ki a dátumot, időpontot és az elérhetőségi adatokat.", variant: "destructive" });
       return;
@@ -83,7 +87,26 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
       toast({ title: "Kérjük fogadd el az Általános Szerződési Feltételeket!", variant: "destructive" });
       return;
     }
-    setStep(5); // Success screen
+    setIsSubmitting(true);
+    try {
+      const booking = await createProviderBooking({
+        providerId: provider.id,
+        serviceId: service.id,
+        bookingDate: selectedDate,
+        bookingTime: selectedSlot,
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        customerEmail: customerEmail.trim(),
+        notes: notes.trim(),
+      });
+      setBookingReference(booking.id);
+      setStep(5);
+      toast({ title: "A foglalási kérés elküldve", description: "A szolgáltató visszaigazolásáig az időpont függőben marad." });
+    } catch (error) {
+      toast({ title: "A foglalás nem sikerült", description: error instanceof Error ? error.message : "Ismeretlen hiba történt.", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const goToConfirmation = () => {
@@ -126,7 +149,7 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
             <span>➔</span>
             <span className={step === 3 ? "text-emerald-600 underline" : ""}>3️⃣ Adatok</span>
             <span>➔</span>
-            <span className={step === 4 ? "text-emerald-600 underline" : ""}>4️⃣ Fizetés & Zárolás</span>
+            <span className={step === 4 ? "text-emerald-600 underline" : ""}>4️⃣ Összesítés</span>
           </div>
         )}
 
@@ -270,18 +293,18 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
                   Vissza
                 </Button>
                 <Button onClick={goToConfirmation} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl py-6 text-base shadow-md">
-                  Tovább a Fizetéshez & Megerősítéshez ➔
+                  Tovább az Összesítéshez ➔
                 </Button>
               </div>
             </div>
           )}
 
-          {/* STEP 4: MEGERŐSÍTÉS & FIZETÉS / ZÁROLÁS */}
+          {/* STEP 4: MEGERŐSÍTÉS */}
           {step === 4 && (
             <div className="space-y-5">
               <div className="text-center space-y-1">
                 <Badge className="bg-emerald-100 text-emerald-800 font-extrabold">4. Lépés</Badge>
-                <h4 className="text-xl font-black text-slate-900 dark:text-slate-100">Foglalás Összesítése & Előleg Zárolás</h4>
+                <h4 className="text-xl font-black text-slate-900 dark:text-slate-100">Foglalás Összesítése</h4>
               </div>
 
               <div className="p-4 rounded-3xl bg-slate-50 dark:bg-slate-800/50 border space-y-2 text-xs">
@@ -308,7 +331,7 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
                 {hasDeposit ? (
                   <>
                     <div className="flex justify-between text-emerald-800 font-black text-sm">
-                      <span>Visszaigazoláskor levonandó előleg ({depositPercent}%):</span>
+                      <span>Visszaigazolás után fizetendő előleg ({depositPercent}%):</span>
                       <span>{formatPrice(depositAmount)}</span>
                     </div>
                     <div className="flex justify-between text-slate-500 pt-1 border-t">
@@ -324,41 +347,13 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
                 )}
               </div>
 
-              {/* Payment Method Selector if deposit applies */}
-              {hasDeposit && (
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700">Fizetési Kártya Megadása (Előzetes Zárolás)</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { id: "card", label: "Bankkártya", icon: CreditCard },
-                      { id: "paypal", label: "PayPal", icon: ShieldCheck },
-                      { id: "applepay", label: "Apple Pay", icon: Smartphone },
-                      { id: "googlepay", label: "Google Pay", icon: Smartphone },
-                    ].map((pm) => (
-                      <button
-                        key={pm.id}
-                        onClick={() => setPaymentMethod(pm.id as typeof paymentMethod)}
-                        className={`p-3 rounded-2xl border text-xs font-extrabold flex items-center gap-2 transition-all ${
-                          paymentMethod === pm.id
-                            ? "border-emerald-600 bg-emerald-50 text-emerald-900 font-black ring-1 ring-emerald-600"
-                            : "border-slate-200 text-slate-600 hover:border-slate-300"
-                        }`}
-                      >
-                        <pm.icon className="w-4 h-4 text-emerald-600" />
-                        <span>{pm.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Notice Box about Pre-authorization */}
+              {/* Notice Box */}
               <div className="p-3.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 text-[11px] text-indigo-900 dark:text-indigo-200 font-medium flex items-start gap-2.5">
                 <Info className="w-4 h-4 text-indigo-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <strong className="block font-black text-indigo-950 dark:text-indigo-100">🔒 Biztonsági zárolási szabály:</strong>
+                  <strong className="block font-black text-indigo-950 dark:text-indigo-100">Fizetési tájékoztató:</strong>
                   {hasDeposit ? (
-                    <span>A rendszer most még <strong>NEM vonja le</strong> az előleget ({formatPrice(depositAmount)}) a kártyádról, csak előzetesen zárolja. A tényleges levonás kizárólag akkor történik meg, ha a szolgáltató visszaigazolja a foglalást. Elutasítás esetén a zárolás azonnal feloldódik!</span>
+                    <span>A kérés elküldésekor <strong>nem történik terhelés vagy zárolás</strong>. Az előleg ({formatPrice(depositAmount)}) csak a szolgáltatói visszaigazolás után, külön fizetési lépésben válik esedékessé.</span>
                   ) : (
                     <span>Ez a szolgáltató nem kér előleget. A foglalás elküldése után a teljes összeget ({formatPrice(service.price)}) a helyszínen fizeted a szolgáltatónak.</span>
                   )}
@@ -369,8 +364,8 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
                 <Button variant="outline" onClick={() => setStep(3)} className="rounded-2xl font-bold py-6 px-6">
                   Vissza
                 </Button>
-                <Button onClick={handleCompleteBooking} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl py-6 text-base shadow-md">
-                  {hasDeposit ? `🔒 Kártya Zárolása & Foglalás Kérése ➔` : `✅ Foglalás Véglegesítése (0 Ft) ➔`}
+                <Button disabled={isSubmitting} onClick={handleCompleteBooking} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl py-6 text-base shadow-md">
+                  {isSubmitting ? "Foglalási kérés mentése…" : "Foglalási kérés elküldése ➔"}
                 </Button>
               </div>
             </div>
@@ -384,11 +379,11 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
               </div>
 
               <div className="space-y-2">
-                <Badge className="bg-emerald-600 text-white font-black">BK-2026-08-30-001</Badge>
+                <Badge className="bg-emerald-600 text-white font-black">{bookingReference ? `BK-${bookingReference.slice(0, 8).toUpperCase()}` : "FOGLALÁS MENTVE"}</Badge>
                 <h4 className="text-2xl font-black text-slate-900 dark:text-slate-100">Foglalási Kérelmed Elküldve!</h4>
                 {hasDeposit ? (
                   <p className="text-xs text-slate-600 dark:text-slate-300 max-w-md mx-auto">
-                    Az előleg (<strong className="text-emerald-700">{formatPrice(depositAmount)}</strong>) <strong>előzetesen zárolva</strong> lett a kártyádon. Levonás kizárólag a szolgáltatói megerősítéskor történik!
+                    A foglalási kérés rögzítve. Az előleg (<strong className="text-emerald-700">{formatPrice(depositAmount)}</strong>) fizetése külön, biztonságos lépésben lesz elérhető a szolgáltatói visszaigazolás után.
                   </p>
                 ) : (
                   <p className="text-xs text-slate-600 dark:text-slate-300 max-w-md mx-auto">
@@ -412,11 +407,11 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="font-bold text-emerald-600">3.</span>
-                    <span>{hasDeposit ? "✅ Megerősítéskor megtörténik az előleg tényleges levonása." : "✅ Megerősítéskor a helyszíni időpontod zárolásra kerül."}</span>
+                    <span>{hasDeposit ? "✅ Megerősítés után külön fizetési értesítést kapsz az előlegről." : "✅ Megerősítéskor az időpontod véglegessé válik."}</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="font-bold text-emerald-600">4.</span>
-                    <span>❌ Elutasítás esetén az előleg zárolása <strong>azonnal feloldódik</strong>, számládat nem érheti levonás.</span>
+                    <span>❌ Elutasítás esetén a kérés lezárul; a rendszer nem terheli meg a számládat.</span>
                   </li>
                 </ol>
               </div>
