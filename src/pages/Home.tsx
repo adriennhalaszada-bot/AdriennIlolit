@@ -1,5 +1,5 @@
 import { Layout } from "@/components/layout/Layout";
-import { useGetFeaturedListings } from "@workspace/api-client-react";
+import { useGetListings } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { UnifiedListingCard } from "@/components/shared/UnifiedListingCard";
 import { Button } from "@/components/ui/button";
@@ -107,8 +107,25 @@ export function Home() {
   const [searchValue, setSearchValue] = useState("");
   const [locationValue, setLocationValue] = useState("");
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
-
-  const showcaseItems = MOCK_SHOWCASE_DATA[activeTab] || MOCK_SHOWCASE_DATA.marketplace;
+  const {
+    data: liveListingPage,
+    isLoading: isLoadingMarketplace,
+    isError: hasMarketplaceError,
+  } = useGetListings({ limit: 4 });
+  const liveMarketplaceItems: ShowcaseItem[] = (
+    Array.isArray((liveListingPage as any)?.items) ? (liveListingPage as any).items : []
+  ).map((listing: any) => ({
+    id: listing.id,
+    title: listing.title || "Névtelen hirdetés",
+    price: Number(listing.price) || 0,
+    location: listing.location || listing.user?.location || "Magyarország",
+    imageUrl: listing.images?.[0]?.url || "",
+    subtitle: listing.description || listing.category?.name || "Piactéri hirdetés",
+    badgeText: listing.listingType === "AUCTION" ? "Licit" : listing.listingType === "NEGOTIABLE" ? "Alkuképes" : "Fix áras",
+  }));
+  const showcaseItems = activeTab === "marketplace"
+    ? liveMarketplaceItems
+    : MOCK_SHOWCASE_DATA[activeTab] || [];
 
   return (
     <Layout>
@@ -268,7 +285,20 @@ export function Home() {
         </div>
 
         {/* Listings Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {activeTab === "marketplace" && isLoadingMarketplace ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm font-semibold text-slate-600">
+            A legfrissebb hirdetések betöltése…
+          </div>
+        ) : activeTab === "marketplace" && hasMarketplaceError ? (
+          <div className="rounded-2xl border border-rose-200 bg-white p-10 text-center text-sm font-semibold text-rose-700">
+            A hirdetéseket most nem sikerült betölteni.
+          </div>
+        ) : showcaseItems.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm font-semibold text-slate-600">
+            Jelenleg nincs megjeleníthető aktív ajánlat.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {showcaseItems.map((item) => (
             <UnifiedListingCard
               key={item.id}
@@ -285,7 +315,9 @@ export function Home() {
               isVerified={item.isVerified}
               specs={item.specs}
               href={
-                activeTab === "realestate"
+                activeTab === "marketplace"
+                  ? `/product/${item.id}`
+                  : activeTab === "realestate"
                   ? `/real-estate?id=${item.id}`
                   : activeTab === "vehicles"
                   ? `/vehicles?id=${item.id}`
@@ -293,7 +325,8 @@ export function Home() {
               }
             />
           ))}
-        </div>
+          </div>
+        )}
       </section>
 
       {/* ── 4. CONCISE VIDEO & PLATFORM OVERVIEW ── */}
