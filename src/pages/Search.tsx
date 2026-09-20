@@ -279,7 +279,11 @@ export function Search() {
 
   const [showCategoryTree, setShowCategoryTree] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MarketplaceItem | null>(null);
-  const { data: liveListingPage } = useGetListings({ limit: 100 });
+  const {
+    data: liveListingPage,
+    isLoading: isLoadingListings,
+    isError: hasListingError,
+  } = useGetListings({ limit: 100 });
 
   const liveMarketplaceItems = useMemo<MarketplaceItem[]>(() => {
     const items = Array.isArray((liveListingPage as any)?.items) ? (liveListingPage as any).items : [];
@@ -323,10 +327,9 @@ export function Search() {
       }));
   }, [liveListingPage]);
 
-  const marketplaceItems = useMemo(() => {
-    const liveIds = new Set(liveMarketplaceItems.map((item) => item.id));
-    return [...liveMarketplaceItems, ...MOCK_MARKETPLACE_ITEMS.filter((item) => !liveIds.has(item.id))];
-  }, [liveMarketplaceItems]);
+  // A nyilvános piactér kizárólag a szerveren ténylegesen elmentett,
+  // aktív hirdetéseket mutatja. A bemutató adatok nem keveredhetnek a valódiakkal.
+  const marketplaceItems = liveMarketplaceItems;
 
   // Clean Categories list
   const quickCategories = [
@@ -658,7 +661,7 @@ export function Search() {
                       : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
                   }`}
                 >
-                  🌐 Összes hirdetés ({MOCK_MARKETPLACE_ITEMS.length})
+                  🌐 Összes hirdetés ({marketplaceItems.length})
                 </button>
                 <button
                   onClick={() => { setSellerTypeFilter("PRIVATE"); setMerchantShopFilter("all"); }}
@@ -716,7 +719,19 @@ export function Search() {
             )}
 
             {/* Products Grid */}
-            {filteredItems.length === 0 ? (
+            {isLoadingListings ? (
+              <div className="text-center py-16 bg-white dark:bg-slate-950 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 space-y-3">
+                <p className="text-sm font-extrabold text-slate-600 dark:text-slate-400">
+                  Hirdetések betöltése…
+                </p>
+              </div>
+            ) : hasListingError ? (
+              <div className="text-center py-16 bg-white dark:bg-slate-950 rounded-3xl border border-rose-200 dark:border-rose-900 p-8 space-y-3">
+                <p className="text-sm font-extrabold text-rose-700 dark:text-rose-300">
+                  A hirdetéseket most nem sikerült betölteni. Kérjük, frissítsd az oldalt.
+                </p>
+              </div>
+            ) : filteredItems.length === 0 ? (
               <div className="text-center py-16 bg-white dark:bg-slate-950 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 space-y-3">
                 <p className="text-sm font-extrabold text-slate-600 dark:text-slate-400">
                   Nincs találat a megadott szűrők alapján.
@@ -788,10 +803,10 @@ export function Search() {
                       <div className="px-4 pb-4 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                         <div>
                           <span className="text-base font-black text-purple-600 dark:text-purple-400 block">
-                            {formatPrice(item.price)}
+                            {formatPrice(item.price)} Ft
                           </span>
                           <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium block">
-                            + Biztonsági díj: {formatPrice(safetyFee)}
+                            + Biztonsági díj: {formatPrice(safetyFee)} Ft
                           </span>
                         </div>
 
@@ -851,10 +866,10 @@ export function Search() {
                 </div>
                 <div className="text-left md:text-right">
                   <div className="text-2xl font-black text-purple-600 dark:text-purple-400">
-                    {formatPrice(selectedItem.price)}
+                    {formatPrice(selectedItem.price)} Ft
                   </div>
                   <span className="text-xs font-extrabold text-slate-500 block">
-                    + {formatPrice(calculateSafetyFee(selectedItem.price))} Biztonsági díj
+                    + {formatPrice(calculateSafetyFee(selectedItem.price))} Ft Biztonsági díj
                   </span>
                 </div>
               </div>
