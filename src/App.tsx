@@ -43,7 +43,6 @@ import { ShopPage } from "./pages/ShopPage";
 import { BusinessCommissionDashboard } from "./pages/BusinessCommissionDashboard";
 import { AdminCategoriesPage } from "./pages/AdminCategories";
 import { AdminDisputes } from "./pages/AdminDisputes";
-import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { InteractiveCalendarBookingApp } from "./pages/InteractiveCalendarBookingApp";
 import { MediaManagerPage } from "./pages/MediaManagerPage";
 import { BeautyDevRoadmap } from "./components/beauty/BeautyDevRoadmap";
@@ -294,8 +293,8 @@ function AppRouterInner() {
 
       <Route path="/auth/register" component={SignUpPage} />
       <Route path="/auth/login" component={SignInPage} />
-      <Route path="/auth/forgot-password" component={ForgotPasswordPage} />
-      <Route path="/auth/reset-password" component={ForgotPasswordPage} />
+      <Route path="/auth/forgot-password" component={SignInPage} />
+      <Route path="/auth/reset-password" component={SignInPage} />
 
       <Route path="/auth/login/*?" component={SignInPage} />
       <Route path="/auth/register/*?" component={SignUpPage} />
@@ -397,7 +396,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v7.1_20260920_no_demo_merchants";
+    const CURRENT_VER = "v7.2_20260920_clerk_only_auth";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);
