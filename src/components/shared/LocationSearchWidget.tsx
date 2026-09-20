@@ -412,7 +412,7 @@ export function LocationSearchWidget({
               <input
                 type="range"
                 min={1}
-                max={300}
+                max={500}
                 step={1}
                 value={value.customRadiusKm ?? value.radiusKm}
                 onChange={(e) => update({ customRadiusKm: Number(e.target.value) })}
@@ -423,7 +423,7 @@ export function LocationSearchWidget({
                 <span className="font-extrabold text-slate-600 dark:text-slate-300">
                   {value.customRadiusKm ?? value.radiusKm} km
                 </span>
-                <span>300 km</span>
+                <span>500 km</span>
               </div>
             </div>
           )}
