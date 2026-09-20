@@ -48,6 +48,7 @@ export interface ProviderProfileRecord {
     activatedAt?: string;
     cancelledAt?: string;
     currentPeriodEnd?: string;
+    cancelAtPeriodEnd?: boolean;
   };
   updatedAt?: string;
 }
