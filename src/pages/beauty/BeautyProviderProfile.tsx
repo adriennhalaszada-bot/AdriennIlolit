@@ -22,7 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { useUserAccountStore } from "@/lib/userAccountStore";
 import { formatPrice } from "@/lib/constants";
 import { BEAUTY_SERVICE_TYPE_LABELS } from "@/lib/beautyConstants";
-import { Star, MapPin, Phone, Instagram, Globe, Heart, Clock, CheckCircle2, ChevronDown, Sparkles, CalendarDays, Video, Bell, Play } from "lucide-react";
+import { Star, MapPin, Phone, Instagram, Globe, Heart, Clock, CheckCircle2, ChevronDown, Sparkles, CalendarDays, Video, Bell } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getProfileTemplate, type ProfileTemplate } from "./templates/templateConfig";
@@ -39,6 +39,27 @@ function toDateKey(d: Date) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function videoEmbedUrl(value: string): string | null {
+  try {
+    const url = new URL(value, window.location.origin);
+    if (url.hostname === "youtu.be") {
+      const id = url.pathname.split("/").filter(Boolean)[0];
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+    if (url.hostname.endsWith("youtube.com")) {
+      const id = url.searchParams.get("v") || url.pathname.match(/\/(?:embed|shorts)\/([^/?]+)/)?.[1];
+      return id ? `https://www.youtube.com/embed/${id}` : null;
+    }
+    if (url.hostname === "vimeo.com" || url.hostname.endsWith(".vimeo.com")) {
+      const id = url.pathname.match(/\/(?:video\/)?(\d+)/)?.[1];
+      return id ? `https://player.vimeo.com/video/${id}` : null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 export function BeautyProviderProfile() {
@@ -419,32 +440,32 @@ function GlassProfile({ provider, theme, isFavorited, onToggleFavorite, reviews,
           />
         </div>
 
-        {/* Cloudflare Showcase Video Intro */}
+        {/* Provider introduction video */}
         {(provider as any).videoUrl && (
           <div className="mb-10 space-y-3">
             <h2 className="text-lg font-bold flex items-center gap-2">
               <Video className="w-5 h-5 text-emerald-500" />
-              <span>Bemutatkozó Videó & Munkák (Cloudflare Stream)</span>
+              <span>Bemutatkozó videó</span>
             </h2>
             <div className="relative rounded-3xl overflow-hidden bg-slate-950 border border-slate-800 aspect-video shadow-2xl flex items-center justify-center">
-              {(provider as any).videoUrl.includes("youtube.com") || (provider as any).videoUrl.includes("youtu.be") ? (
+              {videoEmbedUrl((provider as any).videoUrl) ? (
                 <iframe
-                  src={(provider as any).videoUrl.replace("watch?v=", "embed/")}
+                  src={videoEmbedUrl((provider as any).videoUrl) ?? undefined}
                   title="Szolgáltatói Bemutatkozó Videó"
                   className="w-full h-full rounded-3xl border-0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                 />
               ) : (
-                <div className="text-center p-8 space-y-3">
-                  <div className="w-16 h-16 rounded-full bg-emerald-600/90 text-white flex items-center justify-center mx-auto shadow-lg">
-                    <Play className="w-8 h-8 fill-white ml-1" />
-                  </div>
-                  <div className="text-sm font-extrabold text-white">Cloudflare Stream Bemutató Lejátszása</div>
-                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                    A videó a Cloudflare hálózatáról töltődik be nagy felbontásban.
-                  </p>
-                </div>
+                <video
+                  src={(provider as any).videoUrl}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="h-full w-full object-contain"
+                >
+                  A böngésződ nem támogatja a videólejátszást.
+                </video>
               )}
             </div>
           </div>
