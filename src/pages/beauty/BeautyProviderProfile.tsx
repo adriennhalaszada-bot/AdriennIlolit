@@ -332,10 +332,11 @@ function GlassProfile({ provider, theme, isFavorited, onToggleFavorite, reviews,
               </Button>
               <Button
                 size="sm"
+                disabled={availableServices.length === 0}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl"
-                onClick={() => onOpenWizard(availableServices[0] || { id: "s1", name: "Teljes kezelés", price: 8500, durationMinutes: 60, depositPercentage: 50 })}
+                onClick={() => availableServices[0] && onOpenWizard(availableServices[0])}
               >
-                Időpont foglalása
+                {availableServices.length > 0 ? "Időpont foglalása" : "Nincs foglalható szolgáltatás"}
               </Button>
             </div>
           </div>
