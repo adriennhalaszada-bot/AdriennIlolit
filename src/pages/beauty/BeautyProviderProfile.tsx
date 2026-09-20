@@ -15,14 +15,12 @@ import {
 import type { BeautyProvider, BeautyReview, BeautyServiceOffering } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Calendar } from "@/components/ui/calendar";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { useUserAccountStore } from "@/lib/userAccountStore";
 import { formatPrice } from "@/lib/constants";
 import { BEAUTY_SERVICE_TYPE_LABELS } from "@/lib/beautyConstants";
-import { Star, MapPin, Phone, Instagram, Globe, Heart, Clock, CheckCircle2, ChevronDown, Sparkles, CalendarDays, Video, Bell } from "lucide-react";
+import { Star, MapPin, Phone, Instagram, Globe, Heart, Clock, ChevronDown, Sparkles, CalendarDays, Video, Bell } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getProfileTemplate, type ProfileTemplate } from "./templates/templateConfig";
@@ -33,13 +31,6 @@ import { cn } from "@/lib/utils";
 import { BeautyBookingWizard } from "@/components/beauty/BeautyBookingWizard";
 import { DEMO_GENERAL_PROVIDERS } from "@/data/allProvidersData";
 import { getProviderProfile, type ProviderProfileRecord } from "@/lib/providerApi";
-
-function toDateKey(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 function videoEmbedUrl(value: string): string | null {
   try {
@@ -524,123 +515,42 @@ function MultiServiceBookingEngine({
   onOpenWizard?: (service: any) => void;
 }) {
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
-  const { currentUser } = useUserAccountStore();
-
-  const [selectedIds, setSelectedIds] = useState<string[]>(
-    services.length > 0 ? [services[0].id] : []
-  );
-  const [date, setDate] = useState<Date | undefined>(new Date(Date.now() + 86400000));
-  const [selectedSlot, setSelectedSlot] = useState<{ id: string; startTime: string; endTime: string; duration: number } | null>(null);
-  const [notes, setNotes] = useState("");
-  const [done, setDone] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(services[0]?.id ?? null);
   const [isWatchdogOpen, setIsWatchdogOpen] = useState(false);
 
-  const dateKey = date ? toDateKey(date) : "";
-
-  // Selected services calculation
-  const selectedServices = services.filter((s) => selectedIds.includes(s.id));
-  const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0);
-  const totalDurationMinutes = selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0);
-  const requiredDepositAmount = selectedServices.reduce((sum, service) => {
+  const selectedService = services.find((service) => service.id === selectedId) ?? null;
+  const requiredDepositAmount = selectedService ? (() => {
+    const service = selectedService;
     const requiresDeposit = (service as any).requiresDeposit === true;
     const percentage = Number((service as any).depositPercentage || 0);
-    return requiresDeposit ? sum + Math.round((service.price * percentage) / 100) : sum;
-  }, 0);
+    return requiresDeposit ? Math.round((service.price * percentage) / 100) : 0;
+  })() : 0;
 
   // Group services by category
   const categories = Array.from(new Set(services.map((s) => (s as any).category || "Egyéb")));
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
-    setSelectedSlot(null);
-  };
-
-  // Mock slot data with start and end times to calculate exact duration
-  const mockSlots = [
-    { id: "slot-1", startTime: "09:00", endTime: "10:00", duration: 60 },
-    { id: "slot-2", startTime: "10:00", endTime: "11:30", duration: 90 },
-    { id: "slot-3", startTime: "11:30", endTime: "13:00", duration: 90 },
-    { id: "slot-4", startTime: "14:00", endTime: "15:00", duration: 60 },
-    { id: "slot-5", startTime: "15:00", endTime: "17:00", duration: 120 },
-  ];
-
-  const disablePastDates = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return { before: today };
-  }, []);
-
-  const handleSubmit = () => {
+  const handleContinue = () => {
     if (!isSignedIn) {
       setLocation("/auth/login");
       return;
     }
-    if (!selectedSlot || selectedIds.length === 0) return;
-
-    if (totalDurationMinutes > selectedSlot.duration) {
-      toast({
-        title: "Időtartam Túllépés!",
-        description: `A kiválasztott ${totalDurationMinutes} perces csomag nem fér bele a ${selectedSlot.duration} perces idősávba.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setDone(true);
-    toast({
-      title: "Sikeres Intelligens Foglalás! 🎉",
-      description: `${selectedServices.length} szolgáltatás lefoglalva. Összesen: ${formatPrice(totalPrice)} (${totalDurationMinutes} perc).`,
-    });
+    if (selectedService) onOpenWizard?.(selectedService);
   };
-
-  if (done) {
-    return (
-      <div className="rounded-3xl p-8 text-center" style={glassCard(theme)}>
-        <CheckCircle2 className="w-12 h-12 mx-auto mb-3 text-emerald-500" />
-        <h3 className="text-xl font-bold mb-1">Foglalási Kérés Elküldve!</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          A szolgáltató értesítést kapott a(z) <strong>{currentUser?.nickname || "vendég"}</strong> becenevű foglalásról.
-        </p>
-
-        <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl max-w-sm mx-auto mb-6 text-left text-xs space-y-2 border">
-          <div className="flex justify-between font-bold">
-            <span>Dátum & Idősáv:</span>
-            <span>{dateKey} ({selectedSlot?.startTime} – {selectedSlot?.endTime})</span>
-          </div>
-          <div className="flex justify-between font-bold">
-            <span>Választott Szolgáltatások:</span>
-            <span>{selectedServices.map(s => s.name).join(", ")}</span>
-          </div>
-          <div className="flex justify-between text-emerald-600 font-extrabold text-sm pt-1 border-t">
-            <span>Összesen:</span>
-            <span>{formatPrice(totalPrice)} ({totalDurationMinutes} perc)</span>
-          </div>
-        </div>
-
-        <Button asChild size="sm" variant="outline" className="rounded-xl">
-          <Link href="/beauty/bookings">Foglalásaim Megtekintése</Link>
-        </Button>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between border-b pb-3">
         <div>
           <h2 className="text-xl font-extrabold flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-rose-500" /> 1. Válassz Szolgáltatásokat
+            <Sparkles className="w-5 h-5 text-rose-500" /> Válassz szolgáltatást
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Több szolgáltatást is kijelölhetsz – a rendszer automatikusan kiszámítja az összesített időtartamot és árat!
+            A következő lépésben csak a szolgáltató valóban szabad időpontjai jelennek meg.
           </p>
         </div>
-        {selectedServices.length > 0 && (
+        {selectedService && (
           <Badge className="bg-rose-500 text-white font-bold">
-            {selectedServices.length} kijelölve ({totalDurationMinutes} perc)
+            {selectedService.durationMinutes} perc
           </Badge>
         )}
       </div>
@@ -654,11 +564,11 @@ function MultiServiceBookingEngine({
               <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">{cat}</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {catServices.map((s) => {
-                  const isChecked = selectedIds.includes(s.id);
+                  const isChecked = selectedId === s.id;
                   return (
                     <div
                       key={s.id}
-                      onClick={() => toggleSelect(s.id)}
+                      onClick={() => setSelectedId(s.id)}
                       className={`p-4 rounded-2xl border cursor-pointer transition-all ${
                         isChecked
                           ? "bg-rose-500/10 border-rose-500 shadow-sm ring-2 ring-rose-500/30"
@@ -668,9 +578,10 @@ function MultiServiceBookingEngine({
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-3">
                           <input
-                            type="checkbox"
+                            type="radio"
+                            name="provider-service"
                             checked={isChecked}
-                            onChange={() => {}}
+                            onChange={() => setSelectedId(s.id)}
                             className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500"
                           />
                           <div>
@@ -695,93 +606,39 @@ function MultiServiceBookingEngine({
         })}
       </div>
 
-      {/* Live Selection Summary Bar */}
-      {selectedServices.length > 0 && (
+      {selectedService && (
         <Card className="p-4 rounded-2xl bg-gradient-to-r from-rose-500 to-indigo-600 text-white shadow-lg space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <span className="text-xs opacity-90 block">Kiválasztott Szolgáltatás-csomag:</span>
-              <span className="font-extrabold text-sm">{selectedServices.map((s) => s.name).join(" + ")}</span>
+              <span className="text-xs opacity-90 block">Kiválasztott szolgáltatás:</span>
+              <span className="font-extrabold text-sm">{selectedService.name}</span>
             </div>
             <div className="text-right">
-              <div className="text-lg font-black">{formatPrice(totalPrice)}</div>
+              <div className="text-lg font-black">{formatPrice(selectedService.price)}</div>
               <div className="text-xs opacity-90 flex items-center justify-end gap-1 font-bold">
-                <Clock className="w-3.5 h-3.5" /> {totalDurationMinutes} perc összesen
+                <Clock className="w-3.5 h-3.5" /> {selectedService.durationMinutes} perc
               </div>
             </div>
           </div>
         </Card>
       )}
 
-      {/* Step 2: Intelligent Date & Slot Picker */}
-      {selectedServices.length > 0 && (
-        <div className="space-y-4 pt-4 border-t">
-          <h2 className="text-xl font-extrabold flex items-center gap-2">
-            <CalendarDays className="w-5 h-5 text-rose-500" /> 2. Válassz Dátumot és Idősávot
-          </h2>
+      {selectedService && (
+        <div className="grid grid-cols-1 gap-4 border-t pt-4 md:grid-cols-2">
+          <div className="rounded-2xl border bg-white p-5 shadow-sm dark:bg-slate-900">
+            <h2 className="flex items-center gap-2 text-lg font-extrabold">
+              <CalendarDays className="h-5 w-5 text-emerald-600" /> Valós időpontok megtekintése
+            </h2>
+            <p className="mt-2 text-xs text-muted-foreground">A rendszer a mentett munkaidőből levonja a már lefoglalt időpontokat, ezért csak foglalható időpontot enged kiválasztani.</p>
+            <Button onClick={handleContinue} className="mt-4 w-full rounded-xl bg-emerald-600 py-5 font-extrabold text-white hover:bg-emerald-700">
+              {isSignedIn ? "Dátum és szabad időpont kiválasztása" : "Jelentkezz be a foglaláshoz"}
+            </Button>
+            <p className="mt-2 text-center text-[10px] font-bold text-slate-500">
+              {requiredDepositAmount > 0 ? `A megerősítéskor fizetendő előleg: ${formatPrice(requiredDepositAmount)}` : "Ehhez a szolgáltatáshoz nem szükséges online előleg."}
+            </p>
+          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h3 className="text-sm font-bold mb-2 text-slate-700 dark:text-slate-300">Dátum Kiválasztása</h3>
-              <Card className="p-2 w-fit border rounded-2xl bg-white dark:bg-slate-900 shadow-sm">
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={(d) => { setDate(d); setSelectedSlot(null); }}
-                  disabled={disablePastDates}
-                />
-              </Card>
-            </div>
-
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">Intelligens Idősáv Ellenőrzés</h3>
-              <p className="text-xs text-muted-foreground">
-                Csak azok az idősávok foglalhatók, amelyekbe a kiválasztott {totalDurationMinutes} perces csomag belefér!
-              </p>
-
-              <div className="space-y-2">
-                {mockSlots.map((slot) => {
-                  const fits = slot.duration >= totalDurationMinutes;
-                  const isSelected = selectedSlot?.id === slot.id;
-
-                  return (
-                    <button
-                      key={slot.id}
-                      type="button"
-                      disabled={!fits}
-                      onClick={() => setSelectedSlot(slot)}
-                      className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-all ${
-                        !fits
-                          ? "opacity-40 bg-slate-100 dark:bg-slate-800/50 border-slate-200 cursor-not-allowed"
-                          : isSelected
-                            ? "bg-rose-500 text-white border-rose-500 shadow-md font-bold"
-                            : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-rose-400"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4" />
-                        <span className="text-sm font-extrabold">{slot.startTime} – {slot.endTime}</span>
-                        <span className="text-xs opacity-80">({slot.duration} perces sáv)</span>
-                      </div>
-
-                      <div>
-                        {fits ? (
-                          <Badge variant="outline" className={`text-[10px] ${isSelected ? "border-white text-white" : "border-emerald-500 text-emerald-600"}`}>
-                            ✓ Belefér ({totalDurationMinutes}m)
-                          </Badge>
-                        ) : (
-                          <Badge variant="destructive" className="text-[10px]">
-                            ❌ Túl rövid ({slot.duration}m &lt; {totalDurationMinutes}m)
-                          </Badge>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Service Watchdog Banner */}
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white shadow-lg space-y-2 border border-emerald-500/40">
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white shadow-lg space-y-2 border border-emerald-500/40">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black text-emerald-400 flex items-center gap-1.5">
                     <Bell className="w-4 h-4 text-emerald-400 animate-bounce" />
@@ -797,30 +654,8 @@ function MultiServiceBookingEngine({
                   onClick={() => setIsWatchdogOpen(true)}
                   className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-4 rounded-xl text-xs mt-1 shadow-md"
                 >
-                  ⚡ Szolgáltatásfigyelő Aktiválása Erre a Napra ➔
+                  ⚡ Szolgáltatásfigyelő beállítása ➔
                 </Button>
-              </div>
-
-              {/* Confirmation Button */}
-              <div className="pt-2 space-y-2">
-                <Button
-                  onClick={handleSubmit}
-                  disabled={!selectedSlot || selectedIds.length === 0}
-                  className="w-full py-6 rounded-2xl text-base font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl shadow-emerald-600/20"
-                >
-                  {isSignedIn
-                    ? requiredDepositAmount > 0
-                      ? `Foglalási kérés · fizetendő előleg: ${formatPrice(requiredDepositAmount)}`
-                      : `Foglalási kérés · ${formatPrice(totalPrice)}`
-                    : "Jelentkezz be a foglaláshoz"}
-                </Button>
-                <div className="text-[10px] text-center font-bold text-slate-500 dark:text-slate-400">
-                  {requiredDepositAmount > 0
-                    ? "Az előleg csak a foglalás megerősítésekor fizetendő; a fennmaradó összeget a szolgáltatónál rendezed."
-                    : "Ehhez a szolgáltatáshoz nem szükséges online előleg; a fizetés a szolgáltatónál történik."}
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       )}
@@ -830,8 +665,8 @@ function MultiServiceBookingEngine({
         onClose={() => setIsWatchdogOpen(false)}
         providerName={provider.displayName}
         providerId={provider.id}
-        requestedDate={dateKey}
-        serviceName={selectedServices.map((s) => s.name).join(" + ")}
+        requestedDate=""
+        serviceName={selectedService?.name || "Kiválasztott szolgáltatás"}
       />
     </div>
   );
