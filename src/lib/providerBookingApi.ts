@@ -65,3 +65,11 @@ export function respondToProviderBooking(id: string, status: "CONFIRMED" | "REJE
 export function cancelProviderBooking(id: string) {
   return customFetch<ProviderBookingRecord>(`/api/bookings/${encodeURIComponent(id)}/cancel`, { method: "PATCH" });
 }
+
+export function rescheduleProviderBooking(id: string, bookingDate: string, bookingTime: string) {
+  return customFetch<ProviderBookingRecord>(`/api/bookings/${encodeURIComponent(id)}/reschedule`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bookingDate, bookingTime }),
+  });
+}
