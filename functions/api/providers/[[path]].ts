@@ -99,6 +99,7 @@ function normalize(input: any, id: string, ownerId: string, existing?: any) {
     category: text(input.category, 120),
     subCategory: text(input.subCategory, 160),
     city: text(input.city, 100),
+    region: text(input.region, 100) || text(existing?.region, 100),
     address: text(input.address, 240),
     phone: text(input.phone, 50),
     email: text(input.email, 180),
