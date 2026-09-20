@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { formatPrice } from "@/lib/constants";
 import { useToast } from "@/hooks/use-toast";
-import { createProviderBooking } from "@/lib/providerBookingApi";
+import { createProviderBooking, getProviderAvailability } from "@/lib/providerBookingApi";
 
 export interface BeautyBookingWizardProps {
   isOpen: boolean;
@@ -57,6 +57,8 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service, slots 
   const [termsAccepted, setTermsAccepted] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingReference, setBookingReference] = useState("");
+  const [serverAvailableTimes, setServerAvailableTimes] = useState<string[] | null>(null);
+  const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -70,7 +72,24 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service, slots 
     setTermsAccepted(false);
     setIsSubmitting(false);
     setBookingReference("");
+    setServerAvailableTimes(null);
   }, [isOpen, service.id, tomorrow]);
+
+  useEffect(() => {
+    if (!isOpen || !selectedDate || !slots?.length) return;
+    let active = true;
+    setIsLoadingAvailability(true);
+    setServerAvailableTimes(null);
+    getProviderAvailability(provider.id, selectedDate)
+      .then((result) => {
+        if (!active) return;
+        setServerAvailableTimes(result.slots.map((slot) => slot.time));
+        setSelectedSlot((current) => result.slots.some((slot) => slot.time === current) ? current : "");
+      })
+      .catch(() => active && setServerAvailableTimes([]))
+      .finally(() => active && setIsLoadingAvailability(false));
+    return () => { active = false; };
+  }, [isOpen, provider.id, selectedDate, slots]);
 
   if (!isOpen) return null;
 
@@ -88,7 +107,10 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service, slots 
       time: `${slot.startTime} - ${slot.endTime}`,
       recommended: index === 0,
     }));
-  const availableSlots = slots?.length ? configuredSlots : [
+  const liveConfiguredSlots = serverAvailableTimes === null
+    ? configuredSlots
+    : configuredSlots.filter((slot) => serverAvailableTimes.includes(slot.time));
+  const availableSlots = slots?.length ? liveConfiguredSlots : [
     { time: "09:00 - 11:00", recommended: false },
     { time: "10:00 - 12:00", recommended: true },
     { time: "14:00 - 16:00", recommended: false },
@@ -226,6 +248,7 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service, slots 
 
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-700">Elérhető Időpontok ({selectedDate})</label>
+                {isLoadingAvailability && <p className="text-xs text-slate-500">Szabad időpontok frissítése…</p>}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {availableSlots.map((slot) => (
                     <button
