@@ -13,6 +13,7 @@ import { Sparkles, Eye, Briefcase, CalendarDays, Bell, Check, X, Video, ShieldCh
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/lib/constants";
 import { getMyProviderProfile, saveMyProviderProfile } from "@/lib/providerApi";
+import { getMyProviderBookings, respondToProviderBooking, type ProviderBookingRecord } from "@/lib/providerBookingApi";
 
 export function GeneralProviderDashboard() {
   const { toast } = useToast();
@@ -20,6 +21,7 @@ export function GeneralProviderDashboard() {
   const [providerId, setProviderId] = useState<string | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isLoadingBookings, setIsLoadingBookings] = useState(true);
 
   // Demo provider state
   const [displayName, setDisplayName] = useState("Vasszerkezet & Lakatos Műhely Kft.");
@@ -154,11 +156,16 @@ export function GeneralProviderDashboard() {
     toast({ title: "Idősávok Automatizált Generálása Kész! ⚡", description: `${selectedDay}: ${generated.length} új idősáv hozva létre.` });
   };
 
-  // Demo bookings list
-  const [bookings, setBookings] = useState([
-    { id: "b1", clientName: "Kovács János", clientPhone: "+36 30 111 2222", date: "2026-08-25", time: "10:00 - 12:00", serviceName: "Biztonsági Rács Gyártása & Helyszíni Szerelése", price: 45000, status: "PENDING" },
-    { id: "b2", clientName: "Nagy Éva", clientPhone: "+36 20 333 4444", date: "2026-08-26", time: "14:00 - 15:00", serviceName: "Kovácsoltvas Kapu és Korlát Felmérés", price: 15000, status: "CONFIRMED" },
-  ]);
+  const [bookings, setBookings] = useState<ProviderBookingRecord[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    getMyProviderBookings()
+      .then(({ items }) => active && setBookings(items.filter((booking) => booking.role === "provider")))
+      .catch(() => {})
+      .finally(() => active && setIsLoadingBookings(false));
+    return () => { active = false; };
+  }, []);
 
   const handleAddService = (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,12 +183,17 @@ export function GeneralProviderDashboard() {
     toast({ title: "Szolgáltatás Hozzáadva!", description: srv.name });
   };
 
-  const handleBookingAction = (id: string, action: "CONFIRMED" | "CANCELLED") => {
-    setBookings(bookings.map((b) => (b.id === id ? { ...b, status: action } : b)));
-    toast({
-      title: action === "CONFIRMED" ? "Foglalás Visszaigazolva! 🟢" : "Foglalás Elutasítva! 🔴",
-      description: "A vevő automatikus Push és Email értesítést kapott.",
-    });
+  const handleBookingAction = async (id: string, action: "CONFIRMED" | "REJECTED") => {
+    try {
+      const updated = await respondToProviderBooking(id, action);
+      setBookings((current) => current.map((booking) => booking.id === id ? updated : booking));
+      toast({
+        title: action === "CONFIRMED" ? "Foglalás visszaigazolva" : "Foglalás elutasítva",
+        description: "A foglalás állapota tartósan mentve.",
+      });
+    } catch (error) {
+      toast({ title: "A foglalás frissítése nem sikerült", description: error instanceof Error ? error.message : "Ismeretlen hiba történt.", variant: "destructive" });
+    }
   };
 
   return (
@@ -281,12 +293,14 @@ export function GeneralProviderDashboard() {
                     <span>Beérkezett Foglalási Kérések</span>
                   </h2>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Az előleggel lefoglalt időpontok igazolása vagy elutasítása.
+                    A beérkezett foglalási kérések elfogadása vagy elutasítása.
                   </p>
                 </div>
               </div>
 
               <div className="space-y-3">
+                {isLoadingBookings && <p className="text-sm text-slate-500">Foglalások betöltése…</p>}
+                {!isLoadingBookings && bookings.length === 0 && <p className="text-sm text-slate-500">Még nem érkezett foglalási kérés.</p>}
                 {bookings.map((b) => (
                   <div
                     key={b.id}
@@ -298,19 +312,19 @@ export function GeneralProviderDashboard() {
                           className={`font-black text-[10px] ${
                             b.status === "CONFIRMED"
                               ? "bg-emerald-600 text-white"
-                              : b.status === "CANCELLED"
+                            : b.status === "CANCELLED" || b.status === "REJECTED"
                               ? "bg-rose-600 text-white"
                               : "bg-amber-500 text-slate-950 animate-pulse"
                           }`}
                         >
-                          {b.status === "CONFIRMED" ? "🟢 VISSZAIGAZOLVA" : b.status === "CANCELLED" ? "🔴 ELUTASÍTVA" : "⏳ VISSZAIGAZOLÁSRA VÁR"}
+                          {b.status === "CONFIRMED" ? "🟢 VISSZAIGAZOLVA" : b.status === "REJECTED" ? "🔴 ELUTASÍTVA" : b.status === "CANCELLED" ? "⚪ LEMONDVA" : "⏳ VISSZAIGAZOLÁSRA VÁR"}
                         </Badge>
-                        <span className="text-xs font-bold text-slate-400">📅 {b.date} • {b.time}</span>
+                        <span className="text-xs font-bold text-slate-400">📅 {b.bookingDate} • {b.bookingTime}</span>
                       </div>
                       <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">{b.serviceName}</h3>
                       <div className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-3">
-                        <span>👤 <strong>{b.clientName}</strong></span>
-                        <span>📞 {b.clientPhone}</span>
+                        <span>👤 <strong>{b.customerName}</strong></span>
+                        <span>📞 {b.customerPhone}</span>
                         <span className="font-extrabold text-emerald-600">{formatPrice(b.price)}</span>
                       </div>
                     </div>
@@ -324,7 +338,7 @@ export function GeneralProviderDashboard() {
                           <Check className="w-4 h-4" /> Visszaigazolás (Elfogadás)
                         </Button>
                         <Button
-                          onClick={() => handleBookingAction(b.id, "CANCELLED")}
+                          onClick={() => handleBookingAction(b.id, "REJECTED")}
                           variant="outline"
                           className="border-rose-300 text-rose-600 hover:bg-rose-50 font-bold rounded-xl text-xs py-4 px-4 gap-1.5"
                         >
