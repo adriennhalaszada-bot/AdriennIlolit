@@ -5,11 +5,6 @@ import { BeautyHeaderNav } from "@/components/beauty/BeautyHeaderNav";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import {
-  useRegisterBeautyProvider,
-  useGetMyBeautyProvider, getGetMyBeautyProviderQueryKey,
-  useSyncUser,
-} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,11 +12,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { ImageUploader } from "@/components/shared/ImageUploader";
 import { HU_COUNTIES, HU_CITIES_BY_COUNTY } from "@/lib/beautyConstants";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sparkles, ArrowLeft, Check, CreditCard, ShieldCheck, Star, Zap } from "lucide-react";
+import { Sparkles, ArrowLeft, Check, CreditCard, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUser } from "@clerk/react";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
+import { getMyProviderProfile, saveMyProviderProfile } from "@/lib/providerApi";
+import { confirmProviderSubscription, createProviderSubscriptionCheckout, type SubscriptionPlan } from "@/lib/billingApi";
 import { Badge } from "@/components/ui/badge";
 
 const schema = z.object({
@@ -31,43 +27,18 @@ const schema = z.object({
   region: z.string().min(1, "Kötelező"),
   county: z.string().min(1, "Kötelező"),
   address: z.string().optional(),
-  phone: z.string().optional(),
+  phone: z.string().min(6, "Adj meg egy elérhető telefonszámot"),
 });
 
-const SUBSCRIPTION_TIERS = [
-  {
-    id: "monthly",
-    name: "HAVI ELŐFIZETÉS",
-    price: "999 Ft",
-    period: "/ hó",
-    color: "border-emerald-500 bg-emerald-50/50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100",
-    badge: "HAVI DÍJ",
-    popular: false,
-    features: [
-      "Saját profil arculat & Egyedi sablonok",
-      "Korlátlan időpontfoglalás fogadás",
-      "Előleg zárolás & automatikus elfogadás",
-      "Korlátlan szolgáltatások & árak kezelése",
-      "Naptár, nyitvatartás & ügyfél üzenetküldés"
-    ]
-  },
-  {
-    id: "yearly",
-    name: "ÉVES ELŐFIZETÉS",
-    price: "9.999 Ft",
-    period: "/ év (kb. 833 Ft/hó)",
-    color: "border-amber-500 bg-amber-50/60 text-amber-950 dark:bg-amber-950/40 dark:text-amber-100",
-    badge: "2 HÓNAP INGYEN",
-    popular: true,
-    features: [
-      "⭐ KIEMELÉS a találati lista élén",
-      "Saját profil arculat & VIP sablonok",
-      "Korlátlan időpontfoglalás fogadás",
-      "Előleg zárolás & automatikus elfogadás",
-      "Korlátlan szolgáltatások & árak kezelése",
-      "VIP Értesítések & Kiemelt támogatás"
-    ]
-  }
+const SUBSCRIPTION_TIERS: Array<{
+  id: SubscriptionPlan;
+  name: string;
+  price: string;
+  period: string;
+  badge: string;
+}> = [
+  { id: "monthly", name: "Havi előfizetés", price: "999 Ft", period: "/ hó", badge: "Rugalmas" },
+  { id: "yearly", name: "Éves előfizetés", price: "9 999 Ft", period: "/ év", badge: "2 hónap kedvezmény" },
 ];
 
 export function BeautyRegister() {
@@ -75,13 +46,9 @@ export function BeautyRegister() {
   const { user } = useUser();
   const { toast } = useToast();
   const [step, setStep] = useState<1 | 2>(1);
-  const [selectedTier, setSelectedTier] = useState<string>("pro");
-
-  const { data: existingProvider, isLoading } = useGetMyBeautyProvider({
-    query: { queryKey: getGetMyBeautyProviderQueryKey() },
-  });
-  const registerProvider = useRegisterBeautyProvider();
-  const syncUser = useSyncUser();
+  const [selectedTier, setSelectedTier] = useState<SubscriptionPlan>("monthly");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   const form = useForm({
     resolver: zodResolver(schema),
@@ -97,47 +64,86 @@ export function BeautyRegister() {
   });
 
   useEffect(() => {
-    if (existingProvider) {
-      setLocation("/beauty/dashboard");
+    let active = true;
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("session_id");
+    const payment = params.get("payment");
+    const load = payment === "success" && sessionId
+      ? confirmProviderSubscription(sessionId).then((result) => {
+          if (!result.active) throw new Error("A Stripe még nem igazolta vissza a fizetést.");
+          toast({ title: "Sikeres előfizetés", description: "A szolgáltatói fiókod aktív." });
+          if (active) setLocation("/providers/dashboard");
+          return null;
+        })
+      : payment === "cancelled"
+      ? Promise.resolve(null)
+      : getMyProviderProfile()
+      .then((profile) => {
+        if (active && profile?.exists) setLocation("/providers/dashboard");
+        return profile;
+      });
+    if (payment === "cancelled") {
+      toast({ title: "A fizetés megszakadt", description: "Nem történt terhelés; az adataidat újra ellenőrizheted." });
+      setStep(2);
     }
-  }, [existingProvider, setLocation]);
+    load
+      .catch((error: any) => {
+        if (payment === "success") toast({ title: "A fizetés ellenőrzése sikertelen", description: error?.message, variant: "destructive" });
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [setLocation, toast]);
 
   const profileImageUrl = form.watch("profileImageUrl");
   const region = form.watch("region");
   const cityOptions = region ? HU_CITIES_BY_COUNTY[region] ?? [] : [];
 
   const onSubmit = async (data: z.infer<typeof schema>) => {
-    try {
-      if (user) {
-        await syncUser.mutateAsync({
-          data: {
-            clerkId: user.id,
-            email: user.primaryEmailAddress?.emailAddress || "",
-            username: user.username || undefined,
-            fullName: user.fullName || undefined,
-            avatarUrl: user.imageUrl || undefined,
-          },
-        });
-      }
-      await registerProvider.mutateAsync({
-        data: {
-          ...data,
-          bio: data.bio || undefined,
-          profileImageUrl: data.profileImageUrl || undefined,
-        },
-      });
-      await queryClient.invalidateQueries({ queryKey: getGetMyBeautyProviderQueryKey() });
+    const email = user?.primaryEmailAddress?.emailAddress;
+    if (!email) {
       toast({
-        title: "🎉 Profil sikeresen regisztrálva!",
-        description: `Kiválasztott csomag: ${selectedTier.toUpperCase()}`,
+        title: "Bejelentkezés szükséges",
+        description: "A profil mentéséhez jelentkezz be ellenőrzött e-mail-címmel.",
+        variant: "destructive",
       });
-      setLocation("/beauty/dashboard");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await saveMyProviderProfile({
+        displayName: data.displayName,
+        category: "Szépség- és egészségipar",
+        subCategory: "Szépségipari szolgáltatás",
+        city: data.county,
+        address: data.address || "",
+        phone: data.phone,
+        email,
+        bio: data.bio || "",
+        videoUrl: "",
+        profileImage: data.profileImageUrl || "",
+        profileImages: data.profileImageUrl ? [data.profileImageUrl] : [],
+        publishPortfolio: false,
+        themeId: "emerald",
+        services: [],
+        slots: [],
+        isPublished: false,
+      });
+      const checkout = await createProviderSubscriptionCheckout(selectedTier, email);
+      if (!checkout.checkoutUrl) throw new Error("A Stripe fizetési oldal nem indítható.");
+      window.location.assign(checkout.checkoutUrl);
     } catch (err: any) {
       toast({
         title: "Hiba történt",
-        description: err?.response?.data?.error || "Nem sikerült létrehozni a profilt. Próbáld újra.",
+        description: err?.message || "Nem sikerült létrehozni a profilt. Próbáld újra.",
         variant: "destructive",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -161,7 +167,7 @@ export function BeautyRegister() {
           </Button>
           <div className="flex items-center gap-2 font-extrabold text-xs">
             <span className={`px-3 py-1 rounded-full ${step === 1 ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-700"}`}>1. Profil Adatok</span>
-            <span className={`px-3 py-1 rounded-full ${step === 2 ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-700"}`}>2. Előfizetés & Fizetés</span>
+            <span className={`px-3 py-1 rounded-full ${step === 2 ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-700"}`}>2. Ellenőrzés</span>
           </div>
         </div>
 
@@ -259,7 +265,7 @@ export function BeautyRegister() {
                     name="phone"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="font-bold text-slate-700">Telefonszám</FormLabel>
+                        <FormLabel className="font-bold text-slate-700">Telefonszám *</FormLabel>
                         <FormControl>
                           <Input placeholder="Pl. +36 20 123 4567" className="rounded-xl" {...field} />
                         </FormControl>
@@ -288,11 +294,12 @@ export function BeautyRegister() {
                     value={profileImageUrl ? [profileImageUrl] : []}
                     onChange={(urls) => form.setValue("profileImageUrl", urls[0] || "")}
                     maxImages={1}
+                    folder="beauty"
                   />
                 </div>
 
                 <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl py-6 text-base shadow-md">
-                  Folytatás az Előfizetési Csomagokhoz ➔
+                  Adatok ellenőrzése ➔
                 </Button>
               </form>
             </Form>
@@ -300,68 +307,44 @@ export function BeautyRegister() {
         ) : (
           <div className="bg-white dark:bg-slate-900 border rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
             <div className="text-center space-y-2 border-b pb-6">
-              <h2 className="text-2xl font-black text-slate-900">Válassz Előfizetési Csomagot</h2>
+              <h2 className="text-2xl font-black text-slate-900 dark:text-slate-100">Előfizetés és biztonságos fizetés</h2>
               <p className="text-sm text-slate-500">
-                A csomagok bármikor módosíthatók vagy lemondhatók a szolgáltatói vezérlőpultról.
+                Válassz csomagot. A bankkártyás fizetés a Stripe biztonságos oldalán történik.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               {SUBSCRIPTION_TIERS.map((tier) => (
-                <div
+                <button
                   key={tier.id}
+                  type="button"
                   onClick={() => setSelectedTier(tier.id)}
-                  className={`border rounded-3xl p-5 cursor-pointer transition-all relative flex flex-col justify-between ${tier.color} ${
-                    selectedTier === tier.id ? "ring-2 ring-emerald-600 scale-[1.02] shadow-lg" : "hover:border-emerald-400"
-                  }`}
+                  className={`rounded-2xl border p-5 text-left transition ${selectedTier === tier.id ? "border-emerald-600 bg-emerald-50 ring-2 ring-emerald-600/20 dark:bg-emerald-950/30" : "border-slate-200 hover:border-emerald-300 dark:border-slate-700"}`}
                 >
-                  {tier.popular && (
-                    <Badge className="absolute -top-3 right-4 bg-indigo-600 text-white font-black text-[10px] px-3 py-1 rounded-full shadow">
-                      ★ LEGPOPULÁRISABB
-                    </Badge>
-                  )}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-extrabold text-lg">{tier.name}</h3>
-                      <Badge variant="outline" className="font-bold rounded-lg">{tier.badge}</Badge>
-                    </div>
-                    <div className="my-3">
-                      <span className="text-3xl font-black">{tier.price}</span>
-                      <span className="text-xs text-slate-500 font-bold ml-1">{tier.period}</span>
-                    </div>
-                    <ul className="space-y-2 text-xs font-medium text-slate-700 dark:text-slate-300 mt-4">
-                      {tier.features.map((feat, i) => (
-                        <li key={i} className="flex items-center gap-2">
-                          <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                          <span>{feat}</span>
-                        </li>
-                      ))}
-                    </ul>
+                  <div className="mb-4 flex items-center justify-between gap-2">
+                    <span className="font-extrabold text-slate-900 dark:text-slate-100">{tier.name}</span>
+                    <Badge variant="outline">{tier.badge}</Badge>
                   </div>
-
-                  <div className="mt-6 pt-4 border-t flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-500">
-                      {selectedTier === tier.id ? "✓ Kiválasztva" : "Kattints a kiválasztáshoz"}
+                  <div><span className="text-3xl font-black">{tier.price}</span><span className="ml-1 text-sm text-slate-500">{tier.period}</span></div>
+                  <div className="mt-4 flex items-center gap-2 text-sm font-bold text-emerald-700">
+                    <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${selectedTier === tier.id ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300"}`}>
+                      {selectedTier === tier.id && <Check className="h-3 w-3" />}
                     </span>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedTier === tier.id ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300"}`}>
-                      {selectedTier === tier.id && <Check className="w-3 h-3" />}
-                    </div>
+                    {selectedTier === tier.id ? "Kiválasztva" : "Kiválasztás"}
                   </div>
-                </div>
+                </button>
               ))}
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-sm text-slate-800 flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-emerald-600" /> Bankkártyás Fizetés (Stripe Checkout)
-                </span>
-                <span className="text-xs font-extrabold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-lg">Biztonságos SSL</span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <Input placeholder="Kártyaszám: **** **** **** 4242" className="rounded-xl text-xs" defaultValue="4242 •••• •••• 4242" />
-                <Input placeholder="MM/YY" className="rounded-xl text-xs" defaultValue="12/28" />
-                <Input placeholder="CVC" className="rounded-xl text-xs" defaultValue="123" />
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
+              <div className="flex items-start gap-3">
+                <CreditCard className="mt-0.5 h-5 w-5 flex-none text-emerald-600" />
+                <div>
+                  <p className="font-extrabold text-slate-900 dark:text-slate-100">Stripe Checkout</p>
+                  <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                    A kártyaszámot kizárólag a Stripe kezeli; az ILOLIT nem látja és nem tárolja. Sikeres fizetés után automatikusan visszatérsz a vezérlőpultra.
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -369,8 +352,8 @@ export function BeautyRegister() {
               <Button type="button" variant="outline" onClick={() => setStep(1)} className="rounded-2xl font-bold py-6 px-6">
                 Vissza
               </Button>
-              <Button onClick={form.handleSubmit(onSubmit)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl py-6 text-base shadow-md">
-                Fizetés & Szolgáltatói Fiók Létrehozása ➔
+              <Button disabled={isSaving} onClick={form.handleSubmit(onSubmit)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl py-6 text-base shadow-md">
+                {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Átirányítás...</> : "Tovább a biztonságos fizetéshez"}
               </Button>
             </div>
           </div>
