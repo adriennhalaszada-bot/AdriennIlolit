@@ -1,20 +1,18 @@
 import { Layout } from "@/components/layout/Layout";
 import {
-  useGetDashboardStats,
   useGetMe,
-  useGetTransactions,
-  useGetMyBeautyBookings,
 } from "@workspace/api-client-react";
 import { formatPrice } from "@/lib/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { User, Package, CalendarCheck, Heart, Bell, LogOut, Clock, ChevronRight, GraduationCap, Home as HomeIcon, BookmarkCheck } from "lucide-react";
+import { User, Package, CalendarCheck, Heart, Bell, LogOut, Clock, ChevronRight, GraduationCap, Home as HomeIcon, Loader2 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useClerk } from "@clerk/react";
+import { cancelProviderBooking, getMyProviderBookings, type ProviderBookingRecord } from "@/lib/providerBookingApi";
 
 export function Dashboard() {
   const { user: clerkUser } = useUser();
@@ -26,23 +24,25 @@ export function Dashboard() {
   const [activeTab, setActiveTab] = useState<"profile" | "orders" | "bookings" | "favorites" | "courses" | "listings" | "notifications">(initialTab);
 
   const { data: me } = useGetMe();
-  const { data: stats } = useGetDashboardStats();
+  const [bookings, setBookings] = useState<ProviderBookingRecord[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
+  useEffect(() => {
+    let active = true;
+    getMyProviderBookings().then((result) => {
+      if (active) setBookings(result.items.filter((booking) => booking.role === "customer"));
+    }).catch(() => {}).finally(() => active && setBookingsLoading(false));
+    return () => { active = false; };
+  }, []);
 
-  const mockOrders = [
-    { id: "ord_101", title: "Zara Elegáns Bőrdzseki M-es", price: 14500, date: "2026-08-18", status: "COMPLETED", statusLabel: "Teljesítve", seller: "HoldfényVándor_21" },
-    { id: "ord_102", title: "Nike Air Force 1 Sárga Sneaker (38)", price: 22000, date: "2026-08-15", status: "PROCESSING", statusLabel: "Folyamatban", seller: "Molnár Balázs" },
-    { id: "ord_103", title: "Sony WH-1000XM5 Fejhallgató", price: 95000, date: "2026-08-01", status: "RETURNED", statusLabel: "Visszaküldve", seller: "TechStore_HU" }
-  ];
-
-  const mockBookings = [
-    { id: "b_1", providerName: "Glamour Nail & Lash Stúdió", serviceName: "Gél Lakk & Manikűr", date: "2026-08-25 14:00", price: 8500, status: "CONFIRMED", statusLabel: "Megerősítve" },
-    { id: "b_2", providerName: "Chic Fodrászat", serviceName: "Balayage Festés & Vágás", date: "2026-09-02 10:30", price: 24000, status: "PENDING", statusLabel: "Várakozik" }
-  ];
-
-  const mockCourses = [
-    { id: "c_1", title: "Mesteri Balayage & Színkeverési Technikák 2026", progress: 65, instructor: "Szabó Beatrix Wella Ambasszador", lastLesson: "Modul 3: Szőkítési alapszabályok" },
-    { id: "c_2", title: "Digitális Piactéri Értékesítés és Vinted Stratégiák", progress: 100, instructor: "ILOLIT Akadémia", lastLesson: "Vizsga sikeresen teljesítve" }
-  ];
+  const cancelBooking = async (booking: ProviderBookingRecord) => {
+    try {
+      const updated = await cancelProviderBooking(booking.id);
+      setBookings((items) => items.map((item) => item.id === updated.id ? updated : item));
+      toast({ title: "A foglalást lemondtad." });
+    } catch (error) {
+      toast({ title: "A lemondás nem sikerült", description: error instanceof Error ? error.message : "Próbáld újra.", variant: "destructive" });
+    }
+  };
 
   return (
     <Layout>
@@ -124,25 +124,23 @@ export function Dashboard() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-xs font-extrabold text-slate-700 dark:text-slate-300">Teljes név</label>
-                      <Input defaultValue={clerkUser?.fullName || (me as any)?.fullName || "Kovács Anna"} className="rounded-xl font-semibold" />
+                      <Input value={clerkUser?.fullName || (me as any)?.fullName || ""} readOnly className="rounded-xl font-semibold" />
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-extrabold text-slate-700 dark:text-slate-300">E-mail cím</label>
-                      <Input defaultValue={clerkUser?.primaryEmailAddress?.emailAddress || (me as any)?.email || "felhasznalo@ilolit.hu"} disabled className="rounded-xl bg-slate-50 font-semibold" />
+                      <Input value={clerkUser?.primaryEmailAddress?.emailAddress || (me as any)?.email || ""} readOnly className="rounded-xl bg-slate-50 font-semibold" />
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-extrabold text-slate-700 dark:text-slate-300">Telefonszám</label>
-                      <Input defaultValue="+36 30 123 4567" className="rounded-xl font-semibold" />
+                      <Input value={clerkUser?.primaryPhoneNumber?.phoneNumber || ""} readOnly placeholder="Nincs megadva" className="rounded-xl font-semibold" />
                     </div>
                     <div className="space-y-1">
                       <label className="text-xs font-extrabold text-slate-700 dark:text-slate-300">Szállítási & Számlázási cím</label>
-                      <Input defaultValue="1052 Budapest, Váci utca 12." className="rounded-xl font-semibold" />
+                      <Input value="" readOnly placeholder="Nincs megadva" className="rounded-xl font-semibold" />
                     </div>
                   </div>
                   <div className="pt-4 flex justify-end gap-3">
-                    <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl px-6 cursor-pointer" onClick={() => toast({ title: "Adatok sikeresen frissítve!" })}>
-                      Mentés
-                    </Button>
+                    <Button asChild className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl px-6 cursor-pointer"><Link href="/settings/profile">Adatok szerkesztése</Link></Button>
                   </div>
                 </CardContent>
               </Card>
@@ -157,25 +155,7 @@ export function Dashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0 space-y-3 pt-2">
-                  {mockOrders.map((ord) => (
-                    <div key={ord.id} className="p-4 rounded-2xl border bg-slate-50 dark:bg-slate-800/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-slate-900 dark:text-slate-100">{ord.title}</span>
-                          <Badge className={`text-[10px] font-extrabold rounded-lg ${
-                            ord.status === "COMPLETED" ? "bg-emerald-100 text-emerald-700" :
-                            ord.status === "PROCESSING" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"
-                          }`}>
-                            {ord.statusLabel}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-1 font-medium">Eladó: {ord.seller} · Dátum: {ord.date}</p>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-lg font-black text-emerald-600">{formatPrice(ord.price)}</span>
-                      </div>
-                    </div>
-                  ))}
+                  <div className="rounded-2xl border bg-slate-50 p-8 text-center dark:bg-slate-800/50"><Package className="mx-auto mb-2 h-8 w-8 text-slate-400" /><p className="font-extrabold">Nincs megjeleníthető rendelés</p><p className="mt-1 text-xs text-muted-foreground">Itt kizárólag a valóban létrejött piactéri rendelések fognak megjelenni.</p></div>
                 </CardContent>
               </Card>
             )}
@@ -189,20 +169,23 @@ export function Dashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0 space-y-3 pt-2">
-                  {mockBookings.map((b) => (
+                  {bookingsLoading && <div className="flex justify-center gap-2 py-10 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Foglalások betöltése…</div>}
+                  {!bookingsLoading && bookings.length === 0 && <div className="rounded-2xl border bg-slate-50 p-8 text-center dark:bg-slate-800/50"><CalendarCheck className="mx-auto mb-2 h-8 w-8 text-slate-400" /><p className="font-extrabold">Még nincs foglalásod</p><Button asChild variant="outline" className="mt-4 rounded-xl"><Link href="/providers">Szolgáltatók keresése</Link></Button></div>}
+                  {bookings.map((b) => (
                     <div key={b.id} className="p-4 rounded-2xl border bg-slate-50 dark:bg-slate-800/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                       <div>
                         <h4 className="font-extrabold text-slate-900 dark:text-slate-100">{b.providerName}</h4>
                         <p className="text-xs text-slate-700 dark:text-slate-300 font-extrabold mt-0.5">{b.serviceName}</p>
                         <p className="text-xs text-slate-500 mt-1 flex items-center gap-1 font-medium">
-                          <Clock className="w-3.5 h-3.5 text-emerald-600" /> {b.date}
+                          <Clock className="w-3.5 h-3.5 text-emerald-600" /> {b.bookingDate} · {b.bookingTime}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-base font-black text-emerald-600">{formatPrice(b.price)}</span>
-                        <Button variant="outline" size="sm" className="rounded-xl text-xs text-rose-600 border-rose-300 hover:bg-rose-50 font-extrabold cursor-pointer" onClick={() => toast({ title: "Foglalás törölve!" })}>
+                        <Badge variant="outline">{b.status === "CONFIRMED" ? "Megerősítve" : b.status === "PENDING" ? "Válaszra vár" : b.status === "CANCELLED" ? "Lemondva" : "Elutasítva"}</Badge>
+                        {(["PENDING", "CONFIRMED"] as string[]).includes(b.status) && <Button variant="outline" size="sm" className="rounded-xl text-xs text-rose-600 border-rose-300 hover:bg-rose-50 font-extrabold cursor-pointer" onClick={() => cancelBooking(b)}>
                           Lemondás
-                        </Button>
+                        </Button>}
                       </div>
                     </div>
                   ))}
@@ -220,18 +203,7 @@ export function Dashboard() {
                 </CardHeader>
                 <CardContent className="p-0 space-y-3 pt-2">
                   <p className="text-sm text-slate-600 font-medium">Elmentett termékek, szolgáltatók, ingatlanok és kurzusok egy közös listában.</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                    <div className="p-4 rounded-2xl border bg-slate-50 dark:bg-slate-800/40 space-y-2">
-                      <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">🛒 Piactér</span>
-                      <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">Sony WH-1000XM5 Fejhallgató</h4>
-                      <p className="text-xs font-black text-emerald-600">95 000 Ft</p>
-                    </div>
-                    <div className="p-4 rounded-2xl border bg-slate-50 dark:bg-slate-800/40 space-y-2">
-                      <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800">💄 Szolgáltató</span>
-                      <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">Glamour Nail & Lash Stúdió</h4>
-                      <p className="text-xs font-semibold text-slate-500">1052 Budapest, Váci u.</p>
-                    </div>
-                  </div>
+                  <div className="rounded-2xl border bg-slate-50 p-8 text-center dark:bg-slate-800/40"><Heart className="mx-auto mb-2 h-8 w-8 text-slate-400" /><p className="font-extrabold">A kedvenceid a külön kedvencek oldalon érhetők el</p><Button asChild variant="outline" className="mt-4 rounded-xl"><Link href="/dashboard/favorites">Kedvencek megnyitása</Link></Button></div>
                 </CardContent>
               </Card>
             )}
@@ -245,28 +217,7 @@ export function Dashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0 space-y-4 pt-2">
-                  {mockCourses.map((course) => (
-                    <div key={course.id} className="p-5 rounded-2xl border bg-slate-50 dark:bg-slate-800/40 space-y-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-extrabold text-slate-900 dark:text-white text-base">{course.title}</h4>
-                          <p className="text-xs text-slate-500 font-medium">Oktató: {course.instructor}</p>
-                        </div>
-                        <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                          {course.progress}% kész
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-200 rounded-full h-2">
-                        <div className="bg-emerald-600 h-2 rounded-full transition-all" style={{ width: `${course.progress}%` }} />
-                      </div>
-                      <div className="flex justify-between items-center pt-1">
-                        <span className="text-xs text-slate-500 font-semibold">{course.lastLesson}</span>
-                        <Button size="sm" className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs cursor-pointer" asChild>
-                          <Link href="/education">Folytatás ➔</Link>
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                  <div className="rounded-2xl border bg-slate-50 p-8 text-center dark:bg-slate-800/40"><GraduationCap className="mx-auto mb-2 h-8 w-8 text-slate-400" /><p className="font-extrabold">Nincs aktív kurzusod</p><Button asChild variant="outline" className="mt-4 rounded-xl"><Link href="/education">Kurzusok megtekintése</Link></Button></div>
                 </CardContent>
               </Card>
             )}
@@ -315,13 +266,7 @@ export function Dashboard() {
 
                   <div className="space-y-3 pt-4 border-t">
                     <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider">Aktív Piactéri & Ágazati Hirdetéseim</h4>
-                    <div className="p-4 rounded-2xl border bg-slate-50 dark:bg-slate-800/40 flex items-center justify-between">
-                      <div>
-                        <h4 className="font-extrabold text-sm text-slate-900 dark:text-white">Zara Elegáns Bőrdzseki M-es</h4>
-                        <p className="text-xs text-slate-500 font-medium">Státusz: Aktív · Megtekintve: 42x</p>
-                      </div>
-                      <span className="text-sm font-black text-emerald-600">14 500 Ft</span>
-                    </div>
+                    <div className="rounded-2xl border bg-slate-50 p-6 text-center dark:bg-slate-800/40"><p className="text-sm font-extrabold">A hirdetéseid kezeléséhez nyisd meg a piactéri hirdetéskezelőt.</p><Button asChild variant="outline" className="mt-3 rounded-xl"><Link href="/dashboard/listings">Saját hirdetések</Link></Button></div>
                   </div>
                 </CardContent>
               </Card>
@@ -336,21 +281,7 @@ export function Dashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0 space-y-3 pt-2">
-                  <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 text-xs font-bold text-emerald-800 dark:text-emerald-300 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-extrabold">🔔 Új Ingatlan Érkezett a Mentett Keresésedből!</span>
-                      <span className="text-[10px] text-emerald-600">10 perce</span>
-                    </div>
-                    <p className="font-medium">Budapest XI. kerület felújított tégla lakás megjelent a kínálatban.</p>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 text-xs font-bold text-indigo-800 dark:text-indigo-300 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-extrabold">📅 Szolgáltatási Emlékeztető</span>
-                      <span className="text-[10px] text-indigo-600">Tegnap</span>
-                    </div>
-                    <p className="font-medium">Holnap 14:00-kor időpontod van a Glamour Nail Stúdióban.</p>
-                  </div>
+                  <div className="rounded-2xl border bg-slate-50 p-8 text-center dark:bg-slate-800/40"><Bell className="mx-auto mb-2 h-8 w-8 text-slate-400" /><p className="font-extrabold">Valódi értesítéseid az értesítési központban láthatók</p><Button asChild variant="outline" className="mt-4 rounded-xl"><Link href="/notifications">Értesítések megnyitása</Link></Button></div>
                 </CardContent>
               </Card>
             )}
