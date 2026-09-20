@@ -34,6 +34,7 @@ export interface ProviderProfileRecord {
   videoUrl: string;
   profileImage: string;
   profileImages?: string[];
+  publishPortfolio?: boolean;
   themeId: string;
   services: ProviderServiceRecord[];
   slots: ProviderSlotRecord[];
