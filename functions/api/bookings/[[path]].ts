@@ -186,6 +186,44 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     return json(booking);
   }
 
+  if (method === "PATCH" && bookingId && route[1] === "reschedule") {
+    const booking = await readJson(context.env, `${BOOKING_PREFIX}${bookingId}.json`);
+    if (!booking || booking.customerId !== userId) return json({ error: "A foglalás nem található." }, 404);
+    if (!["PENDING", "CONFIRMED"].includes(booking.status)) return json({ error: "Lezárt foglalás nem időzíthető át." }, 409);
+    let input: any;
+    try { input = await context.request.json(); } catch { return json({ error: "Érvénytelen átfoglalási adat." }, 400); }
+    const bookingDate = safeText(input.bookingDate, 10);
+    const bookingTime = safeText(input.bookingTime, 30);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(bookingDate) || !bookingTime) return json({ error: "Adj meg érvényes dátumot és időpontot." }, 400);
+    const selectedDate = new Date(`${bookingDate}T00:00:00Z`);
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    if (Number.isNaN(selectedDate.getTime()) || selectedDate < today) return json({ error: "Múltbeli időpontra nem lehet átfoglalni." }, 400);
+
+    const provider = await readJson(context.env, `${PROVIDER_PREFIX}${booking.providerId}.json`);
+    const matchingSlot = provider?.slots?.some((slot: any) =>
+      slot.isAvailable !== false && slot.day === weekdayFor(bookingDate) && `${slot.startTime} - ${slot.endTime}` === bookingTime,
+    );
+    if (!matchingSlot) return json({ error: "A kiválasztott új időpont már nem foglalható." }, 409);
+    const collision = (await allBookings(context.env)).some((item) =>
+      item.id !== booking.id && item.providerId === booking.providerId && item.bookingDate === bookingDate &&
+      item.bookingTime === bookingTime && ["PENDING", "CONFIRMED"].includes(item.status),
+    );
+    if (collision) return json({ error: "Ezt az időpontot időközben lefoglalták." }, 409);
+
+    booking.rescheduleHistory = [
+      ...(Array.isArray(booking.rescheduleHistory) ? booking.rescheduleHistory : []),
+      { bookingDate: booking.bookingDate, bookingTime: booking.bookingTime, changedAt: new Date().toISOString() },
+    ].slice(-10);
+    booking.bookingDate = bookingDate;
+    booking.bookingTime = bookingTime;
+    booking.status = "PENDING";
+    booking.rescheduledCount = Number(booking.rescheduledCount || 0) + 1;
+    booking.updatedAt = new Date().toISOString();
+    await writeBooking(context.env, booking);
+    return json(booking);
+  }
+
   if (method === "PATCH" && bookingId && route[1] === "cancel") {
     const booking = await readJson(context.env, `${BOOKING_PREFIX}${bookingId}.json`);
     if (!booking || (booking.customerId !== userId && booking.providerOwnerId !== userId)) {
