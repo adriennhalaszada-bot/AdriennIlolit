@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { UniversalSearchBar } from "@/components/shared/UniversalSearchBar";
 import { LocationSearchWidget } from "@/components/shared/LocationSearchWidget";
-import { LocationSearchState, applyLocationFilter } from "@/lib/locationFilter";
+import { DEFAULT_LOCATION_STATE, applyLocationFilter } from "@/lib/locationFilter";
+import { useLocationQueryState } from "@/hooks/useLocationQueryState";
 import { useFavorites, FavoriteType } from "@/context/FavoritesContext";
 import { useSavedSearches } from "@/context/SavedSearchesContext";
 import { useComparison } from "@/context/ComparisonContext";
@@ -90,15 +91,8 @@ export function UniversalSearch() {
   const [locationPath] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
   const q = searchParams.get("q") || "";
-  const initialCity = searchParams.get("city") || "";
-
   const [activeTab, setActiveTab] = useState<ModuleTab>("all");
-  const [locationState, setLocationState] = useState<LocationSearchState>({
-    mode: "city",
-    cityInput: initialCity,
-    radiusKm: 25,
-    customRadiusKm: null,
-  });
+  const [locationState, setLocationState] = useLocationQueryState(DEFAULT_LOCATION_STATE);
 
   const { isFavorite, toggleFavorite } = useFavorites();
   const { addSavedSearch, isSearchSaved } = useSavedSearches();
@@ -215,7 +209,7 @@ export function UniversalSearch() {
         />
 
         {/* Search Bar */}
-        <UniversalSearchBar initialQuery={q} initialCity={initialCity} />
+        <UniversalSearchBar initialQuery={q} initialCity={locationState.cityInput} />
 
         {/* Main Layout Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
