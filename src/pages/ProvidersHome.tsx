@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -9,19 +9,21 @@ import {
   Sparkles, MapPin, Search, Star, Clock, Filter, Navigation, 
   CalendarCheck, ShieldCheck, CheckCircle2, ArrowRight, Briefcase, Zap, Bell, MessageSquarePlus, Flag
 } from "lucide-react";
-import { ALL_PROVIDER_CATEGORIES, DEMO_GENERAL_PROVIDERS, ProviderCategory } from "@/data/allProvidersData";
+import { ALL_PROVIDER_CATEGORIES, ProviderCategory } from "@/data/allProvidersData";
 import { SubcategoryModal } from "@/components/providers/SubcategoryModal";
 import { LocationSearchWidget } from "@/components/shared/LocationSearchWidget";
 import { DEFAULT_LOCATION_STATE, applyLocationFilter, getCalculatedDistance } from "@/lib/locationFilter";
 import { useLocationQueryState } from "@/hooks/useLocationQueryState";
-import { VerificationBadge } from "@/components/shared/VerificationBadge";
 import { VerifiedReviewSummary } from "@/components/shared/VerifiedReviewSummary";
 import { ReportProblemModal } from "@/components/shared/ReportProblemModal";
 import { WaitingListModal } from "@/components/beauty/WaitingListModal";
 import { QuoteRequestModal } from "@/components/providers/QuoteRequestModal";
 import { ProviderCoverageSection, CoverageAreaConfig } from "@/components/providers/ProviderCoverageSection";
+import { getProviderProfiles, type ProviderProfileRecord } from "@/lib/providerApi";
 
 export function ProvidersHome() {
+  const [savedProviders, setSavedProviders] = useState<ProviderProfileRecord[]>([]);
+  const [isLoadingProviders, setIsLoadingProviders] = useState(true);
   // Modal state for subcategory browser
   const [activeModalCat, setActiveModalCat] = useState<ProviderCategory | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -41,6 +43,15 @@ export function ProvidersHome() {
   const [waitingListModalData, setWaitingListModalData] = useState<{ isOpen: boolean; providerName: string }>({ isOpen: false, providerName: '' });
   const [quoteModalData, setQuoteModalData] = useState<{ isOpen: boolean; providerName: string }>({ isOpen: false, providerName: '' });
 
+  useEffect(() => {
+    let active = true;
+    getProviderProfiles()
+      .then(({ items }) => active && setSavedProviders(items))
+      .catch(() => active && setSavedProviders([]))
+      .finally(() => active && setIsLoadingProviders(false));
+    return () => { active = false; };
+  }, []);
+
   // Filter Subcategories based on chosen Category
   const availableSubcategories = useMemo(() => {
     if (selectedCategory === "ALL") return [];
@@ -48,36 +59,42 @@ export function ProvidersHome() {
     return found ? found.subcategories : [];
   }, [selectedCategory]);
 
-  // Enhanced demo provider data with verifications and coverage area
+  // Public profiles persisted in Cloudflare R2. No demo providers are mixed into live results.
   const enhancedProviders = useMemo(() => {
-    return DEMO_GENERAL_PROVIDERS.map((p, idx) => ({
-      ...p,
-      verifications: {
-        email: true,
-        phone: true,
-        identity: idx % 2 === 0,
-        business: true,
-        qualifications: idx % 3 !== 0,
-        location: true,
-        sellerStatus: p.tier === 'PREMIUM' || p.tier === 'PRO',
-      },
-      coverage: {
-        mode: (idx % 3 === 0 ? 'saját_helyszín' : idx % 3 === 1 ? 'kiszállás' : 'mindkettő') as CoverageAreaConfig['mode'],
-        baseSettlement: p.city,
-        baseAddress: p.address,
-        customRadiusKm: (idx + 1) * 15,
-        coveredSettlements: [p.city, 'Felsőzsolca', 'Nyékládháza', 'Miskolc'].slice(0, (idx % 3) + 2),
-      },
-      isAvailableToday: p.availableToday,
-      isAvailableTomorrow: true,
-      isAvailableThisWeek: true,
-    }));
-  }, []);
+    const dayNames = ["Vasárnap", "Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek", "Szombat"];
+    const today = dayNames[new Date().getDay()];
+    const tomorrow = dayNames[(new Date().getDay() + 1) % 7];
+    return savedProviders.map((provider) => {
+      const todaySlots = provider.slots.filter((slot) => slot.isAvailable && slot.day === today);
+      return {
+        id: provider.id || "",
+        name: provider.displayName,
+        profession: provider.subCategory,
+        category: provider.category,
+        city: provider.city,
+        region: provider.region || "",
+        address: provider.city,
+        coverImage: provider.profileImage,
+        avatar: provider.profileImage,
+        tier: "STANDARD",
+        rating: 0,
+        reviewCount: 0,
+        services: provider.services,
+        coverage: undefined as CoverageAreaConfig | undefined,
+        availableToday: todaySlots.length > 0,
+        isAvailableToday: todaySlots.length > 0,
+        isAvailableTomorrow: provider.slots.some((slot) => slot.isAvailable && slot.day === tomorrow),
+        isAvailableThisWeek: provider.slots.some((slot) => slot.isAvailable),
+        nextSlot: todaySlots.sort((a, b) => a.startTime.localeCompare(b.startTime))[0]?.startTime || "",
+        distanceKm: null as number | null,
+      };
+    });
+  }, [savedProviders]);
 
   // Filtered providers
   const filteredProviders = useMemo(() => {
     return enhancedProviders.map((provider) => {
-      const loc = provider.address || provider.city;
+      const loc = provider.city;
       const { matches, distanceKm } = applyLocationFilter(loc, locationState);
       const computedDist = locationState.cityInput ? getCalculatedDistance(locationState.cityInput, loc) : null;
       return { provider, matches, dist: distanceKm ?? computedDist ?? provider.distanceKm };
@@ -364,11 +381,13 @@ export function ProvidersHome() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-black text-slate-900 dark:text-slate-100">
-              Ellenőrzött Szolgáltatók & Szakemberek ({filteredProviders.length})
+              Szolgáltatók és szakemberek ({filteredProviders.length})
             </h2>
           </div>
 
-          {filteredProviders.length === 0 ? (
+          {isLoadingProviders ? (
+            <div className="text-center py-16 text-sm text-slate-500">Szolgáltatók betöltése…</div>
+          ) : filteredProviders.length === 0 ? (
             <div className="text-center py-16 bg-slate-50 rounded-3xl border border-slate-200 space-y-3 p-8">
               <Search className="w-10 h-10 mx-auto text-slate-400" />
               <h3 className="text-lg font-bold text-slate-900">
@@ -400,11 +419,7 @@ export function ProvidersHome() {
                 >
                   {/* Cover Header */}
                   <div className="h-32 relative bg-slate-950 overflow-hidden">
-                    <img
-                      src={provider.coverImage}
-                      alt={provider.name}
-                      className="w-full h-full object-cover"
-                    />
+                    {provider.coverImage && <img src={provider.coverImage} alt={provider.name} className="w-full h-full object-cover" />}
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent" />
 
                     {/* Tier badge */}
@@ -445,28 +460,20 @@ export function ProvidersHome() {
                             {provider.profession} · {provider.category}
                           </p>
 
-                          {/* ILOLIT VERIFIED Badge (II.7) */}
-                          <div className="mt-1.5">
-                            <VerificationBadge verifications={provider.verifications} size="sm" />
-                          </div>
                         </div>
 
-                        <img
-                          src={provider.avatar}
-                          alt={provider.name}
-                          className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow -mt-6 z-10 shrink-0"
-                        />
+                        {provider.avatar && <img src={provider.avatar} alt={provider.name} className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow -mt-6 z-10 shrink-0" />}
                       </div>
 
                       {/* Verified Rating Summary (II.8) */}
-                      <div>
+                      {provider.reviewCount > 0 && <div>
                         <VerifiedReviewSummary
                           rating={provider.rating}
                           reviewCount={provider.reviewCount}
                           transactionType="szolgáltatás"
                           size="sm"
                         />
-                      </div>
+                      </div>}
 
                       {/* Szolgáltatási Terület (III.13) */}
                       {provider.coverage && (
