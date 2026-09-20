@@ -56,213 +56,6 @@ export interface MarketplaceItem {
   createdAt: string;
 }
 
-export const MOCK_MARKETPLACE_ITEMS: MarketplaceItem[] = [
-  // 1. Merchant Item: Tefal Botmixer from GastroHome Kft.
-  {
-    id: "item-tefal-1",
-    title: "Tefal InfinyForce Pro 1000W 4in1 Botmixer Szett (Aprító + Habverő)",
-    categorySlug: "elektronika",
-    categoryName: "Elektronika",
-    price: 22990,
-    listingType: "DIRECT",
-    listingTypeLabel: "Fix áras",
-    condition: "new",
-    conditionLabel: "Új (Bontatlan)",
-    brand: "Tefal",
-    location: "Budapest (GastroHome Kft.)",
-    image: "https://images.unsplash.com/photo-1578643463396-0997cb5328c1?w=800&auto=format&fit=crop&q=60",
-    seller: "GastroHome & Kitchen Kft.",
-    sellerType: "BUSINESS",
-    shopId: "gastro-home",
-    taxNumber: "23456789-2-41",
-    regNumber: "Cg.01-09-345678",
-    warranty: "24 hónap gyári garancia",
-    shippingTime: "1-2 munkanap DPD",
-    stockCount: 8,
-    sellerRating: 4.8,
-    sellerReviewsCount: 89,
-    description: "Hivatalos forgalmazótól származó Tefal 1000W botmixer szett aprítóval, habverővel és mérőpohárral. 24 hónap gyári garanciával.",
-    createdAt: "2026-08-28"
-  },
-
-  // 2. Merchant Item: Sony Headphone from FoxTech Electronics
-  {
-    id: "item-sony-fox",
-    title: "Sony WH-1000XM5 Vezeték Nélküli Zajszűrős Fejhallgató",
-    categorySlug: "elektronika",
-    categoryName: "Elektronika",
-    price: 129900,
-    originalPrice: 149900,
-    listingType: "DIRECT",
-    listingTypeLabel: "Fix áras",
-    condition: "new",
-    conditionLabel: "Új (Gyári bontatlan)",
-    brand: "Sony",
-    location: "Budapest (FoxTech Kft.)",
-    image: "https://images.unsplash.com/photo-1546435770-a3e426bf472b?w=800&auto=format&fit=crop&q=60",
-    seller: "FoxTech Premium Electronics Kft.",
-    sellerType: "BUSINESS",
-    shopId: "biz-fox-tech",
-    taxNumber: "12345678-2-42",
-    regNumber: "Cg.01-09-987654",
-    warranty: "24 hónap Sony garancia",
-    shippingTime: "1 munkanap GLS",
-    stockCount: 5,
-    sellerRating: 4.9,
-    sellerReviewsCount: 142,
-    description: "Prémium zajszűrős fejhallgató 30 órás akkumulátor üzemidővel, gyorstöltéssel és hi-res hangzással. Eredeti számlával.",
-    createdAt: "2026-08-27"
-  },
-
-  // 3. Merchant Item: Dyson Airwrap from BeautyCare Store
-  {
-    id: "item-dyson-1",
-    title: "Dyson Airwrap Complete Long Hajformázó (Nickle/Copper)",
-    categorySlug: "otthon-kert",
-    categoryName: "Otthon & Kert",
-    price: 189900,
-    listingType: "DIRECT",
-    listingTypeLabel: "Fix áras",
-    condition: "new",
-    conditionLabel: "Új (Dyson Garanciás)",
-    brand: "Dyson",
-    location: "Debrecen (BeautyCare Kft.)",
-    image: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800&auto=format&fit=crop&q=60",
-    seller: "BeautyCare & Luxury Store Kft.",
-    sellerType: "BUSINESS",
-    shopId: "beauty-care",
-    taxNumber: "56789012-2-05",
-    regNumber: "Cg.03-09-567123",
-    warranty: "24 hónap Dyson garancia",
-    shippingTime: "1 munkanap GLS",
-    stockCount: 2,
-    sellerRating: 5.0,
-    sellerReviewsCount: 64,
-    description: "Hivatalos importőri garanciával rendelkező Dyson Airwrap Complete Long hajformázó szett.",
-    createdAt: "2026-08-28"
-  },
-
-  // 4. Private Seller Item: iPhone 15 Pro Max
-  {
-    id: "item-1",
-    title: "Apple iPhone 15 Pro Max 256GB - Titánkék",
-    categorySlug: "elektronika",
-    categoryName: "Elektronika",
-    price: 449000,
-    originalPrice: 519000,
-    listingType: "DIRECT",
-    listingTypeLabel: "Fix áras",
-    condition: "like_new",
-    conditionLabel: "Újszerű",
-    brand: "Apple",
-    location: "Budapest, V. kerület",
-    image: "https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=800&auto=format&fit=crop&q=60",
-    seller: "Kovács Dániel",
-    sellerType: "PRIVATE",
-    sellerRating: 4.9,
-    sellerReviewsCount: 38,
-    description: "Kifogástalan állapotú iPhone 15 Pro Max 99%-os akkumulátorral. Eredeti dobozával, üvegfóliával és gyári MagSafe tokkal eladó.",
-    createdAt: "2026-08-25"
-  },
-
-  // 5. Private Seller Item: Jordan 1
-  {
-    id: "item-2",
-    title: "Nike Air Jordan 1 Retro High OG 'Chicago' (43-as)",
-    categorySlug: "ferfi-divat",
-    categoryName: "Férfi divat",
-    price: 78000,
-    listingType: "AUCTION",
-    listingTypeLabel: "Lolit Licit",
-    condition: "new",
-    conditionLabel: "Új (Címkés)",
-    brand: "Nike",
-    location: "Debrecen",
-    image: "https://images.unsplash.com/photo-1552346154-21d32810aba3?w=800&auto=format&fit=crop&q=60",
-    seller: "Szabó Péter",
-    sellerType: "PRIVATE",
-    sellerRating: 5.0,
-    sellerReviewsCount: 112,
-    description: "Ritka gyűjtői darab! Eredeti Nike Air Jordan 1 Chicago színállásban, bontatlan gyári dobozában, dupla fűzővel.",
-    bidsCount: 14,
-    currentBid: 78000,
-    auctionEndsAt: "Ma 21:00",
-    createdAt: "2026-08-24"
-  },
-
-  // 6. Private Seller Item: Bőrdzseki
-  {
-    id: "item-3",
-    title: "Vintage Olasz Bőrdzseki - Barna Marhabőr (M-es)",
-    categorySlug: "noi-divat",
-    categoryName: "Női divat",
-    price: 34900,
-    originalPrice: 65000,
-    listingType: "NEGOTIABLE",
-    listingTypeLabel: "Lolit Deal (Alkudható)",
-    condition: "good",
-    conditionLabel: "Jó állapotú",
-    brand: "Vintage Italy",
-    location: "Székesfehérvár",
-    image: "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=800&auto=format&fit=crop&q=60",
-    seller: "Nagy Zsófia",
-    sellerType: "PRIVATE",
-    sellerRating: 4.8,
-    sellerReviewsCount: 24,
-    description: "Eredeti olasz marhabőr dzseki gyönyörű patinával. Puha selyembéléssel, robusztus cipzárral. Mérete M-es.",
-    createdAt: "2026-08-26"
-  },
-
-  // 7. Merchant Item: ElectroShop Botmixer option
-  {
-    id: "item-tefal-electro",
-    title: "Tefal QuickChef 800W 3in1 Rozsdamentes Acél Botmixer",
-    categorySlug: "elektronika",
-    categoryName: "Elektronika",
-    price: 19990,
-    listingType: "DIRECT",
-    listingTypeLabel: "Fix áras",
-    condition: "new",
-    conditionLabel: "Új termék",
-    brand: "Tefal",
-    location: "Győr (ElectroShop Kft.)",
-    image: "https://images.unsplash.com/photo-1578643463396-0997cb5328c1?w=800&auto=format&fit=crop&q=60",
-    seller: "ElectroShop Pro Hungary Kft.",
-    sellerType: "BUSINESS",
-    shopId: "electro-shop",
-    taxNumber: "34567890-2-13",
-    regNumber: "Cg.06-09-123987",
-    warranty: "24 hónap garancia",
-    shippingTime: "24 órás szállítás MPL",
-    stockCount: 4,
-    sellerRating: 4.7,
-    sellerReviewsCount: 215,
-    description: "Erős 800W motorral szerelt rozsdamentes acél botmixer.",
-    createdAt: "2026-08-27"
-  },
-
-  // 8. Private Seller Item: Rolex
-  {
-    id: "item-6",
-    title: "Rolex Submariner Date 41mm (126610LN) - 2024 Garancia",
-    categorySlug: "ora-ekszer",
-    categoryName: "Óra & Ékszer",
-    price: 4950000,
-    listingType: "NEGOTIABLE",
-    listingTypeLabel: "Lolit Deal",
-    condition: "like_new",
-    conditionLabel: "Újszerű",
-    brand: "Rolex",
-    location: "Budapest, III. kerület",
-    image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=60",
-    seller: "LuxuryWatch Club (Magánszemély)",
-    sellerType: "PRIVATE",
-    sellerRating: 5.0,
-    sellerReviewsCount: 156,
-    description: "Eredeti Rolex Submariner Date teljes szettel (Full Set: doboz, kártya, fityegő, pótszemek). Hivatalos magyar márkaszervizben ellenőrizhető.",
-    createdAt: "2026-08-20"
-  }
-];
 
 export function Search() {
   const [searchParams] = useState(() => new URLSearchParams(window.location.search));
@@ -318,8 +111,8 @@ export function Search() {
         brand: listing.brand || "",
         location: listing.user?.location || "Magyarország",
         image: Array.isArray(listing.images) && listing.images[0]?.url ? listing.images[0].url : "https://placehold.co/800x800/e2e8f0/1e293b?text=Nincs+kép",
-        seller: listing.user?.username || listing.user?.fullName || "Eladó",
-        sellerType: listing.user?.businessName ? "BUSINESS" : "PRIVATE",
+        seller: listing.user?.businessName || listing.user?.username || listing.user?.fullName || "Eladó",
+        sellerType: listing.sellerType === "BUSINESS" || listing.user?.businessName ? "BUSINESS" : "PRIVATE",
         shopId: listing.user?.id || undefined,
         sellerRating: Number(listing.user?.rating) || 0,
         sellerReviewsCount: Number(listing.user?.reviewCount) || 0,
@@ -331,6 +124,16 @@ export function Search() {
   // A nyilvános piactér kizárólag a szerveren ténylegesen elmentett,
   // aktív hirdetéseket mutatja. A bemutató adatok nem keveredhetnek a valódiakkal.
   const marketplaceItems = liveMarketplaceItems;
+  const registeredShops = useMemo(
+    () => Array.from(
+      new Map(
+        marketplaceItems
+          .filter((item) => item.sellerType === "BUSINESS" && item.shopId)
+          .map((item) => [item.shopId as string, item.seller]),
+      ),
+    ),
+    [marketplaceItems],
+  );
 
   // Clean Categories list
   const quickCategories = [
@@ -582,12 +385,16 @@ export function Search() {
                     onChange={(e) => setMerchantShopFilter(e.target.value)}
                     className="w-full px-3 py-2 border border-emerald-300 rounded-xl text-xs bg-emerald-50/50 dark:bg-emerald-950/40 font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-900 dark:text-white"
                   >
-                    <option value="all">🏪 Összes bolt</option>
-                    <option value="gastro-home">🥣 GastroHome & Kitchen Kft.</option>
-                    <option value="biz-fox-tech">🦊 FoxTech Electronics Kft.</option>
-                    <option value="electro-shop">⚡ ElectroShop Pro Hungary</option>
-                    <option value="beauty-care">✨ BeautyCare Store Kft.</option>
+                    <option value="all">Összes regisztrált bolt</option>
+                    {registeredShops.map(([id, name]) => (
+                      <option key={id} value={id}>{name}</option>
+                    ))}
                   </select>
+                  {registeredShops.length === 0 && (
+                    <p className="text-[11px] font-medium text-slate-500">
+                      Jelenleg nincs aktív, regisztrált bolti hirdetés.
+                    </p>
+                  )}
                 </div>
               )}
 
