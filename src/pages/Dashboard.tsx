@@ -183,6 +183,10 @@ export function Dashboard() {
                       <div className="flex items-center gap-3">
                         <span className="text-base font-black text-emerald-600">{formatPrice(b.price)}</span>
                         <Badge variant="outline">{b.status === "CONFIRMED" ? "Megerősítve" : b.status === "PENDING" ? "Válaszra vár" : b.status === "CANCELLED" ? "Lemondva" : "Elutasítva"}</Badge>
+                        {b.depositAmount > 0 && <Badge variant="outline" className={b.depositPayment?.status === "paid" ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-amber-300 bg-amber-50 text-amber-900"}>
+                          {b.depositPayment?.status === "paid" ? "Előleg kifizetve" : `Előleg: ${formatPrice(b.depositAmount)}`}
+                        </Badge>}
+                        {b.depositPayment?.refundStatus === "required" && <Badge className="bg-rose-600 text-white">Visszatérítés rendezendő</Badge>}
                         {(["PENDING", "CONFIRMED"] as string[]).includes(b.status) && <Button variant="outline" size="sm" className="rounded-xl text-xs text-rose-600 border-rose-300 hover:bg-rose-50 font-extrabold cursor-pointer" onClick={() => cancelBooking(b)}>
                           Lemondás
                         </Button>}
