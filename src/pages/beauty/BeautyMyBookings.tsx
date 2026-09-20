@@ -336,9 +336,14 @@ export function BeautyMyBookings() {
                             : `Visszaigazolva · fizetendő előleg: ${formatPrice(b.depositAmount)}`}
                         </Badge>
                       )}
-                      {(b.status === "REJECTED" || b.status === "CANCELLED") && b.depositAmount > 0 && (
+                      {(b.status === "REJECTED" || b.status === "CANCELLED") && b.depositAmount > 0 && b.depositPayment?.status !== "paid" && (
                         <Badge variant="outline" className="text-[11px] gap-1 py-0.5 border-slate-300 bg-slate-100 text-slate-700 font-medium">
                           Nem történt terhelés
+                        </Badge>
+                      )}
+                      {(b.status === "REJECTED" || b.status === "CANCELLED") && b.depositPayment?.status === "paid" && (
+                        <Badge className="bg-rose-600 text-white">
+                          {b.depositPayment?.refundStatus === "refunded" ? "Előleg visszatérítve" : "Előleg visszatérítése rendezendő"}
                         </Badge>
                       )}
                     </div>
