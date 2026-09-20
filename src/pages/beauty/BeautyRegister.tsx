@@ -79,7 +79,21 @@ export function BeautyRegister() {
       ? Promise.resolve(null)
       : getMyProviderProfile()
       .then((profile) => {
-        if (active && profile?.exists) setLocation("/providers/dashboard");
+        if (!active || !profile?.exists) return profile;
+        if (profile.subscription?.status === "active" || profile.subscription?.status === "trialing") {
+          setLocation("/providers/dashboard");
+          return profile;
+        }
+        form.reset({
+          displayName: profile.displayName || "",
+          bio: profile.bio || "",
+          profileImageUrl: profile.profileImage || "",
+          region: "Korábban megadva",
+          county: profile.city || "",
+          address: profile.address || "",
+          phone: profile.phone || "",
+        });
+        setStep(2);
         return profile;
       });
     if (payment === "cancelled") {
