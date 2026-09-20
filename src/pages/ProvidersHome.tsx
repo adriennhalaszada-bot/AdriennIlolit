@@ -124,24 +124,24 @@ export function ProvidersHome() {
   return (
     <Layout>
       {/* Hero Section */}
-      <div className="bg-gradient-to-br from-slate-900 via-teal-950 to-emerald-950 text-white border-b relative overflow-hidden">
+      <div className="bg-gradient-to-br from-emerald-50 via-white to-teal-50 text-slate-950 border-b border-slate-200 relative overflow-hidden">
         <div className="container mx-auto px-4 py-12 sm:py-16 max-w-6xl relative z-10">
           <div className="flex items-center gap-2 mb-3">
-            <Sparkles className="w-6 h-6 text-emerald-400 animate-pulse" />
-            <span className="text-sm font-black text-emerald-300 uppercase tracking-widest bg-emerald-900/60 px-3 py-1 rounded-full border border-emerald-700/50">
-              ILOLIT Szolgáltatók & Valós Időpont Kereső
+            <Sparkles className="w-6 h-6 text-emerald-600" />
+            <span className="text-sm font-extrabold text-emerald-800 uppercase tracking-wider bg-white px-3 py-1 rounded-full border border-emerald-200">
+              ILOLIT szolgáltatók és időpontkereső
             </span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl font-black mb-3 max-w-2xl leading-tight">
             Foglalj időpontot ellenőrzött szakembereknél
           </h1>
-          <p className="text-slate-300 font-medium text-base sm:text-lg max-w-3xl mb-8 leading-relaxed">
-            Keresés GPS és Település alapján, valós szabad időpont szűréssel, ár-ajánlatkéréssel és ellenőrzött státuszokkal.
+          <p className="text-slate-600 font-medium text-base sm:text-lg max-w-3xl mb-8 leading-relaxed">
+            Keress település vagy GPS alapján, szűrj szabad időpontra, és kérj ajánlatot ellenőrzött szakemberektől.
           </p>
 
           {/* Search Box Card */}
-          <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-2xl border border-slate-800 space-y-5">
+          <div className="bg-white text-slate-900 p-6 rounded-3xl shadow-lg border border-slate-200 space-y-5">
             {/* Search Input */}
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -149,13 +149,13 @@ export function ProvidersHome() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="🔍 Szakma, szolgáltatás vagy név alapján (Pl. villanyszerelő ma Miskolcon)..."
-                className="pl-12 py-6 rounded-2xl text-sm sm:text-base bg-slate-950 border-slate-800 text-white placeholder:text-slate-500 font-medium"
+                placeholder="Szakma, szolgáltatás vagy név (például: villanyszerelő Miskolcon)"
+                className="pl-12 py-6 rounded-2xl text-sm sm:text-base bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 font-medium"
               />
             </div>
 
             {/* Location Search Widget */}
-            <div className="border-t border-slate-800 pt-4">
+            <div className="border-t border-slate-200 pt-4">
               <LocationSearchWidget
                 value={locationState}
                 onChange={setLocationState}
@@ -166,10 +166,10 @@ export function ProvidersHome() {
             </div>
 
             {/* Middle Row: Category, Subcategory & Sort Controls */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-800">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-200">
               {/* Category Selector */}
               <div>
-                <label className="text-xs font-extrabold text-slate-300 mb-1.5 block">
+                <label className="text-xs font-extrabold text-slate-700 mb-1.5 block">
                   Szolgáltatás Típus
                 </label>
                 <select
@@ -178,7 +178,7 @@ export function ProvidersHome() {
                     setSelectedCategory(e.target.value);
                     setSelectedSubcategory("ALL");
                   }}
-                  className="w-full px-3 py-3 rounded-xl border border-slate-800 bg-slate-950 text-slate-200 text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full px-3 py-3 rounded-xl border border-slate-300 bg-white text-slate-800 text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
                 >
                   <option value="ALL">Minden szolgáltatás (Összes)</option>
                   {ALL_PROVIDER_CATEGORIES.map((cat) => (
@@ -191,14 +191,14 @@ export function ProvidersHome() {
 
               {/* Subcategory Selector */}
               <div>
-                <label className="text-xs font-extrabold text-slate-300 mb-1.5 block">
+                <label className="text-xs font-extrabold text-slate-700 mb-1.5 block">
                   Szakma / Alszolgáltatás
                 </label>
                 <select
                   value={selectedSubcategory}
                   onChange={(e) => setSelectedSubcategory(e.target.value)}
                   disabled={selectedCategory === "ALL"}
-                  className="w-full px-3 py-3 rounded-xl border border-slate-800 bg-slate-950 text-slate-200 text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-50"
+                  className="w-full px-3 py-3 rounded-xl border border-slate-300 bg-white text-slate-800 text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none disabled:opacity-50"
                 >
                   <option value="ALL">Minden szakma</option>
                   {availableSubcategories.map((sub) => (
@@ -211,13 +211,13 @@ export function ProvidersHome() {
 
               {/* Sort By Selector */}
               <div>
-                <label className="text-xs font-extrabold text-slate-300 mb-1.5 block">
+                <label className="text-xs font-extrabold text-slate-700 mb-1.5 block">
                   Rendezés
                 </label>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="w-full px-3 py-3 rounded-xl border border-slate-800 bg-slate-950 text-slate-200 text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full px-3 py-3 rounded-xl border border-slate-300 bg-white text-slate-800 text-xs font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
                 >
                   <option value="distance">Távolság szerint (km)</option>
                   <option value="rating">Értékelés szerint ⭐</option>
@@ -227,7 +227,7 @@ export function ProvidersHome() {
             </div>
 
             {/* Availability Filter Chips (III.10) */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-bold text-slate-400 mr-1 flex items-center gap-1">
                   <Clock size={14} className="text-emerald-400" /> Szabad Időpont:
@@ -238,7 +238,7 @@ export function ProvidersHome() {
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                     availabilityFilter === 'all'
                       ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                      : 'bg-slate-950 text-slate-400 hover:bg-slate-800 border border-slate-800'
+                      : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-300'
                   }`}
                 >
                   Bármikor
@@ -249,7 +249,7 @@ export function ProvidersHome() {
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
                     availabilityFilter === 'today'
                       ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                      : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                      : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-300'
                   }`}
                 >
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
@@ -261,7 +261,7 @@ export function ProvidersHome() {
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                     availabilityFilter === 'tomorrow'
                       ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                      : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                      : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-300'
                   }`}
                 >
                   Elérhető holnap
@@ -272,7 +272,7 @@ export function ProvidersHome() {
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                     availabilityFilter === 'this_week'
                       ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                      : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                      : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-300'
                   }`}
                 >
                   Elérhető ezen a héten
@@ -290,13 +290,13 @@ export function ProvidersHome() {
       {/* Main Content Area */}
       <div className="container mx-auto px-4 py-10 max-w-6xl space-y-10">
         {/* Provider Registration CTA Banner */}
-        <div className="bg-gradient-to-r from-emerald-800 via-teal-800 to-slate-900 text-white p-6 sm:p-8 rounded-3xl shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 border border-emerald-500/40">
+        <div className="bg-emerald-50 text-slate-900 p-6 sm:p-8 rounded-3xl shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 border border-emerald-200">
           <div className="space-y-2 text-center md:text-left">
-            <Badge className="bg-emerald-500 text-slate-950 font-extrabold text-xs shadow">💼 SZOLGÁLTATÓI ELŐFIZETÉS</Badge>
+            <Badge className="bg-emerald-600 text-white font-extrabold text-xs">SZOLGÁLTATÓI FIÓK</Badge>
             <h3 className="text-xl sm:text-2xl font-black">
               Szolgáltató vagy? Hozz létre saját előfizetéses bemutatkozó oldalt!
             </h3>
-            <p className="text-xs sm:text-sm text-emerald-100 max-w-xl font-medium">
+            <p className="text-xs sm:text-sm text-slate-600 max-w-xl font-medium">
               Válassz ágazatot, mutasd be a szolgáltatásaidat, állíts be előleget és fogadj időpontokat vagy egyedi árajánlatkéréseket!
             </p>
           </div>
@@ -323,8 +323,8 @@ export function ProvidersHome() {
                 key={cat.id}
                 className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-2 ${
                   selectedCategory === cat.name
-                    ? "border-emerald-500 bg-emerald-950/60 ring-2 ring-emerald-500 shadow-md"
-                    : "border-slate-800 bg-slate-900 hover:border-emerald-500/60"
+                    ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200 shadow-sm"
+                    : "border-slate-200 bg-white hover:border-emerald-400 hover:shadow-sm"
                 }`}
               >
                 <button
@@ -335,7 +335,7 @@ export function ProvidersHome() {
                   }}
                   className="w-full text-left"
                 >
-                  <div className="text-xs font-extrabold text-slate-100 line-clamp-2 leading-snug">
+                  <div className="text-xs font-extrabold text-slate-900 line-clamp-2 leading-snug">
                     {cat.name}
                   </div>
                   <div className="text-[10px] font-bold text-emerald-400 truncate mt-1">
@@ -350,10 +350,10 @@ export function ProvidersHome() {
                     setActiveModalCat(cat);
                     setIsModalOpen(true);
                   }}
-                  className="text-[10px] font-extrabold text-slate-300 hover:text-emerald-400 bg-slate-800 hover:bg-slate-700 py-1.5 px-2 rounded-xl text-center border border-slate-700 transition"
+                  className="text-[10px] font-extrabold text-slate-600 hover:text-emerald-700 bg-slate-50 hover:bg-emerald-50 py-1.5 px-2 rounded-xl text-center border border-slate-200 transition"
                   title="Alkategóriák részletes megtekintése"
                 >
-                  👁️ Alkategóriák ({cat.subcategories.length})
+                  Alkategóriák ({cat.subcategories.length})
                 </button>
               </div>
             ))}
@@ -369,9 +369,9 @@ export function ProvidersHome() {
           </div>
 
           {filteredProviders.length === 0 ? (
-            <div className="text-center py-16 bg-slate-900 rounded-3xl border border-slate-800 space-y-3 p-8">
-              <div className="text-4xl">🔍</div>
-              <h3 className="text-lg font-bold text-slate-100">
+            <div className="text-center py-16 bg-slate-50 rounded-3xl border border-slate-200 space-y-3 p-8">
+              <Search className="w-10 h-10 mx-auto text-slate-400" />
+              <h3 className="text-lg font-bold text-slate-900">
                 Nem található szakember a megadott szűrési feltételekkel
               </h3>
               <p className="text-xs text-slate-400 max-w-md mx-auto">
@@ -386,7 +386,7 @@ export function ProvidersHome() {
                   setAvailabilityFilter('all');
                 }}
                 variant="outline"
-                className="rounded-2xl text-xs font-extrabold mt-2 border-slate-700 text-slate-200"
+                className="rounded-2xl text-xs font-extrabold mt-2 border-slate-300 text-slate-700"
               >
                 Szűrők Alaphelyzetbe Állítása
               </Button>
@@ -396,7 +396,7 @@ export function ProvidersHome() {
               {filteredProviders.map((provider) => (
                 <Card
                   key={provider.id}
-                  className="rounded-3xl overflow-hidden shadow-xl transition border border-slate-800 flex flex-col bg-slate-900 text-slate-100"
+                  className="rounded-3xl overflow-hidden shadow-sm hover:shadow-lg transition border border-slate-200 flex flex-col bg-white text-slate-900"
                 >
                   {/* Cover Header */}
                   <div className="h-32 relative bg-slate-950 overflow-hidden">
@@ -405,7 +405,7 @@ export function ProvidersHome() {
                       alt={provider.name}
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent" />
 
                     {/* Tier badge */}
                     <div className="absolute top-3 right-3">
@@ -425,7 +425,7 @@ export function ProvidersHome() {
                     <button
                       type="button"
                       onClick={() => setReportModalData({ isOpen: true, title: provider.name })}
-                      className="absolute top-3 left-3 bg-slate-950/80 hover:bg-rose-950 text-slate-400 hover:text-rose-400 p-1.5 rounded-xl text-xs border border-slate-800 transition flex items-center gap-1"
+                      className="absolute top-3 left-3 bg-white/90 hover:bg-rose-50 text-slate-600 hover:text-rose-600 p-1.5 rounded-xl text-xs border border-slate-200 transition flex items-center gap-1"
                       title="Probléma jelentése"
                     >
                       <Flag size={13} />
@@ -438,7 +438,7 @@ export function ProvidersHome() {
                     <div className="space-y-3">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <h3 className="font-extrabold text-base text-slate-100 leading-snug">
+                          <h3 className="font-extrabold text-base text-slate-900 leading-snug">
                             {provider.name}
                           </h3>
                           <p className="text-xs font-bold text-emerald-400 mt-0.5">
@@ -454,7 +454,7 @@ export function ProvidersHome() {
                         <img
                           src={provider.avatar}
                           alt={provider.name}
-                          className="w-12 h-12 rounded-2xl object-cover border-2 border-slate-800 shadow -mt-6 z-10 shrink-0"
+                          className="w-12 h-12 rounded-2xl object-cover border-2 border-white shadow -mt-6 z-10 shrink-0"
                         />
                       </div>
 
@@ -475,7 +475,7 @@ export function ProvidersHome() {
 
                       {/* Slot info (III.10) */}
                       {provider.availableToday && (
-                        <div className="flex items-center gap-2 text-xs font-bold bg-emerald-950/60 border border-emerald-500/40 p-2 rounded-xl text-emerald-300">
+                        <div className="flex items-center gap-2 text-xs font-bold bg-emerald-50 border border-emerald-200 p-2 rounded-xl text-emerald-800">
                           <Clock size={14} className="text-emerald-400" />
                           <span>Ma szabad: {provider.nextSlot}</span>
                         </div>
@@ -483,14 +483,14 @@ export function ProvidersHome() {
                     </div>
 
                     {/* Action Buttons (III.11, III.12) */}
-                    <div className="space-y-2 pt-2 border-t border-slate-800">
+                    <div className="space-y-2 pt-2 border-t border-slate-200">
                       <div className="grid grid-cols-2 gap-2">
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
                           onClick={() => setWaitingListModalData({ isOpen: true, providerName: provider.name })}
-                          className="rounded-xl text-[11px] font-bold border-slate-800 bg-slate-950 text-amber-400 hover:bg-slate-800 truncate"
+                          className="rounded-xl text-[11px] font-bold border-slate-300 bg-white text-amber-700 hover:bg-amber-50 truncate"
                         >
                           <Bell size={12} className="mr-1 shrink-0" /> Várólista
                         </Button>
@@ -499,7 +499,7 @@ export function ProvidersHome() {
                           variant="outline"
                           size="sm"
                           onClick={() => setQuoteModalData({ isOpen: true, providerName: provider.name })}
-                          className="rounded-xl text-[11px] font-bold border-slate-800 bg-slate-950 text-teal-300 hover:bg-slate-800 truncate"
+                          className="rounded-xl text-[11px] font-bold border-slate-300 bg-white text-teal-700 hover:bg-teal-50 truncate"
                         >
                           <MessageSquarePlus size={12} className="mr-1 shrink-0" /> Ajánlatot kérek
                         </Button>
