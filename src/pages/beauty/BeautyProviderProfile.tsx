@@ -111,6 +111,8 @@ export function BeautyProviderProfile() {
       price: s.price,
       durationMinutes: s.durationMinutes,
       description: s.description,
+      category: foundGeneralProvider.profession,
+      isAvailable: true,
       requiresDeposit: s.requiresDeposit,
       depositPercentage: s.depositPercentage,
     }))
@@ -204,8 +206,8 @@ export function BeautyProviderProfile() {
             description: wizardService.description,
             price: wizardService.price,
             durationMinutes: wizardService.durationMinutes,
-            requiresDeposit: true,
-            depositPercentage: wizardService.depositPercentage || 50,
+            requiresDeposit: wizardService.requiresDeposit === true,
+            depositPercentage: wizardService.depositPercentage || 0,
           }}
         />
       )}
@@ -225,7 +227,7 @@ interface LayoutProps {
 
 function GlassProfile({ provider, theme, isFavorited, onToggleFavorite, reviews, isSignedIn, onOpenWizard }: LayoutProps) {
   const services: BeautyServiceOffering[] = provider.services ?? [];
-  const availableServices = services.filter((s) => s.isAvailable);
+  const availableServices = services.filter((s) => s.isAvailable !== false);
   const portfolio = provider.portfolio ?? [];
   const mainPhoto = provider.profileImageUrl ?? portfolio[0]?.imageUrl;
   const subPhotos = [portfolio[0]?.imageUrl, portfolio[1]?.imageUrl].filter(
