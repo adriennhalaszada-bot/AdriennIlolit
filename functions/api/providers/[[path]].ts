@@ -112,8 +112,11 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       let input: any;
       try { input = await context.request.json(); } catch { return json({ error: "Érvénytelen JSON-adat." }, 400); }
       const provider = normalize(input, id, ownerId, existing);
-      if (!provider.displayName || !provider.city || !provider.email) {
-        return json({ error: "A vállalkozás neve, települése és e-mail-címe kötelező." }, 400);
+      if (!provider.displayName || !provider.category || !provider.subCategory || !provider.city || !provider.phone || !provider.email) {
+        return json({ error: "A vállalkozás neve, kategóriája, szakterülete, települése, telefonszáma és e-mail-címe kötelező." }, 400);
+      }
+      if (provider.isPublished && (!provider.services.length || !provider.slots.some((slot: any) => slot.isAvailable))) {
+        return json({ error: "Publikáláshoz legalább egy szolgáltatás és egy aktív idősáv szükséges." }, 400);
       }
       await context.env.MEDIA_BUCKET.put(`${PREFIX}${id}.json`, JSON.stringify(provider), {
         httpMetadata: { contentType: "application/json" },
