@@ -257,6 +257,7 @@ export function BeautyProviderProfile() {
             requiresDeposit: wizardService.requiresDeposit === true,
             depositPercentage: wizardService.depositPercentage || 0,
           }}
+          slots={storedProvider?.slots}
         />
       )}
     </Layout>
