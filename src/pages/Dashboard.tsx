@@ -258,7 +258,7 @@ export function Dashboard() {
                         <p className="text-xs text-slate-600 font-medium">Autó/motor hirdetések, tesztvezetés foglalások és ajánlatok.</p>
                       </Link>
 
-                      <Link href="/beauty/dashboard" className="p-4 rounded-2xl border border-slate-200 hover:border-rose-400 bg-rose-50/40 hover:bg-rose-50 transition space-y-2 block group">
+                      <Link href="/providers/dashboard" className="p-4 rounded-2xl border border-slate-200 hover:border-rose-400 bg-rose-50/40 hover:bg-rose-50 transition space-y-2 block group">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-black text-rose-800 flex items-center gap-1">💄 Szépségápolási Admin</span>
                           <ChevronRight className="w-4 h-4 text-rose-600 group-hover:translate-x-1 transition" />
