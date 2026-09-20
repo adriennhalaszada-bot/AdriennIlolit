@@ -35,6 +35,8 @@ export function GeneralProviderDashboard() {
   const [profileImages, setProfileImages] = useState<string[]>([]);
   const [publishPortfolio, setPublishPortfolio] = useState(false);
   const [themeId, setThemeId] = useState("emerald");
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string>("inactive");
+  const [subscriptionPlan, setSubscriptionPlan] = useState<string>("");
 
   // Services list
   const [services, setServices] = useState<Array<{ id: string; name: string; price: number; durationMinutes: number; deposit: number }>>([]);
@@ -54,6 +56,9 @@ export function GeneralProviderDashboard() {
     displayName.trim() && category && subCategory && city.trim() && phone.trim() && email.trim() &&
     services.length > 0 && customSlots.some((slot) => slot.isAvailable),
   );
+  const isBeautyProvider = category === "Szépség- és egészségipar";
+  const hasActiveSubscription = subscriptionStatus === "active" || subscriptionStatus === "trialing";
+  const mayPublish = canPublish && (!isBeautyProvider || hasActiveSubscription);
 
   useEffect(() => {
     let active = true;
@@ -73,6 +78,8 @@ export function GeneralProviderDashboard() {
         setProfileImages(profile.profileImages?.length ? profile.profileImages : profile.profileImage ? [profile.profileImage] : []);
         setPublishPortfolio(profile.publishPortfolio === true);
         setThemeId(profile.themeId);
+        setSubscriptionStatus(profile.subscription?.status || "inactive");
+        setSubscriptionPlan(profile.subscription?.plan || "");
         setServices(profile.services.map((service) => ({
           id: service.id,
           name: service.name,
@@ -109,7 +116,7 @@ export function GeneralProviderDashboard() {
           depositPercentage: service.price > 0 ? Math.round(service.deposit / service.price * 100) : 0,
           isAvailable: true,
         })),
-        isPublished: canPublish,
+        isPublished: mayPublish,
       });
       setProviderId(saved.id || null);
       toast({ title: "A szolgáltatói adatok mentve", description: "A profil, az árlista és az idősávok tartósan a Cloudflare tárhelyre kerültek." });
@@ -263,8 +270,19 @@ export function GeneralProviderDashboard() {
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
           <div className="text-xs text-slate-700">
-            {isLoadingProfile ? "A korábban mentett szolgáltatói adatok betöltése…" : canPublish ? "A profil publikálható: minden kötelező adat, szolgáltatás és aktív idősáv rendelkezésre áll." : "A publikáláshoz töltsd ki a kötelező adatokat, majd adj hozzá szolgáltatást és aktív idősávot."}
+            {isLoadingProfile
+              ? "A korábban mentett szolgáltatói adatok betöltése…"
+              : isBeautyProvider && !hasActiveSubscription
+                ? `A szépségipari profil nem publikálható aktív előfizetés nélkül. Jelenlegi állapot: ${subscriptionStatus}.`
+                : canPublish
+                  ? "A profil publikálható: minden kötelező adat, szolgáltatás és aktív idősáv rendelkezésre áll."
+                  : "A publikáláshoz töltsd ki a kötelező adatokat, majd adj hozzá szolgáltatást és aktív idősávot."}
           </div>
+          {isBeautyProvider && (
+            <Badge className={hasActiveSubscription ? "bg-emerald-600 text-white" : "bg-amber-500 text-slate-950"}>
+              Előfizetés: {hasActiveSubscription ? `aktív${subscriptionPlan ? ` (${subscriptionPlan === "yearly" ? "éves" : "havi"})` : ""}` : subscriptionStatus}
+            </Badge>
+          )}
           <Button
             type="button"
             onClick={handleSaveProfile}
