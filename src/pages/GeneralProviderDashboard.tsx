@@ -32,7 +32,7 @@ export function GeneralProviderDashboard() {
   const [email, setEmail] = useState("");
   const [bio, setBio] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
-  const [profileImage, setProfileImage] = useState("");
+  const [profileImages, setProfileImages] = useState<string[]>([]);
   const [themeId, setThemeId] = useState("emerald");
 
   // Services list
@@ -69,7 +69,7 @@ export function GeneralProviderDashboard() {
         setEmail(profile.email);
         setBio(profile.bio);
         setVideoUrl(profile.videoUrl);
-        setProfileImage(profile.profileImage);
+        setProfileImages(profile.profileImages?.length ? profile.profileImages : profile.profileImage ? [profile.profileImage] : []);
         setThemeId(profile.themeId);
         setServices(profile.services.map((service) => ({
           id: service.id,
@@ -100,7 +100,7 @@ export function GeneralProviderDashboard() {
     try {
       const saved = await saveMyProviderProfile({
         displayName, category, subCategory, city, address, phone, email, bio,
-        videoUrl, profileImage, themeId, slots: customSlots,
+        videoUrl, profileImage: profileImages[0] || "", profileImages, themeId, slots: customSlots,
         services: services.map((service) => ({
           ...service,
           requiresDeposit: service.deposit > 0,
@@ -514,7 +514,8 @@ export function GeneralProviderDashboard() {
               {/* Cloudflare Image Uploader */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Profil & Portfólió Képek (Cloudflare R2 Storage)</label>
-                <ImageUploader value={profileImage ? [profileImage] : []} onChange={(urls) => setProfileImage(urls[0] || "")} maxImages={6} />
+                <ImageUploader value={profileImages} onChange={setProfileImages} maxImages={6} />
+                <p className="text-[11px] text-slate-500">Az első kép a profil főképe, a további képek a nyilvános portfólióban jelennek meg. Legfeljebb 6 kép tölthető fel.</p>
               </div>
 
               <Button onClick={handleSaveProfile} disabled={isSavingProfile} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-5 rounded-2xl text-xs shadow-md">
