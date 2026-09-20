@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Sparkles, LayoutDashboard, Calendar, CalendarCheck, UserPlus, Eye } from "lucide-react";
+import { Sparkles, LayoutDashboard, CalendarCheck, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface BeautyHeaderNavProps {
@@ -12,18 +12,15 @@ export function BeautyHeaderNav({ activeTab }: BeautyHeaderNavProps) {
   const current = activeTab || (
     location === "/beauty" ? "home" :
     location.startsWith("/beauty/dashboard") ? "dashboard" :
-    location.startsWith("/interactive-calendar") ? "calendar" :
     location.startsWith("/beauty/bookings") ? "bookings" :
     location.startsWith("/beauty/register") ? "register" : "home"
   );
 
   const tabs = [
-    { id: "home", label: "🌸 Szolgáltatók & Keresés", href: "/beauty", icon: Sparkles },
-    { id: "roadmap", label: "🚀 7 Modul Roadmap & Kipróbálás", href: "/beauty/roadmap", icon: Eye },
-    { id: "dashboard", label: "💼 Szolgáltatói Admin", href: "/beauty/dashboard", icon: LayoutDashboard },
-    { id: "calendar", label: "📅 Interaktív Naptár", href: "/interactive-calendar", icon: Calendar },
-    { id: "bookings", label: "📋 Saját Foglalásaim", href: "/beauty/bookings", icon: CalendarCheck },
-    { id: "register", label: "📝 Legyél Szolgáltató", href: "/beauty/register", icon: UserPlus },
+    { id: "home", label: "Szolgáltatók és keresés", href: "/beauty", icon: Sparkles },
+    { id: "dashboard", label: "Szolgáltatói admin", href: "/providers/dashboard", icon: LayoutDashboard },
+    { id: "bookings", label: "Saját foglalásaim", href: "/beauty/bookings", icon: CalendarCheck },
+    { id: "register", label: "Legyél szolgáltató", href: "/beauty/register", icon: UserPlus },
   ];
 
   return (
