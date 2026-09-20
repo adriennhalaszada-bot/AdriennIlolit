@@ -9,6 +9,7 @@ interface Env {
 
 type Context = EventContext<Env, string, Record<string, unknown>>;
 const PROVIDER_PREFIX = "data/providers/";
+const BOOKING_PREFIX = "data/bookings/";
 
 function json(data: unknown, status = 200) {
   return Response.json(data, {
@@ -81,6 +82,19 @@ async function updateSubscription(env: Env, ownerId: string, subscription: Recor
   });
 }
 
+async function updateBookingPayment(env: Env, bookingId: string, payment: Record<string, unknown>) {
+  const key = `${BOOKING_PREFIX}${bookingId}.json`;
+  const object = await env.MEDIA_BUCKET.get(key);
+  if (!object) return null;
+  const booking = await object.json<any>();
+  const updated = { ...booking, depositPayment: payment, updatedAt: new Date().toISOString() };
+  await env.MEDIA_BUCKET.put(key, JSON.stringify(updated), {
+    httpMetadata: { contentType: "application/json" },
+    customMetadata: { customerId: booking.customerId, providerOwnerId: booking.providerOwnerId },
+  });
+  return updated;
+}
+
 export const onRequest: PagesFunction<Env> = async (rawContext) => {
   const context = rawContext as Context;
   if (context.request.method === "OPTIONS") return json(null, 204);
@@ -93,7 +107,15 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     }
     const event = JSON.parse(payload);
     const object = event?.data?.object || {};
-    if (event.type === "checkout.session.completed" && object.client_reference_id) {
+    if (event.type === "checkout.session.completed" && object.metadata?.kind === "booking_deposit" && object.metadata?.bookingId) {
+      await updateBookingPayment(context.env, object.metadata.bookingId, {
+        status: object.payment_status === "paid" ? "paid" : "pending",
+        amount: Number(object.amount_total || 0),
+        stripeCheckoutSessionId: object.id || "",
+        stripePaymentIntentId: object.payment_intent || "",
+        paidAt: object.payment_status === "paid" ? new Date().toISOString() : undefined,
+      });
+    } else if (event.type === "checkout.session.completed" && object.client_reference_id) {
       await updateSubscription(context.env, object.client_reference_id, {
         status: "active",
         plan: object.metadata?.plan || "monthly",
@@ -128,6 +150,77 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
   }
   const userId = await currentUserId(context.request, context.env);
   if (!userId) return json({ error: "A fizetéshez jelentkezz be." }, 401);
+  if (route[0] === "booking-deposit") {
+    try {
+      if (context.request.method === "POST" && route.length === 1) {
+        const body = await context.request.json<{ bookingId?: string }>();
+        const bookingId = typeof body.bookingId === "string" ? body.bookingId.trim().slice(0, 160) : "";
+        const object = bookingId ? await context.env.MEDIA_BUCKET.get(`${BOOKING_PREFIX}${bookingId}.json`) : null;
+        if (!object) return json({ error: "A foglalás nem található." }, 404);
+        const booking = await object.json<any>();
+        if (booking.customerId !== userId) return json({ error: "Ehhez a foglaláshoz nincs hozzáférésed." }, 403);
+        if (booking.status !== "CONFIRMED") return json({ error: "Előleget csak visszaigazolt foglalásra lehet fizetni." }, 409);
+        const amount = Math.round(Number(booking.depositAmount) || 0);
+        if (amount <= 0) return json({ error: "Ehhez a foglaláshoz nem tartozik fizetendő előleg." }, 409);
+        if (booking.depositPayment?.status === "paid") return json({ error: "Az előleg már ki van fizetve." }, 409);
+
+        const origin = new URL(context.request.url).origin;
+        const form = new URLSearchParams({
+          mode: "payment",
+          client_reference_id: userId,
+          customer_email: String(booking.customerEmail || "").slice(0, 180),
+          "line_items[0][quantity]": "1",
+          "line_items[0][price_data][currency]": "huf",
+          "line_items[0][price_data][unit_amount]": String(amount),
+          "line_items[0][price_data][product_data][name]": `ILOLIT foglalási előleg – ${String(booking.serviceName || "szolgáltatás").slice(0, 120)}`,
+          "metadata[kind]": "booking_deposit",
+          "metadata[bookingId]": booking.id,
+          "metadata[customerId]": userId,
+          success_url: `${origin}/beauty/bookings?deposit=success&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${origin}/beauty/bookings?deposit=cancelled`,
+        });
+        const response = await stripeRequest(context.env, "/checkout/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: form,
+        });
+        const session = await response.json<any>();
+        if (!response.ok || !session.url) return json({ error: session?.error?.message || "Az előlegfizetés nem indítható." }, 502);
+        await updateBookingPayment(context.env, booking.id, {
+          status: "pending",
+          amount,
+          stripeCheckoutSessionId: session.id,
+          createdAt: new Date().toISOString(),
+        });
+        return json({ checkoutUrl: session.url });
+      }
+
+      if (context.request.method === "GET" && route[1] === "status") {
+        const sessionId = new URL(context.request.url).searchParams.get("session_id") || "";
+        if (!/^cs_(test_|live_)?[A-Za-z0-9]+$/.test(sessionId)) return json({ error: "Érvénytelen fizetési azonosító." }, 400);
+        const response = await stripeRequest(context.env, `/checkout/sessions/${encodeURIComponent(sessionId)}`);
+        const session = await response.json<any>();
+        if (!response.ok) return json({ error: session?.error?.message || "Az előlegfizetés nem ellenőrizhető." }, 502);
+        if (session.metadata?.kind !== "booking_deposit" || session.metadata?.customerId !== userId) {
+          return json({ error: "Ez a fizetés nem ehhez a felhasználóhoz tartozik." }, 403);
+        }
+        const paid = session.status === "complete" && session.payment_status === "paid";
+        if (paid && session.metadata?.bookingId) {
+          await updateBookingPayment(context.env, session.metadata.bookingId, {
+            status: "paid",
+            amount: Number(session.amount_total || 0),
+            stripeCheckoutSessionId: session.id,
+            stripePaymentIntentId: session.payment_intent || "",
+            paidAt: new Date().toISOString(),
+          });
+        }
+        return json({ paid, bookingId: session.metadata?.bookingId || "" });
+      }
+    } catch (error: any) {
+      return json({ error: error?.message || "Váratlan előlegfizetési hiba történt." }, 500);
+    }
+    return json({ error: "Nem támogatott előlegfizetési művelet." }, 405);
+  }
   if (route[0] !== "provider-subscription") return json({ error: "Ismeretlen számlázási végpont." }, 404);
 
   try {
