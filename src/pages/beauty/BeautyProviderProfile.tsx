@@ -136,7 +136,10 @@ export function BeautyProviderProfile() {
     ]
   } as unknown as BeautyProvider;
 
-  const effectiveProvider = provider ?? MOCK_PROVIDER;
+  // A demo/general service-provider ID must never be replaced by an empty or
+  // partial beauty API response. These profiles are sourced from the unified
+  // provider catalogue and have their own complete local representation.
+  const effectiveProvider = isMockId ? MOCK_PROVIDER : (provider ?? MOCK_PROVIDER);
   const reviews = reviewsData?.items ?? [];
   const theme = getProfileTemplate(effectiveProvider.templateId);
 
