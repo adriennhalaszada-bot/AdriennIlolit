@@ -15,3 +15,9 @@ export function confirmProviderSubscription(sessionId: string) {
     `/api/billing/provider-subscription/status?session_id=${encodeURIComponent(sessionId)}`,
   );
 }
+
+export function createProviderBillingPortal() {
+  return customFetch<{ portalUrl: string }>("/api/billing/provider-subscription/portal", {
+    method: "POST",
+  });
+}
