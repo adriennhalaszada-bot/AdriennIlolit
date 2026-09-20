@@ -101,6 +101,7 @@ function normalize(input: any, id: string, ownerId: string, existing?: any) {
     videoUrl: text(input.videoUrl, 500),
     profileImage: profileImages[0] || "",
     profileImages,
+    publishPortfolio: input.publishPortfolio === true,
     themeId: text(input.themeId, 40) || "emerald",
     services,
     slots,
@@ -147,15 +148,15 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     if (!provider || !provider.isPublished) return json({ error: "A szolgáltató nem található." }, 404);
     // Contact details and the exact address remain private by default. A later
     // explicit provider opt-in may expose selected business contact channels.
-    const { ownerId: _ownerId, email: _email, phone: _phone, address: _address, ...publicProvider } = provider;
-    return json(publicProvider);
+    const { ownerId: _ownerId, email: _email, phone: _phone, address: _address, profileImages: _profileImages, ...publicProvider } = provider;
+    return json(provider.publishPortfolio ? { ...publicProvider, profileImages: provider.profileImages } : publicProvider);
   }
 
   if (method === "GET") {
     const listed = await context.env.MEDIA_BUCKET.list({ prefix: PREFIX, limit: 500 });
     const providers = (await Promise.all(listed.objects.map((object) =>
       readProvider(context.env, object.key.slice(PREFIX.length, -5)),
-    ))).filter((provider) => provider?.isPublished).map(({ ownerId: _ownerId, email: _email, phone: _phone, address: _address, ...provider }) => provider);
+    ))).filter((provider) => provider?.isPublished).map(({ ownerId: _ownerId, email: _email, phone: _phone, address: _address, profileImages: _profileImages, ...provider }) => provider);
     return json({ items: providers, total: providers.length });
   }
 
