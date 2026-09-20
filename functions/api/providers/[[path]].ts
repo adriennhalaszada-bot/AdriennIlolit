@@ -140,6 +140,11 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       if (provider.isPublished && (!provider.services.length || !provider.slots.some((slot: any) => slot.isAvailable))) {
         return json({ error: "Publikáláshoz legalább egy szolgáltatás és egy aktív idősáv szükséges." }, 400);
       }
+      const beautySubscriptionRequired = provider.category === "Szépség- és egészségipar";
+      const subscriptionActive = provider.subscription?.status === "active" || provider.subscription?.status === "trialing";
+      if (provider.isPublished && beautySubscriptionRequired && !subscriptionActive) {
+        return json({ error: "A szépségipari profil közzétételéhez aktív előfizetés szükséges." }, 402);
+      }
       await context.env.MEDIA_BUCKET.put(`${PREFIX}${id}.json`, JSON.stringify(provider), {
         httpMetadata: { contentType: "application/json" },
         customMetadata: { owner: ownerId, updatedAt: provider.updatedAt },
