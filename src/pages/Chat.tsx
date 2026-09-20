@@ -1,7 +1,8 @@
 import { Layout } from "@/components/layout/Layout";
-import { getGetConversationQueryKey, getGetListingQueryKey, useCreateConversation, useGetConversation, useGetListing, useSendMessage } from "@workspace/api-client-react";
+import { getGetConversationQueryKey, getGetConversationsQueryKey, getGetListingQueryKey, useCreateConversation, useGetConversation, useGetListing, useMarkConversationRead, useSendMessage } from "@workspace/api-client-react";
+import { useUser } from "@clerk/react";
 import { useLocation, useParams } from "wouter";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
@@ -11,12 +12,14 @@ import { MessageCircle, AlertTriangle, ArrowLeft, Loader2, Send } from "lucide-r
 
 export function Chat() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useUser();
   const [, setLocation] = useLocation();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [content, setContent] = useState("");
   const isNew = id === "new";
   const listingId = isNew ? new URLSearchParams(window.location.search).get("listingId") || "" : "";
   
-  const { data: conv, isLoading } = useGetConversation(id || "", {
+  const { data: conv, isLoading, isError: isConversationError } = useGetConversation(id || "", {
     query: { enabled: !!id && !isNew, queryKey: getGetConversationQueryKey(id || "") }
   });
   const { data: listing, isLoading: isListingLoading, isError: isListingError } = useGetListing(listingId, {
@@ -25,6 +28,19 @@ export function Chat() {
   
   const send = useSendMessage();
   const createConversation = useCreateConversation();
+  const markRead = useMarkConversationRead();
+
+  useEffect(() => {
+    if (!isNew && id && conv && Number(conv.unreadCount) > 0 && !markRead.isPending) {
+      markRead.mutate({ id }, {
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetConversationsQueryKey() }),
+      });
+    }
+  }, [conv?.id, conv?.unreadCount, id, isNew]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [conv?.messages?.length]);
 
   const handleStartConversation = (event: React.FormEvent) => {
     event.preventDefault();
@@ -86,6 +102,8 @@ export function Chat() {
           </Card>
         ) : isLoading ? (
           <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Beszélgetés betöltése…</div>
+        ) : isConversationError || !conv ? (
+          <Card className="mx-auto mt-10 w-full max-w-lg rounded-3xl p-10 text-center"><h1 className="font-extrabold text-rose-700">A beszélgetés nem nyitható meg</h1><p className="mt-2 text-sm text-muted-foreground">Lehet, hogy a beszélgetés nem létezik, vagy nincs hozzáférésed.</p><Button onClick={() => setLocation("/messages")} variant="outline" className="mt-5 rounded-xl">Vissza az üzenetekhez</Button></Card>
         ) : (
           <>
             <div className="mb-4 pb-4 border-b flex items-center gap-3">
@@ -106,7 +124,7 @@ export function Chat() {
                 <div
                   key={msg.id}
                   className={`p-3 rounded-2xl max-w-[80%] text-sm leading-relaxed ${
-                    msg.senderId === conv.buyerId
+                    msg.senderId === user?.id
                       ? "bg-primary text-primary-foreground ml-auto rounded-br-sm"
                       : "bg-muted text-foreground rounded-bl-sm"
                   }`}
@@ -114,17 +132,20 @@ export function Chat() {
                   {msg.content}
                 </div>
               ))}
+              <div ref={messagesEndRef} />
             </div>
 
+            {send.isError && <p className="mb-2 rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700">{send.error instanceof Error ? send.error.message : "Az üzenetet nem sikerült elküldeni."}</p>}
             <form onSubmit={handleSend} className="flex gap-2">
               <Input 
                 value={content} 
                 onChange={(e) => setContent(e.target.value)} 
+                maxLength={2000}
                 placeholder="💬 Írj üzenetet..." 
                 className="flex-1 rounded-full"
               />
-              <Button type="submit" disabled={send.isPending} size="icon" className="rounded-full h-10 w-10 flex-shrink-0">
-                <Send className="w-4 h-4" />
+              <Button type="submit" disabled={send.isPending || !content.trim()} size="icon" className="rounded-full h-10 w-10 flex-shrink-0">
+                {send.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </Button>
             </form>
           </>
