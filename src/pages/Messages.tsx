@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Layout } from "@/components/layout/Layout";
-import { useGetConversations } from "@workspace/api-client-react";
+import { getGetConversationsQueryKey, useGetConversations } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { useUser } from "@clerk/react";
 import { useUserAccountStore } from "@/lib/userAccountStore";
@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
-import { MessageSquare, User, Briefcase, Mail, Sparkles } from "lucide-react";
+import { Loader2, MessageSquare } from "lucide-react";
 
 export function Messages() {
   let user: any = null;
@@ -18,45 +18,20 @@ export function Messages() {
   } catch (e) {
     user = null;
   }
-  const { currentUser, activeProfile } = useUserAccountStore();
-  const { data, isLoading } = useGetConversations();
+  const { activeProfile } = useUserAccountStore();
+  const { data = [], isLoading, isError } = useGetConversations({ query: { enabled: !!user, queryKey: getGetConversationsQueryKey() } });
   const [inboxFilter, setInboxFilter] = useState<"all" | "private" | "business">("all");
 
-  const mockConversations = [
-    {
-      id: "conv-beauty-1",
-      targetProfile: "business",
-      otherUser: { name: "Kiss Mária", avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100", role: "Vendég" },
-      lastMessage: "Jó napot kívánok! Szeretnék érdeklődni, hogy csütörtökön 14:00-kor van-e szabad hely balayage festésre?",
-      lastMessageAt: "10:45",
-      unread: true,
-      listingTitle: "Balayage Festés & Ápolás",
-    },
-    {
-      id: "conv-private-1",
-      targetProfile: "private",
-      otherUser: { name: "Kovács Ádám (BátorLovag)", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100", role: "Vásárló" },
-      lastMessage: "Szia! Érdeklődnék a vintage bőrdzseki iránt. Elérhető még, és személyesen átvehető Budapesten?",
-      lastMessageAt: "Tegnap",
-      unread: false,
-      listingTitle: "Vintage Bőrdzseki L-es",
-    },
-    {
-      id: "conv-beauty-2",
-      targetProfile: "business",
-      otherUser: { name: "Nagy Gábor", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100", role: "Vendég" },
-      lastMessage: "Köszönöm a visszajelzést, ott leszek időben!",
-      lastMessageAt: "Tegnap",
-      unread: false,
-      listingTitle: "Női & Férfi Hajvágás",
-    },
-  ];
-
-  const filteredConversations = mockConversations.filter((c) => {
-    if (inboxFilter === "private") return c.targetProfile === "private";
-    if (inboxFilter === "business") return c.targetProfile === "business";
+  const filteredConversations = data.filter((conversation) => {
+    const target = conversation.sellerId === user?.id ? "business" : "private";
+    if (inboxFilter === "private") return target === "private";
+    if (inboxFilter === "business") return target === "business";
     return true;
   });
+
+  const formatTime = (value?: string | null) => value
+    ? new Intl.DateTimeFormat("hu-HU", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value))
+    : "";
 
   return (
     <Layout>
@@ -87,7 +62,7 @@ export function Messages() {
         <Tabs value={inboxFilter} onValueChange={(v: any) => setInboxFilter(v)} className="w-full">
           <TabsList className="bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl">
             <TabsTrigger value="all" className="rounded-xl text-xs font-bold">
-              Összes Postaláda ({mockConversations.length})
+              Összes Postaláda ({data.length})
             </TabsTrigger>
             <TabsTrigger value="private" className="rounded-xl text-xs font-bold">
               👤 Magán Üzenetek
@@ -100,28 +75,35 @@ export function Messages() {
 
         {/* Conversation List */}
         <div className="space-y-3">
+          {isLoading && <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Beszélgetések betöltése…</div>}
+          {isError && <Card className="p-8 text-center text-sm text-rose-700">A beszélgetések most nem tölthetők be. Frissítsd az oldalt, vagy jelentkezz be újra.</Card>}
+          {!isLoading && !isError && filteredConversations.length === 0 && (
+            <Card className="p-10 text-center"><MessageSquare className="mx-auto mb-3 h-9 w-9 text-slate-400" /><h2 className="font-extrabold">Még nincs beszélgetésed</h2><p className="mt-1 text-xs text-muted-foreground">Egy hirdetés oldaláról küldött első üzenet itt fog megjelenni.</p></Card>
+          )}
           {filteredConversations.map((conv) => {
-            const isBusinessTarget = conv.targetProfile === "business";
+            const isBusinessTarget = conv.sellerId === user?.id;
+            const otherUser = isBusinessTarget ? conv.buyer : conv.seller;
+            const otherName = otherUser?.fullName || otherUser?.username || "ILOLIT felhasználó";
             return (
-              <Card
+              <Link href={`/messages/${conv.id}`}><Card
                 key={conv.id}
                 className={`p-4 rounded-2xl border transition hover:shadow-md ${
-                  conv.unread
+                  Number(conv.unreadCount) > 0
                     ? "bg-rose-50/40 dark:bg-rose-950/10 border-rose-200 dark:border-rose-900"
                     : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
                 }`}
               >
                 <div className="flex items-center gap-4">
                   <Avatar className="w-12 h-12 border-2 border-slate-200">
-                    <AvatarImage src={conv.otherUser.avatar} />
-                    <AvatarFallback>{conv.otherUser.name[0]}</AvatarFallback>
+                    <AvatarImage src={otherUser?.avatarUrl || undefined} />
+                    <AvatarFallback>{otherName[0]}</AvatarFallback>
                   </Avatar>
 
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <span className="font-extrabold text-slate-900 dark:text-slate-100 text-sm">
-                          {conv.otherUser.name}
+                          {otherName}
                         </span>
                         <Badge
                           className={`text-[10px] font-bold ${
@@ -133,14 +115,14 @@ export function Messages() {
                           {isBusinessTarget ? "💼 VÁLLALKOZÓI" : "👤 PRIVÁT"}
                         </Badge>
                       </div>
-                      <span className="text-xs text-muted-foreground font-semibold">{conv.lastMessageAt}</span>
+                      <span className="text-xs text-muted-foreground font-semibold">{formatTime(conv.lastMessageAt)}</span>
                     </div>
 
-                    <p className="text-xs font-semibold text-slate-500 truncate">{conv.listingTitle}</p>
-                    <p className="text-xs text-slate-700 dark:text-slate-300 line-clamp-1">{conv.lastMessage}</p>
+                    <p className="text-xs font-semibold text-slate-500 truncate">{conv.listing?.title || "Hirdetés"}</p>
+                    <p className="text-xs text-slate-700 dark:text-slate-300 line-clamp-1">{conv.lastMessage?.content || "Beszélgetés elindítva"}</p>
                   </div>
                 </div>
-              </Card>
+              </Card></Link>
             );
           })}
         </div>
