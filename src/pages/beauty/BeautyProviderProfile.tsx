@@ -1,26 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useLocation, Link } from "wouter";
 import { useUser } from "@clerk/react";
 import { Layout } from "@/components/layout/Layout";
-import { BeautyHeaderNav } from "@/components/beauty/BeautyHeaderNav";
 import {
-  useGetBeautyProvider,
-  useGetBeautyProviderReviews,
   useGetMyBeautyFavorites, getGetMyBeautyFavoritesQueryKey,
   useAddBeautyFavorite,
   useRemoveBeautyFavorite,
-  useGetBeautyAvailability, getGetBeautyAvailabilityQueryKey,
-  useCreateBeautyBooking,
 } from "@workspace/api-client-react";
 import type { BeautyProvider, BeautyReview, BeautyServiceOffering } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { formatPrice } from "@/lib/constants";
-import { BEAUTY_SERVICE_TYPE_LABELS } from "@/lib/beautyConstants";
-import { Star, MapPin, Phone, Instagram, Globe, Heart, Clock, ChevronDown, Sparkles, CalendarDays, Video, Bell } from "lucide-react";
+import { Star, MapPin, Phone, Instagram, Globe, Heart, Clock, Sparkles, CalendarDays, Video, Bell, SearchX } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getProfileTemplate, type ProfileTemplate } from "./templates/templateConfig";
@@ -29,7 +21,6 @@ import { gradientText, gradientButton, glassCard, accentBadge, selectedPill, hex
 import { ServiceWatchdogModal } from "@/components/providers/ServiceWatchdogModal";
 import { cn } from "@/lib/utils";
 import { BeautyBookingWizard } from "@/components/beauty/BeautyBookingWizard";
-import { DEMO_GENERAL_PROVIDERS } from "@/data/allProvidersData";
 import { getProviderProfile, type ProviderProfileRecord } from "@/lib/providerApi";
 
 function videoEmbedUrl(value: string): string | null {
@@ -64,19 +55,30 @@ export function BeautyProviderProfile() {
     isSignedIn = false;
   }
   const { toast } = useToast();
-  const [reviewPage] = useState(1);
-
-  const isStoredProviderId = Boolean(id?.startsWith("provider_"));
   const [storedProvider, setStoredProvider] = useState<ProviderProfileRecord | null>(null);
+  const [isLoadingProvider, setIsLoadingProvider] = useState(true);
+  const [providerLoadError, setProviderLoadError] = useState(false);
   useEffect(() => {
-    if (!id || !isStoredProviderId) return;
+    if (!id) {
+      setIsLoadingProvider(false);
+      setProviderLoadError(true);
+      return;
+    }
     let active = true;
-    getProviderProfile(id).then((value) => active && setStoredProvider(value)).catch(() => {});
+    setIsLoadingProvider(true);
+    setProviderLoadError(false);
+    getProviderProfile(id)
+      .then((value) => active && setStoredProvider(value))
+      .catch(() => {
+        if (active) {
+          setStoredProvider(null);
+          setProviderLoadError(true);
+        }
+      })
+      .finally(() => active && setIsLoadingProvider(false));
     return () => { active = false; };
-  }, [id, isStoredProviderId]);
+  }, [id]);
 
-  const { data: provider, isLoading } = useGetBeautyProvider(id);
-  const { data: reviewsData } = useGetBeautyProviderReviews(id, { page: reviewPage, limit: 10 });
   const { data: favorites } = useGetMyBeautyFavorites({
     query: { enabled: !!isSignedIn, queryKey: getGetMyBeautyFavoritesQueryKey() },
   });
@@ -108,11 +110,7 @@ export function BeautyProviderProfile() {
     }
   };
 
-  // Fallback to mock provider instantly if API query is loading or ID is mock
-  const isMockId = !id || id.startsWith("prov") || isStoredProviderId;
-  const foundGeneralProvider = DEMO_GENERAL_PROVIDERS.find((p) => p.id === id);
-
-  const MOCK_PROVIDER: BeautyProvider = storedProvider ? {
+  const effectiveProvider: BeautyProvider | null = storedProvider ? {
     id: storedProvider.id,
     displayName: storedProvider.displayName,
     bio: storedProvider.bio,
@@ -129,7 +127,6 @@ export function BeautyProviderProfile() {
       imageUrl,
       title: `${storedProvider.displayName} portfólió ${index + 1}`,
     })),
-    phone: storedProvider.phone,
     templateId: storedProvider.themeId === "gold" ? "template2" : storedProvider.themeId === "steel" ? "template3" : "template1",
     videoUrl: storedProvider.videoUrl,
     profession: storedProvider.subCategory || storedProvider.category,
@@ -143,72 +140,9 @@ export function BeautyProviderProfile() {
       category: storedProvider.subCategory || storedProvider.category,
       isAvailable: service.isAvailable !== false,
     })),
-  } as any : foundGeneralProvider ? {
-    id: foundGeneralProvider.id,
-    displayName: foundGeneralProvider.name,
-    bio: foundGeneralProvider.bio,
-    region: foundGeneralProvider.address,
-    address: foundGeneralProvider.address,
-    county: foundGeneralProvider.city,
-    rating: foundGeneralProvider.rating,
-    totalReviews: foundGeneralProvider.reviewCount,
-    isVerified: true,
-    profileImageUrl: foundGeneralProvider.avatar,
-    coverImageUrl: foundGeneralProvider.coverImage,
-    phone: foundGeneralProvider.phone,
-    templateId: foundGeneralProvider.templateId,
-    videoUrl: (foundGeneralProvider as any).videoUrl,
-    profession: foundGeneralProvider.profession,
-    nextAvailable: foundGeneralProvider.nextSlot,
-    workingHours: [
-      { day: "Hétfő", hours: "08:00–17:00" },
-      { day: "Kedd", hours: "08:00–17:00" },
-      { day: "Szerda", hours: "08:00–17:00" },
-      { day: "Csütörtök", hours: "08:00–17:00" },
-      { day: "Péntek", hours: "08:00–16:00" },
-      { day: "Szombat", hours: "Előzetes egyeztetéssel" },
-      { day: "Vasárnap", hours: "Zárva" },
-    ],
-    services: foundGeneralProvider.services.map(s => ({
-      id: s.id,
-      serviceType: "general",
-      name: s.name,
-      price: s.price,
-      durationMinutes: s.durationMinutes,
-      description: s.description,
-      category: foundGeneralProvider.profession,
-      isAvailable: true,
-      requiresDeposit: s.requiresDeposit,
-      depositPercentage: s.depositPercentage,
-    }))
-  } as any : {
-    id: id || "prov_1",
-    displayName: "Glamour Nail & Lash Stúdió - Kovács Vanda",
-    bio: "Prémium műköröm, gél lakk és szempilla építés 8 év tapasztalattal. Kizárólag magas minőségű, hipoallergén alapanyagokkal dolgozunk.",
-    region: "Budapest V. kerület",
-    county: "Budapest",
-    rating: 4.9,
-    totalReviews: 87,
-    isVerified: true,
-    profileImageUrl: "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=600",
-    coverImageUrl: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=1200",
-    instagramUrl: "https://instagram.com/glamour_nails_budapest",
-    websiteUrl: "https://glamournails.hu",
-    phone: "+36 30 123 4567",
-    templateId: "glam_neon",
-    services: [
-      { id: "srv_1", serviceType: "nails", name: "Gél Lakk & Műkörmös (Kéz)", price: 8500, durationMinutes: 60, description: "Kombinált manikűr, gél lakk díszítéssel." },
-      { id: "srv_2", serviceType: "nails", name: "Műköröm Építés S/M méret", price: 13500, durationMinutes: 90, description: "Zselés vagy akrilzselés műköröm építés." },
-      { id: "srv_3", serviceType: "brows_lashes", name: "3D Dúsító Szempilla Építés", price: 16000, durationMinutes: 105, description: "Selyem szempillák 3D volume technikával." }
-    ]
-  } as unknown as BeautyProvider;
-
-  // A demo/general service-provider ID must never be replaced by an empty or
-  // partial beauty API response. These profiles are sourced from the unified
-  // provider catalogue and have their own complete local representation.
-  const effectiveProvider = isMockId ? MOCK_PROVIDER : (provider ?? MOCK_PROVIDER);
-  const reviews = reviewsData?.items ?? [];
-  const theme = getProfileTemplate(effectiveProvider.templateId);
+  } as any : null;
+  const reviews: BeautyReview[] = [];
+  const theme = getProfileTemplate(effectiveProvider?.templateId);
 
   const [wizardService, setWizardService] = useState<any>(null);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
@@ -218,31 +152,42 @@ export function BeautyProviderProfile() {
     setIsWizardOpen(true);
   };
 
-  const isGeneralProvider = Boolean(storedProvider || foundGeneralProvider || (id && (id.startsWith("prov-gen-") || id.startsWith("prov_") || id.startsWith("provider_"))));
+  if (isLoadingProvider) {
+    return <Layout><div className="mx-auto max-w-3xl px-4 py-24 text-center text-sm text-slate-500">A szolgáltatói profil betöltése…</div></Layout>;
+  }
+
+  if (providerLoadError || !effectiveProvider) {
+    return (
+      <Layout>
+        <div className="mx-auto max-w-3xl px-4 py-24 text-center">
+          <SearchX className="mx-auto mb-4 h-12 w-12 text-slate-400" />
+          <h1 className="text-2xl font-black text-slate-900">A szolgáltatói profil nem található</h1>
+          <p className="mt-2 text-sm text-slate-500">A profil nem létezik, nincs közzétéve, vagy már nem elérhető.</p>
+          <Button asChild className="mt-6 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700"><Link href="/providers">Vissza a szolgáltatókhoz</Link></Button>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
-      {isGeneralProvider ? (
-        <div className="bg-slate-900 text-white border-b border-slate-800 shadow-md py-2.5 px-4">
+        <div className="bg-white text-slate-900 border-b border-slate-200 shadow-sm py-2.5 px-4">
           <div className="container mx-auto max-w-5xl flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Badge className="bg-emerald-600 text-white font-black text-xs px-3 py-1">
-                💼 ILOLIT SZOLGÁLTATÓI BEMUTATKOZÓ OLDAL
+                ILOLIT SZOLGÁLTATÓI PROFIL
               </Badge>
-              <span className="text-xs text-slate-300 font-bold hidden sm:inline">
+              <span className="text-xs text-slate-600 font-bold hidden sm:inline">
                 {effectiveProvider.displayName} • {effectiveProvider.county || effectiveProvider.region}
               </span>
             </div>
-            <Button asChild size="sm" variant="outline" className="rounded-xl border-slate-700 text-xs font-bold text-slate-200 hover:bg-slate-800">
+            <Button asChild size="sm" variant="outline" className="rounded-xl border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-50">
               <Link href="/providers">
-                <span>➔ Vissza az Összes Szolgáltatóhoz</span>
+                <span>Vissza a szolgáltatókhoz</span>
               </Link>
             </Button>
           </div>
         </div>
-      ) : (
-        <BeautyHeaderNav activeTab="home" />
-      )}
       <TemplateBackdrop theme={theme}>
         <GlassProfile
           provider={effectiveProvider}
