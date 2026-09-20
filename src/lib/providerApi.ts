@@ -33,6 +33,7 @@ export interface ProviderProfileRecord {
   bio: string;
   videoUrl: string;
   profileImage: string;
+  profileImages?: string[];
   themeId: string;
   services: ProviderServiceRecord[];
   slots: ProviderSlotRecord[];
