@@ -26,9 +26,18 @@ export interface BeautyBookingWizardProps {
     requiresDeposit?: boolean;
     depositPercentage?: number;
   };
+  slots?: Array<{
+    id: string;
+    day: string;
+    startTime: string;
+    endTime: string;
+    isAvailable: boolean;
+  }>;
 }
 
-export function BeautyBookingWizard({ isOpen, onClose, provider, service }: BeautyBookingWizardProps) {
+const HUNGARIAN_WEEKDAYS = ["Vasárnap", "Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek", "Szombat"];
+
+export function BeautyBookingWizard({ isOpen, onClose, provider, service, slots }: BeautyBookingWizardProps) {
   const { toast } = useToast();
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
 
@@ -70,9 +79,18 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
   const depositAmount = hasDeposit ? Math.round((service.price * depositPercent) / 100) : 0;
   const remainingBalance = service.price - depositAmount;
 
-  const availableSlots = [
+  const selectedWeekday = selectedDate
+    ? HUNGARIAN_WEEKDAYS[new Date(`${selectedDate}T12:00:00`).getDay()]
+    : "";
+  const configuredSlots = (slots ?? [])
+    .filter((slot) => slot.isAvailable && slot.day === selectedWeekday)
+    .map((slot, index) => ({
+      time: `${slot.startTime} - ${slot.endTime}`,
+      recommended: index === 0,
+    }));
+  const availableSlots = slots?.length ? configuredSlots : [
     { time: "09:00 - 11:00", recommended: false },
-    { time: "10:00 - 12:00", recommended: true, tag: "Legközelebbi szabad" },
+    { time: "10:00 - 12:00", recommended: true },
     { time: "14:00 - 16:00", recommended: false },
     { time: "15:00 - 17:00", recommended: false },
     { time: "16:00 - 18:00", recommended: false },
@@ -231,6 +249,11 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
                     </button>
                   ))}
                 </div>
+                {availableSlots.length === 0 && (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+                    Erre a napra a szolgáltató nem adott meg foglalható idősávot. Válassz másik dátumot.
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 pt-4 border-t">
