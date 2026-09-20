@@ -1,18 +1,17 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout/Layout";
-import { useGetBeautyProviders } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Star, MapPin, Clock, Calendar, MessageSquarePlus, Flag, SlidersHorizontal, ArrowUpDown } from "lucide-react";
 import { LocationSearchWidget } from "@/components/shared/LocationSearchWidget";
 import { DEFAULT_LOCATION_STATE, applyLocationFilter, getCalculatedDistance } from "@/lib/locationFilter";
 import { useLocationQueryState } from "@/hooks/useLocationQueryState";
-import { VerificationBadge } from "@/components/shared/VerificationBadge";
 import { ReportProblemModal } from "@/components/shared/ReportProblemModal";
 import { WaitingListModal } from "@/components/beauty/WaitingListModal";
 import { QuoteRequestModal } from "@/components/providers/QuoteRequestModal";
 import { ProviderCoverageSection } from "@/components/providers/ProviderCoverageSection";
 import { UnifiedModuleHeader } from "@/components/shared/UnifiedModuleHeader";
+import { getProviderProfiles, type ProviderProfileRecord } from "@/lib/providerApi";
 
 const MOCK_BEAUTY_PROVIDERS = [
   {
@@ -125,6 +124,8 @@ const MOCK_BEAUTY_PROVIDERS = [
 ];
 
 export function BeautyHome() {
+  const [savedProviders, setSavedProviders] = useState<ProviderProfileRecord[]>([]);
+  const [isLoadingProviders, setIsLoadingProviders] = useState(true);
   const [search, setSearch] = useState("");
   const [locationState, setLocationState] = useLocationQueryState(DEFAULT_LOCATION_STATE);
   const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'today' | 'tomorrow' | 'this_week'>('all');
@@ -136,18 +137,58 @@ export function BeautyHome() {
   const [waitingListModalData, setWaitingListModalData] = useState<{ isOpen: boolean; providerName: string }>({ isOpen: false, providerName: '' });
   const [quoteModalData, setQuoteModalData] = useState<{ isOpen: boolean; providerName: string }>({ isOpen: false, providerName: '' });
 
-  const { data } = useGetBeautyProviders({
-    search: search || undefined,
-  });
+  useEffect(() => {
+    let active = true;
+    getProviderProfiles()
+      .then(({ items }) => active && setSavedProviders(items))
+      .catch(() => active && setSavedProviders([]))
+      .finally(() => active && setIsLoadingProviders(false));
+    return () => { active = false; };
+  }, []);
 
-  const rawProviders = data?.items ?? [];
-  const allProviders = rawProviders.length > 0 ? rawProviders : MOCK_BEAUTY_PROVIDERS;
+  const allProviders = useMemo(() => {
+    const dayNames = ["Vasárnap", "Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek", "Szombat"];
+    const today = dayNames[new Date().getDay()];
+    const tomorrow = dayNames[(new Date().getDay() + 1) % 7];
+    const query = search.trim().toLocaleLowerCase("hu-HU");
+
+    return savedProviders
+      .filter((provider) => provider.category === "Szépség- és egészségipar")
+      .filter((provider) => {
+        if (!query) return true;
+        return [provider.displayName, provider.subCategory, provider.city, provider.region, provider.bio]
+          .filter(Boolean)
+          .some((value) => String(value).toLocaleLowerCase("hu-HU").includes(query))
+          || provider.services.some((service) => service.name.toLocaleLowerCase("hu-HU").includes(query));
+      })
+      .map((provider) => {
+        const availableSlots = provider.slots.filter((slot) => slot.isAvailable);
+        const todaySlots = availableSlots.filter((slot) => slot.day === today).sort((a, b) => a.startTime.localeCompare(b.startTime));
+        const tomorrowSlots = availableSlots.filter((slot) => slot.day === tomorrow).sort((a, b) => a.startTime.localeCompare(b.startTime));
+        const nextSlot = todaySlots[0]
+          ? `Ma ${todaySlots[0].startTime}`
+          : tomorrowSlots[0]
+            ? `Holnap ${tomorrowSlots[0].startTime}`
+            : availableSlots[0]
+              ? `${availableSlots[0].day} ${availableSlots[0].startTime}`
+              : "";
+        return {
+          ...provider,
+          rating: 0,
+          totalReviews: 0,
+          isAvailableToday: todaySlots.length > 0,
+          isAvailableTomorrow: tomorrowSlots.length > 0,
+          isAvailableThisWeek: availableSlots.length > 0,
+          nextAvailableSlot: nextSlot,
+        };
+      });
+  }, [savedProviders, search]);
 
   const providersWithDist = allProviders.map((p) => {
-    const loc = (p as any).address || (p as any).region || (p as any).county || "";
+    const loc = p.city || p.region || "";
     const { matches, distanceKm } = applyLocationFilter(loc, locationState);
     const computedDist = locationState.cityInput ? getCalculatedDistance(locationState.cityInput, loc) : null;
-    return { provider: p, matches, dist: distanceKm ?? computedDist ?? (p as any).distanceKm ?? null };
+    return { provider: p, matches, dist: distanceKm ?? computedDist ?? null };
   });
 
   const providers = providersWithDist
@@ -160,7 +201,7 @@ export function BeautyHome() {
       return true;
     })
     .sort((a, b) => {
-      if (sortBy === "rating") return (b.provider as any).rating - (a.provider as any).rating;
+      if (sortBy === "rating") return b.provider.rating - a.provider.rating;
       const dA = a.dist ?? 999;
       const dB = b.dist ?? 999;
       return dA - dB;
@@ -264,7 +305,9 @@ export function BeautyHome() {
         </div>
 
         {/* Results Grid */}
-        {providers.length === 0 ? (
+        {isLoadingProviders ? (
+          <div className="text-center py-16 text-sm text-slate-500">Szépségipari szolgáltatók betöltése…</div>
+        ) : providers.length === 0 ? (
           <div className="text-center py-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-8 space-y-4">
             <Calendar className="w-10 h-10 text-slate-400 mx-auto" />
             <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
@@ -285,11 +328,11 @@ export function BeautyHome() {
                   {/* Header Row */}
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3.5">
-                      <img
-                        src={prov.profileImageUrl || "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=600&q=80"}
+                      {prov.profileImage && <img
+                        src={prov.profileImage}
                         alt={prov.displayName}
                         className="w-14 h-14 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shrink-0"
-                      />
+                      />}
                       <div className="space-y-1">
                         <h3 className="font-bold text-base text-slate-900 dark:text-slate-100 leading-snug">
                           {prov.displayName}
@@ -297,7 +340,7 @@ export function BeautyHome() {
                         <div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
                           <span className="flex items-center gap-1">
                             <MapPin className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-                            <span>{prov.address || prov.region}</span>
+                            <span>{[prov.city, prov.region].filter(Boolean).join(", ")}</span>
                           </span>
 
                           {/* Distance Indicator badge */}
@@ -320,16 +363,16 @@ export function BeautyHome() {
                     </button>
                   </div>
 
-                  {/* Rating & Verified Badges */}
+                  {/* Specialty and verified reviews (when available) */}
                   <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center gap-1 text-amber-600 font-semibold">
+                    {prov.totalReviews > 0 ? <div className="flex items-center gap-1 text-amber-600 font-semibold">
                       <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                      <span>{(prov.rating || 4.9).toFixed(1)}</span>
-                      <span className="text-slate-400 font-normal">({prov.totalReviews || 120} értékelés)</span>
-                    </div>
+                      <span>{prov.rating.toFixed(1)}</span>
+                      <span className="text-slate-400 font-normal">({prov.totalReviews} értékelés)</span>
+                    </div> : <span className="text-slate-500">Még nincs értékelés</span>}
 
                     <span className="px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 text-[11px] font-semibold border border-rose-200 dark:border-rose-800">
-                      Ellenőrzött Szalon
+                      {prov.subCategory}
                     </span>
                   </div>
 
@@ -344,7 +387,7 @@ export function BeautyHome() {
                       Legközelebbi szabad időpont:
                     </span>
                     <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                      {prov.nextAvailableSlot || "Ma foglalható"}
+                      {prov.nextAvailableSlot || "Nincs közzétett szabad időpont"}
                     </span>
                   </div>
                 </div>
