@@ -9,7 +9,6 @@ import {
   ShieldCheck, CalendarCheck, BadgeCheck, PlusCircle
 } from "lucide-react";
 import { useState } from "react";
-import { AuthModal } from "@/components/auth/AuthModal";
 
 // Mock Verticals & Data
 const VERTICALS = [
@@ -104,8 +103,6 @@ const MOCK_SHOWCASE_DATA: Record<ShowcaseTab, ShowcaseItem[]> = {
 type ShowcaseTab = "marketplace" | "beauty" | "services" | "realestate" | "vehicles" | "education";
 
 export function Home() {
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<"login" | "register" | "forgot">("register");
   const [activeTab, setActiveTab] = useState<ShowcaseTab>("marketplace");
   const [searchValue, setSearchValue] = useState("");
   const [locationValue, setLocationValue] = useState("");
@@ -115,12 +112,6 @@ export function Home() {
 
   return (
     <Layout>
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        initialMode={authMode}
-      />
-
       {/* ── 1. CLEAR VALUE PROPOSITION AND PRIMARY ACTIONS ── */}
       <section className="border-b border-slate-200 bg-[radial-gradient(circle_at_top_left,_#ecfdf5_0,_#ffffff_48%)] px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
         <div className="mx-auto max-w-7xl">
@@ -360,15 +351,8 @@ export function Home() {
               <Button asChild className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm px-6 py-3 rounded-xl transition">
                 <Link href="/marketplace">Böngészés indítása</Link>
               </Button>
-              <Button
-                variant="outline"
-                className="border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold text-sm px-5 py-3 rounded-xl transition"
-                onClick={() => {
-                  setAuthMode("register");
-                  setAuthModalOpen(true);
-                }}
-              >
-                Regisztráció
+              <Button asChild variant="outline" className="border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold text-sm px-5 py-3 rounded-xl transition">
+                <Link href="/auth/register">Regisztráció</Link>
               </Button>
             </div>
           </div>
