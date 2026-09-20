@@ -110,13 +110,9 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service, slots 
   const liveConfiguredSlots = serverAvailableTimes === null
     ? configuredSlots
     : configuredSlots.filter((slot) => serverAvailableTimes.includes(slot.time));
-  const availableSlots = slots?.length ? liveConfiguredSlots : [
-    { time: "09:00 - 11:00", recommended: false },
-    { time: "10:00 - 12:00", recommended: true },
-    { time: "14:00 - 16:00", recommended: false },
-    { time: "15:00 - 17:00", recommended: false },
-    { time: "16:00 - 18:00", recommended: false },
-  ];
+  // Never invent fallback appointments. Only slots configured by the provider
+  // and confirmed as unoccupied by the server may be selected.
+  const availableSlots = liveConfiguredSlots;
 
   const handleCompleteBooking = async () => {
     if (!selectedDate || !selectedSlot || !customerName.trim() || !customerPhone.trim() || !customerEmail.trim()) {
