@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout/Layout";
 import { BeautyHeaderNav } from "@/components/beauty/BeautyHeaderNav";
@@ -20,6 +20,7 @@ import { BOOKING_STATUS_LABELS, BOOKING_STATUS_COLORS, createGoogleCalendarUrl, 
 import { Star, MapPin, Sparkles, Calendar, Clock, Bell, AlertTriangle, ExternalLink, Download } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { cancelProviderBooking, getMyProviderBookings, type ProviderBookingRecord } from "@/lib/providerBookingApi";
 
 const AVAILABLE_TIME_SLOTS = [
   "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
@@ -36,6 +37,18 @@ export function BeautyMyBookings() {
 
   const cancelBooking = useCancelBeautyBooking();
   const createReview = useCreateBeautyReview();
+  const [providerBookings, setProviderBookings] = useState<ProviderBookingRecord[]>([]);
+  const [isLoadingProviderBookings, setIsLoadingProviderBookings] = useState(true);
+  const [cancellingProviderBookingId, setCancellingProviderBookingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getMyProviderBookings()
+      .then(({ items }) => active && setProviderBookings(items.filter((booking) => booking.role === "customer")))
+      .catch(() => {})
+      .finally(() => active && setIsLoadingProviderBookings(false));
+    return () => { active = false; };
+  }, []);
 
   const [rescheduleBooking, setRescheduleBooking] = useState<any | null>(null);
   const [newDate, setNewDate] = useState("");
@@ -50,7 +63,21 @@ export function BeautyMyBookings() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getGetMyBeautyBookingsQueryKey({ role: "customer" }) });
 
-  const confirmCancel = (booking: any) => {
+  const confirmCancel = async (booking: any) => {
+    if (booking.isProviderBooking) {
+      setCancellingProviderBookingId(booking.id);
+      try {
+        const updated = await cancelProviderBooking(booking.id);
+        setProviderBookings((current) => current.map((item) => item.id === updated.id ? updated : item));
+        toast({ title: "Foglalás lemondva" });
+        setCancelTargetBooking(null);
+      } catch (error) {
+        toast({ title: "Nem sikerült lemondani", description: error instanceof Error ? error.message : "Ismeretlen hiba történt.", variant: "destructive" });
+      } finally {
+        setCancellingProviderBookingId(null);
+      }
+      return;
+    }
     cancelBooking.mutate({ id: booking.id }, {
       onSuccess: () => {
         toast({ title: "Foglalás lemondva" });
@@ -108,36 +135,14 @@ export function BeautyMyBookings() {
 
   const [activeTabFilter, setActiveTabFilter] = useState<"upcoming" | "past" | "cancelled">("upcoming");
 
-  const mockFallbackBookings = [
-    {
-      id: "b_demo_1",
-      providerId: "prov_1",
-      bookingDate: "2026-08-30",
-      bookingTime: "14:00",
-      durationMinutes: 120,
-      totalPrice: 8500,
-      depositAmount: 4250,
-      isDepositPaid: true,
-      status: "CONFIRMED",
-      serviceOffering: { name: "Teljes hajkezelés (Hajvágás + Festés)" },
-      provider: { displayName: "Petra Szépség & Balayage Bar", address: "Andrássy út 45, Budapest" }
-    },
-    {
-      id: "b_demo_2",
-      providerId: "prov_2",
-      bookingDate: "2026-08-25",
-      bookingTime: "10:00",
-      durationMinutes: 45,
-      totalPrice: 3500,
-      depositAmount: 0,
-      isDepositPaid: false,
-      status: "PENDING",
-      serviceOffering: { name: "Manikűr & Gél Lakk" },
-      provider: { displayName: "Zóra Szepin Kozmetika", address: "Dohány utca 8, Budapest" }
-    }
-  ];
-
-  const rawList = bookings && bookings.length > 0 ? bookings : mockFallbackBookings;
+  const persistentBookings = providerBookings.map((booking) => ({
+    ...booking,
+    isProviderBooking: true,
+    totalPrice: booking.price,
+    serviceOffering: { name: booking.serviceName },
+    provider: { displayName: booking.providerName },
+  }));
+  const rawList = [...persistentBookings, ...(bookings ?? [])];
 
   const filteredBookings = rawList.filter((b: any) => {
     if (activeTabFilter === "cancelled") return b.status === "CANCELLED" || b.status === "REJECTED";
@@ -176,13 +181,13 @@ export function BeautyMyBookings() {
           ))}
         </div>
 
-        {isLoading && (
+        {(isLoading || isLoadingProviderBookings) && (
           <div className="space-y-3">
             {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
           </div>
         )}
 
-        {!isLoading && filteredBookings.length === 0 && (
+        {!isLoading && !isLoadingProviderBookings && filteredBookings.length === 0 && (
           <div className="text-center py-16 bg-slate-50 dark:bg-slate-900 border rounded-3xl p-8">
             <p className="text-lg font-extrabold mb-1">Nincs megjeleníthető foglalás ebben a kategóriában.</p>
             <p className="text-muted-foreground text-xs mb-4">Böngéssz az elérhető szépségipari szolgáltatók között!</p>
@@ -250,24 +255,19 @@ export function BeautyMyBookings() {
 
                     {/* Deposit & Pre-Authorization Status Badge */}
                     <div className="flex flex-wrap items-center gap-2 pt-1">
-                      {b.status === "PENDING" && (
+                      {b.status === "PENDING" && b.depositAmount > 0 && (
                         <Badge variant="outline" className="text-[11px] gap-1 py-0.5 border-indigo-300 bg-indigo-50 text-indigo-900 font-bold">
-                          🔒 Előleg zárolva (Megerősítéskor kerül levonásra)
+                          Előleg a visszaigazolás után fizetendő
                         </Badge>
                       )}
-                      {b.status === "CONFIRMED" && (
+                      {b.status === "CONFIRMED" && b.depositAmount > 0 && (
                         <Badge variant="outline" className="text-[11px] gap-1 py-0.5 border-emerald-300 bg-emerald-50 text-emerald-900 font-bold">
-                          ✅ Előleg levonva (Szolgáltató visszaigazolta)
+                          Visszaigazolva · előleg: {formatPrice(b.depositAmount)}
                         </Badge>
                       )}
-                      {(b.status === "REJECTED" || b.status === "CANCELLED") && (
+                      {(b.status === "REJECTED" || b.status === "CANCELLED") && b.depositAmount > 0 && (
                         <Badge variant="outline" className="text-[11px] gap-1 py-0.5 border-slate-300 bg-slate-100 text-slate-700 font-medium">
-                          ↩️ Zárolás feloldva (Kártyát nem érte levonás)
-                        </Badge>
-                      )}
-                      {isPendingOrConfirmed && (
-                        <Badge variant="secondary" className="text-[11px] gap-1 py-0.5">
-                          <Bell className="w-3 h-3 text-amber-500" /> Emlékeztető: 24h & 2h előtt (SMS / E-mail)
+                          Nem történt terhelés
                         </Badge>
                       )}
                     </div>
@@ -277,7 +277,7 @@ export function BeautyMyBookings() {
                   <div className="flex flex-col gap-2 flex-shrink-0 md:min-w-[170px]">
                     {isPendingOrConfirmed && (
                       <>
-                        <Button
+                        {!b.isProviderBooking && <Button
                           size="sm"
                           variant="outline"
                           onClick={() => {
@@ -288,7 +288,7 @@ export function BeautyMyBookings() {
                           className="w-full justify-start text-xs font-semibold"
                         >
                           <Calendar className="w-3.5 h-3.5 mr-1.5 text-primary" /> Átidőzítés
-                        </Button>
+                        </Button>}
 
                         <Button
                           size="sm"
@@ -412,8 +412,8 @@ export function BeautyMyBookings() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setCancelTargetBooking(null)}>Mégse, megtartom</Button>
-            <Button variant="destructive" onClick={() => confirmCancel(cancelTargetBooking)} disabled={cancelBooking.isPending}>
-              {cancelBooking.isPending ? "Lemondás..." : "Igen, lemondom"}
+            <Button variant="destructive" onClick={() => confirmCancel(cancelTargetBooking)} disabled={cancelBooking.isPending || cancellingProviderBookingId === cancelTargetBooking?.id}>
+              {cancelBooking.isPending || cancellingProviderBookingId === cancelTargetBooking?.id ? "Lemondás..." : "Igen, lemondom"}
             </Button>
           </DialogFooter>
         </DialogContent>
