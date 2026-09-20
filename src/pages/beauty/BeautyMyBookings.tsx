@@ -17,10 +17,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Textarea } from "@/components/ui/textarea";
 import { formatPrice } from "@/lib/constants";
 import { BOOKING_STATUS_LABELS, BOOKING_STATUS_COLORS, createGoogleCalendarUrl, downloadICalFile } from "@/lib/beautyConstants";
-import { Star, MapPin, Sparkles, Calendar, Clock, Bell, AlertTriangle, ExternalLink, Download } from "lucide-react";
+import { Star, MapPin, Sparkles, Calendar, Clock, Bell, AlertTriangle, ExternalLink, Download, CreditCard } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cancelProviderBooking, getMyProviderBookings, getProviderAvailability, rescheduleProviderBooking, type ProviderBookingRecord } from "@/lib/providerBookingApi";
+import { confirmBookingDeposit, createBookingDepositCheckout } from "@/lib/billingApi";
 
 const AVAILABLE_TIME_SLOTS = [
   "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
@@ -40,6 +41,7 @@ export function BeautyMyBookings() {
   const [providerBookings, setProviderBookings] = useState<ProviderBookingRecord[]>([]);
   const [isLoadingProviderBookings, setIsLoadingProviderBookings] = useState(true);
   const [cancellingProviderBookingId, setCancellingProviderBookingId] = useState<string | null>(null);
+  const [payingBookingId, setPayingBookingId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -49,6 +51,44 @@ export function BeautyMyBookings() {
       .finally(() => active && setIsLoadingProviderBookings(false));
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("session_id");
+    if (params.get("deposit") !== "success" || !sessionId) return;
+    let active = true;
+    confirmBookingDeposit(sessionId)
+      .then(async ({ paid }) => {
+        if (!active) return;
+        if (!paid) throw new Error("A Stripe még nem igazolta vissza a fizetést.");
+        const { items } = await getMyProviderBookings();
+        if (active) setProviderBookings(items.filter((booking) => booking.role === "customer"));
+        toast({ title: "Az előleg sikeresen kifizetve" });
+        window.history.replaceState({}, "", "/beauty/bookings");
+      })
+      .catch((error) => active && toast({
+        title: "Az előlegfizetés ellenőrzése nem sikerült",
+        description: error instanceof Error ? error.message : "Ismeretlen fizetési hiba.",
+        variant: "destructive",
+      }));
+    return () => { active = false; };
+  }, [toast]);
+
+  const startDepositPayment = async (bookingId: string) => {
+    setPayingBookingId(bookingId);
+    try {
+      const { checkoutUrl } = await createBookingDepositCheckout(bookingId);
+      if (!checkoutUrl) throw new Error("A Stripe fizetési oldal nem indítható.");
+      window.location.assign(checkoutUrl);
+    } catch (error) {
+      toast({
+        title: "Az előlegfizetés nem indítható",
+        description: error instanceof Error ? error.message : "Ismeretlen fizetési hiba.",
+        variant: "destructive",
+      });
+      setPayingBookingId(null);
+    }
+  };
 
   const [rescheduleBooking, setRescheduleBooking] = useState<any | null>(null);
   const [newDate, setNewDate] = useState("");
@@ -291,7 +331,9 @@ export function BeautyMyBookings() {
                       )}
                       {b.status === "CONFIRMED" && b.depositAmount > 0 && (
                         <Badge variant="outline" className="text-[11px] gap-1 py-0.5 border-emerald-300 bg-emerald-50 text-emerald-900 font-bold">
-                          Visszaigazolva · előleg: {formatPrice(b.depositAmount)}
+                          {b.depositPayment?.status === "paid"
+                            ? `Előleg kifizetve: ${formatPrice(b.depositAmount)}`
+                            : `Visszaigazolva · fizetendő előleg: ${formatPrice(b.depositAmount)}`}
                         </Badge>
                       )}
                       {(b.status === "REJECTED" || b.status === "CANCELLED") && b.depositAmount > 0 && (
@@ -304,6 +346,17 @@ export function BeautyMyBookings() {
 
                   {/* Actions column */}
                   <div className="flex flex-col gap-2 flex-shrink-0 md:min-w-[170px]">
+                    {b.isProviderBooking && b.status === "CONFIRMED" && b.depositAmount > 0 && b.depositPayment?.status !== "paid" && (
+                      <Button
+                        size="sm"
+                        disabled={payingBookingId === b.id}
+                        onClick={() => startDepositPayment(b.id)}
+                        className="w-full justify-start bg-emerald-600 text-xs font-extrabold text-white hover:bg-emerald-700"
+                      >
+                        <CreditCard className="mr-1.5 h-3.5 w-3.5" />
+                        {payingBookingId === b.id ? "Stripe megnyitása…" : "Előleg bankkártyával"}
+                      </Button>
+                    )}
                     {isPendingOrConfirmed && (
                       <>
                         <Button
