@@ -52,8 +52,22 @@ function text(value: unknown, max: number): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
+function imageUrl(value: unknown): string {
+  const url = text(value, 1000);
+  return url.startsWith("/api/media/file/") || /^https:\/\//i.test(url) ? url : "";
+}
+
 function normalize(input: any, id: string, ownerId: string, existing?: any) {
   const now = new Date().toISOString();
+  const requestedImages = Array.isArray(input.profileImages)
+    ? input.profileImages.map(imageUrl).filter(Boolean).slice(0, 6)
+    : [];
+  const legacyImage = imageUrl(input.profileImage) || imageUrl(existing?.profileImage);
+  const profileImages = requestedImages.length
+    ? requestedImages
+    : Array.isArray(existing?.profileImages) && existing.profileImages.length
+      ? existing.profileImages.map(imageUrl).filter(Boolean).slice(0, 6)
+      : legacyImage ? [legacyImage] : [];
   const services = Array.isArray(input.services) ? input.services.slice(0, 100).map((service: any) => ({
     id: text(service.id, 80) || crypto.randomUUID(),
     name: text(service.name, 160),
@@ -85,7 +99,8 @@ function normalize(input: any, id: string, ownerId: string, existing?: any) {
     email: text(input.email, 180),
     bio: text(input.bio, 3000),
     videoUrl: text(input.videoUrl, 500),
-    profileImage: text(input.profileImage, 1000),
+    profileImage: profileImages[0] || "",
+    profileImages,
     themeId: text(input.themeId, 40) || "emerald",
     services,
     slots,
