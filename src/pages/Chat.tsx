@@ -25,7 +25,7 @@ export function Chat() {
       {
         onSuccess: () => {
           setContent("");
-          queryClient.invalidateQueries({ queryKey: ["/api/conversations", id] });
+          queryClient.invalidateQueries({ queryKey: getGetConversationQueryKey(id!) });
         }
       }
     );
