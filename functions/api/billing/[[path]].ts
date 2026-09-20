@@ -130,6 +130,31 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
   if (route[0] !== "provider-subscription") return json({ error: "Ismeretlen számlázási végpont." }, 404);
 
   try {
+    if (context.request.method === "POST" && route[1] === "portal") {
+      const providerObject = await context.env.MEDIA_BUCKET.get(`${PROVIDER_PREFIX}provider_${userId}.json`);
+      if (!providerObject) return json({ error: "A szolgáltatói profil nem található." }, 404);
+      const provider = await providerObject.json<any>();
+      const customerId = provider.subscription?.stripeCustomerId;
+      if (typeof customerId !== "string" || !customerId.startsWith("cus_")) {
+        return json({ error: "Ehhez a profilhoz még nem tartozik Stripe-előfizetés." }, 409);
+      }
+      const origin = new URL(context.request.url).origin;
+      const form = new URLSearchParams({
+        customer: customerId,
+        return_url: `${origin}/providers/dashboard`,
+      });
+      const response = await stripeRequest(context.env, "/billing_portal/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: form,
+      });
+      const portal = await response.json<any>();
+      if (!response.ok || !portal.url) {
+        return json({ error: portal?.error?.message || "A Stripe előfizetés-kezelő nem indítható." }, 502);
+      }
+      return json({ portalUrl: portal.url });
+    }
+
     if (context.request.method === "POST" && route.length === 1) {
       const body = await context.request.json<{ plan?: string; email?: string }>();
       const plan = body.plan === "yearly" ? "yearly" : body.plan === "monthly" ? "monthly" : null;
