@@ -20,7 +20,7 @@ import { BOOKING_STATUS_LABELS, BOOKING_STATUS_COLORS, createGoogleCalendarUrl, 
 import { Star, MapPin, Sparkles, Calendar, Clock, Bell, AlertTriangle, ExternalLink, Download } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { cancelProviderBooking, getMyProviderBookings, type ProviderBookingRecord } from "@/lib/providerBookingApi";
+import { cancelProviderBooking, getMyProviderBookings, getProviderAvailability, rescheduleProviderBooking, type ProviderBookingRecord } from "@/lib/providerBookingApi";
 
 const AVAILABLE_TIME_SLOTS = [
   "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
@@ -54,6 +54,28 @@ export function BeautyMyBookings() {
   const [newDate, setNewDate] = useState("");
   const [newTime, setNewTime] = useState("");
   const [isRescheduling, setIsRescheduling] = useState(false);
+  const [rescheduleSlots, setRescheduleSlots] = useState<string[]>(AVAILABLE_TIME_SLOTS);
+  const [isLoadingRescheduleSlots, setIsLoadingRescheduleSlots] = useState(false);
+
+  useEffect(() => {
+    if (!rescheduleBooking || !newDate) return;
+    if (!rescheduleBooking.isProviderBooking) {
+      setRescheduleSlots(AVAILABLE_TIME_SLOTS);
+      return;
+    }
+    let active = true;
+    setIsLoadingRescheduleSlots(true);
+    getProviderAvailability(rescheduleBooking.providerId, newDate)
+      .then((result) => {
+        if (!active) return;
+        const times = result.slots.map((slot) => slot.time);
+        setRescheduleSlots(times);
+        setNewTime((current) => times.includes(current) ? current : "");
+      })
+      .catch(() => active && setRescheduleSlots([]))
+      .finally(() => active && setIsLoadingRescheduleSlots(false));
+    return () => { active = false; };
+  }, [rescheduleBooking, newDate]);
 
   const [reviewBookingId, setReviewBookingId] = useState<string | null>(null);
   const [rating, setRating] = useState(5);
@@ -94,6 +116,13 @@ export function BeautyMyBookings() {
     if (!rescheduleBooking || !newDate || !newTime) return;
     setIsRescheduling(true);
     try {
+      if (rescheduleBooking.isProviderBooking) {
+        const updated = await rescheduleProviderBooking(rescheduleBooking.id, newDate, newTime);
+        setProviderBookings((current) => current.map((item) => item.id === updated.id ? updated : item));
+        toast({ title: "Átfoglalási kérés elküldve", description: `Új időpont: ${newDate} ${newTime}. A szolgáltató új visszaigazolása szükséges.` });
+        setRescheduleBooking(null);
+        return;
+      }
       await fetch(`/api/beauty/bookings/${rescheduleBooking.id}/reschedule`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -277,7 +306,7 @@ export function BeautyMyBookings() {
                   <div className="flex flex-col gap-2 flex-shrink-0 md:min-w-[170px]">
                     {isPendingOrConfirmed && (
                       <>
-                        {!b.isProviderBooking && <Button
+                        <Button
                           size="sm"
                           variant="outline"
                           onClick={() => {
@@ -288,7 +317,7 @@ export function BeautyMyBookings() {
                           className="w-full justify-start text-xs font-semibold"
                         >
                           <Calendar className="w-3.5 h-3.5 mr-1.5 text-primary" /> Átidőzítés
-                        </Button>}
+                        </Button>
 
                         <Button
                           size="sm"
@@ -368,17 +397,19 @@ export function BeautyMyBookings() {
               <Select value={newTime} onValueChange={setNewTime}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {AVAILABLE_TIME_SLOTS.map((t) => (
+                  {rescheduleSlots.map((t) => (
                     <SelectItem key={t} value={t}>{t}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {isLoadingRescheduleSlots && <p className="mt-1 text-xs text-muted-foreground">Szabad időpontok frissítése…</p>}
+              {!isLoadingRescheduleSlots && rescheduleSlots.length === 0 && <p className="mt-1 text-xs font-semibold text-amber-700">Erre a napra nincs szabad időpont.</p>}
             </div>
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setRescheduleBooking(null)}>Mégse</Button>
-            <Button onClick={handleRescheduleSubmit} disabled={isRescheduling || !newDate}>
+            <Button onClick={handleRescheduleSubmit} disabled={isRescheduling || !newDate || !newTime || isLoadingRescheduleSlots}>
               {isRescheduling ? "Átidőzítés..." : "Átidőzítés megerősítése"}
             </Button>
           </DialogFooter>
