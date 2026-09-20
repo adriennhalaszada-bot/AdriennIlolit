@@ -336,7 +336,7 @@ function GlassProfile({ provider, theme, isFavorited, onToggleFavorite, reviews,
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl"
                 onClick={() => onOpenWizard(availableServices[0] || { id: "s1", name: "Teljes kezelés", price: 8500, durationMinutes: 60, depositPercentage: 50 })}
               >
-                📅 4-Lépéses Foglalási Wizard ➔
+                Időpont foglalása
               </Button>
             </div>
           </div>
@@ -479,6 +479,11 @@ function MultiServiceBookingEngine({
   const selectedServices = services.filter((s) => selectedIds.includes(s.id));
   const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0);
   const totalDurationMinutes = selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0);
+  const requiredDepositAmount = selectedServices.reduce((sum, service) => {
+    const requiresDeposit = (service as any).requiresDeposit === true;
+    const percentage = Number((service as any).depositPercentage || 0);
+    return requiresDeposit ? sum + Math.round((service.price * percentage) / 100) : sum;
+  }, 0);
 
   // Group services by category
   const categories = Array.from(new Set(services.map((s) => (s as any).category || "Egyéb")));
@@ -741,11 +746,15 @@ function MultiServiceBookingEngine({
                   className="w-full py-6 rounded-2xl text-base font-extrabold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl shadow-emerald-600/20"
                 >
                   {isSignedIn
-                    ? `Foglalási Kérés Elküldése (Előleggel) · ${formatPrice(totalPrice)}`
+                    ? requiredDepositAmount > 0
+                      ? `Foglalási kérés · fizetendő előleg: ${formatPrice(requiredDepositAmount)}`
+                      : `Foglalási kérés · ${formatPrice(totalPrice)}`
                     : "Jelentkezz be a foglaláshoz"}
                 </Button>
                 <div className="text-[10px] text-center font-bold text-slate-500 dark:text-slate-400">
-                  🔒 Előleg fizetése után a foglalás véglegesítése a szolgáltató általi visszaigazolással történik.
+                  {requiredDepositAmount > 0
+                    ? "Az előleg csak a foglalás megerősítésekor fizetendő; a fennmaradó összeget a szolgáltatónál rendezed."
+                    : "Ehhez a szolgáltatáshoz nem szükséges online előleg; a fizetés a szolgáltatónál történik."}
                 </div>
               </div>
             </div>
