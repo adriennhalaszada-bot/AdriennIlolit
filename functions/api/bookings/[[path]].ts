@@ -232,6 +232,13 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     if (["REJECTED", "CANCELLED"].includes(booking.status)) return json({ error: "A foglalás már lezárt." }, 409);
     booking.status = "CANCELLED";
     booking.cancelledBy = booking.providerOwnerId === userId ? "provider" : "customer";
+    if (booking.depositPayment?.status === "paid") {
+      booking.depositPayment = {
+        ...booking.depositPayment,
+        refundStatus: "required",
+        refundRequiredAt: new Date().toISOString(),
+      };
+    }
     booking.updatedAt = new Date().toISOString();
     await writeBooking(context.env, booking);
     return json(booking);
