@@ -35,7 +35,6 @@ import { ProvidersHome } from "./pages/ProvidersHome";
 import { GeneralProviderRegister } from "./pages/GeneralProviderRegister";
 import { GeneralProviderDashboard } from "./pages/GeneralProviderDashboard";
 import { BeautyRegister } from "./pages/beauty/BeautyRegister";
-import { BeautyDashboard } from "./pages/beauty/BeautyDashboard";
 import { BeautyMyBookings } from "./pages/beauty/BeautyMyBookings";
 import { BeautyProviderProfile } from "./pages/beauty/BeautyProviderProfile";
 import { BeautyBookingRedirect } from "./pages/beauty/BeautyBooking";
@@ -280,7 +279,7 @@ function AppRouterInner() {
       <Route path="/beauty" component={BeautyHome} />
       <Route path="/services" component={BeautyHome} />
       <Route path="/beauty/register" component={BeautyRegister} />
-      <Route path="/beauty/dashboard" component={BeautyDashboard} />
+      <Route path="/beauty/dashboard"><Redirect to="/providers/dashboard" /></Route>
       <Route path="/beauty/bookings" component={BeautyMyBookings} />
       <Route path="/beauty/:id/book/:serviceId" component={BeautyBookingRedirect} />
       <Route path="/beauty/:id" component={BeautyProviderProfile} />
@@ -398,7 +397,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v6.7_20260920_unified_bookings";
+    const CURRENT_VER = "v6.8_20260920_unified_provider_admin";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);
