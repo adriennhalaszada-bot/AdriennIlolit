@@ -69,7 +69,13 @@ async function updateSubscription(env: Env, ownerId: string, subscription: Recor
   if (!object) return;
   const provider = await object.json<any>();
   const updatedAt = new Date().toISOString();
-  await env.MEDIA_BUCKET.put(key, JSON.stringify({ ...provider, subscription, updatedAt }), {
+  const mustUnpublish = ["unpaid", "cancelled", "inactive"].includes(String(subscription.status || ""));
+  await env.MEDIA_BUCKET.put(key, JSON.stringify({
+    ...provider,
+    subscription,
+    isPublished: mustUnpublish ? false : provider.isPublished,
+    updatedAt,
+  }), {
     httpMetadata: { contentType: "application/json" },
     customMetadata: { owner: ownerId, updatedAt },
   });
@@ -104,6 +110,17 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         stripeCustomerId: object.customer || "",
         stripeSubscriptionId: object.id || "",
         cancelledAt: new Date().toISOString(),
+      });
+    }
+    if (event.type === "customer.subscription.updated" && object.metadata?.ownerId) {
+      const status = ["active", "trialing", "past_due", "unpaid"].includes(object.status) ? object.status : "inactive";
+      await updateSubscription(context.env, object.metadata.ownerId, {
+        status,
+        plan: object.metadata?.plan || "monthly",
+        stripeCustomerId: object.customer || "",
+        stripeSubscriptionId: object.id || "",
+        currentPeriodEnd: typeof object.current_period_end === "number" ? new Date(object.current_period_end * 1000).toISOString() : undefined,
+        updatedAt: new Date().toISOString(),
       });
     }
     return json({ received: true });
