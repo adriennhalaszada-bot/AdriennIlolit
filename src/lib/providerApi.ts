@@ -39,6 +39,16 @@ export interface ProviderProfileRecord {
   services: ProviderServiceRecord[];
   slots: ProviderSlotRecord[];
   isPublished?: boolean;
+  subscription?: {
+    status: "active" | "trialing" | "past_due" | "unpaid" | "cancelled" | "inactive";
+    plan?: "monthly" | "yearly";
+    stripeCustomerId?: string;
+    stripeSubscriptionId?: string;
+    checkoutSessionId?: string;
+    activatedAt?: string;
+    cancelledAt?: string;
+    currentPeriodEnd?: string;
+  };
   updatedAt?: string;
 }
 
