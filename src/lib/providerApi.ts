@@ -27,6 +27,7 @@ export interface ProviderProfileRecord {
   category: string;
   subCategory: string;
   city: string;
+  region?: string;
   address: string;
   phone: string;
   email: string;
