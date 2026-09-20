@@ -509,8 +509,8 @@ export function ProvidersHome() {
                         asChild
                         className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold py-5 rounded-2xl text-xs shadow-md"
                       >
-                        <Link href={`/beauty/${provider.id}`}>
-                          <span>Időpont foglalása ➔</span>
+                        <Link href={`/providers/${provider.id}`}>
+                          <span>Profil és időpontok</span>
                         </Link>
                       </Button>
                     </div>
