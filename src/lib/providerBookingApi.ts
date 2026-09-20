@@ -15,6 +15,7 @@ export interface ProviderBookingRecord {
     stripeCheckoutSessionId?: string;
     stripePaymentIntentId?: string;
     paidAt?: string;
+    refundStatus?: "required" | "refunded";
   };
   bookingDate: string;
   bookingTime: string;
