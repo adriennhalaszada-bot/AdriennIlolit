@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/lib/constants";
 import { getMyProviderProfile, saveMyProviderProfile } from "@/lib/providerApi";
 import { getMyProviderBookings, respondToProviderBooking, type ProviderBookingRecord } from "@/lib/providerBookingApi";
+import { createProviderBillingPortal } from "@/lib/billingApi";
 
 export function GeneralProviderDashboard() {
   const { toast } = useToast();
@@ -37,6 +38,7 @@ export function GeneralProviderDashboard() {
   const [themeId, setThemeId] = useState("emerald");
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>("inactive");
   const [subscriptionPlan, setSubscriptionPlan] = useState<string>("");
+  const [isOpeningBilling, setIsOpeningBilling] = useState(false);
 
   // Services list
   const [services, setServices] = useState<Array<{ id: string; name: string; price: number; durationMinutes: number; deposit: number }>>([]);
@@ -124,6 +126,22 @@ export function GeneralProviderDashboard() {
       toast({ title: "A mentés nem sikerült", description: error instanceof Error ? error.message : "Ismeretlen hiba történt.", variant: "destructive" });
     } finally {
       setIsSavingProfile(false);
+    }
+  };
+
+  const handleOpenBillingPortal = async () => {
+    setIsOpeningBilling(true);
+    try {
+      const { portalUrl } = await createProviderBillingPortal();
+      if (!portalUrl) throw new Error("A Stripe előfizetés-kezelő nem indítható.");
+      window.location.assign(portalUrl);
+    } catch (error) {
+      toast({
+        title: "Az előfizetés-kezelő nem nyitható meg",
+        description: error instanceof Error ? error.message : "Ismeretlen hiba történt.",
+        variant: "destructive",
+      });
+      setIsOpeningBilling(false);
     }
   };
 
@@ -279,9 +297,16 @@ export function GeneralProviderDashboard() {
                   : "A publikáláshoz töltsd ki a kötelező adatokat, majd adj hozzá szolgáltatást és aktív idősávot."}
           </div>
           {isBeautyProvider && (
-            <Badge className={hasActiveSubscription ? "bg-emerald-600 text-white" : "bg-amber-500 text-slate-950"}>
-              Előfizetés: {hasActiveSubscription ? `aktív${subscriptionPlan ? ` (${subscriptionPlan === "yearly" ? "éves" : "havi"})` : ""}` : subscriptionStatus}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge className={hasActiveSubscription ? "bg-emerald-600 text-white" : "bg-amber-500 text-slate-950"}>
+                Előfizetés: {hasActiveSubscription ? `aktív${subscriptionPlan ? ` (${subscriptionPlan === "yearly" ? "éves" : "havi"})` : ""}` : subscriptionStatus}
+              </Badge>
+              {hasActiveSubscription && (
+                <Button type="button" variant="outline" size="sm" onClick={handleOpenBillingPortal} disabled={isOpeningBilling} className="rounded-xl text-xs font-bold">
+                  {isOpeningBilling ? "Megnyitás…" : "Előfizetés kezelése"}
+                </Button>
+              )}
+            </div>
           )}
           <Button
             type="button"
