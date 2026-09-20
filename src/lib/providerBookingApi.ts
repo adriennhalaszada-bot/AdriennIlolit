@@ -9,6 +9,13 @@ export interface ProviderBookingRecord {
   price: number;
   durationMinutes: number;
   depositAmount: number;
+  depositPayment?: {
+    status: "pending" | "paid" | "failed" | "refunded";
+    amount: number;
+    stripeCheckoutSessionId?: string;
+    stripePaymentIntentId?: string;
+    paidAt?: string;
+  };
   bookingDate: string;
   bookingTime: string;
   customerName: string;
