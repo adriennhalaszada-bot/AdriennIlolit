@@ -61,14 +61,40 @@ function safeText(value: unknown, max: number): string {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
+const HUNGARIAN_WEEKDAYS = ["Vasárnap", "Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek", "Szombat"];
+
+function weekdayFor(date: string): string {
+  return HUNGARIAN_WEEKDAYS[new Date(`${date}T12:00:00Z`).getUTCDay()] || "";
+}
+
 export const onRequest: PagesFunction<Env> = async (rawContext) => {
   const context = rawContext as Context;
   const method = context.request.method.toUpperCase();
   if (method === "OPTIONS") return json(null, 204);
 
+  const route = routeParts(context);
+  if (method === "GET" && route[0] === "availability") {
+    const url = new URL(context.request.url);
+    const providerId = safeText(url.searchParams.get("providerId"), 160);
+    const bookingDate = safeText(url.searchParams.get("date"), 10);
+    if (!providerId || !/^\d{4}-\d{2}-\d{2}$/.test(bookingDate)) {
+      return json({ error: "Hiányzó vagy hibás szolgáltató és dátum." }, 400);
+    }
+    const provider = await readJson(context.env, `${PROVIDER_PREFIX}${providerId}.json`);
+    if (!provider?.isPublished) return json({ error: "A szolgáltató nem található." }, 404);
+    const weekday = weekdayFor(bookingDate);
+    const occupied = new Set((await allBookings(context.env))
+      .filter((booking) => booking.providerId === providerId && booking.bookingDate === bookingDate && ["PENDING", "CONFIRMED"].includes(booking.status))
+      .map((booking) => booking.bookingTime));
+    const slots = (Array.isArray(provider.slots) ? provider.slots : [])
+      .filter((slot: any) => slot.isAvailable !== false && slot.day === weekday)
+      .map((slot: any) => ({ id: slot.id, startTime: slot.startTime, endTime: slot.endTime, time: `${slot.startTime} - ${slot.endTime}` }))
+      .filter((slot: any) => !occupied.has(slot.time));
+    return json({ providerId, bookingDate, weekday, slots });
+  }
+
   const userId = await currentUserId(context.request, context.env);
   if (!userId) return json({ error: "A foglaláshoz jelentkezz be." }, 401);
-  const route = routeParts(context);
 
   if (method === "GET" && route[0] === "me") {
     const bookings = (await allBookings(context.env))
@@ -100,6 +126,12 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     if (!provider?.isPublished) return json({ error: "A szolgáltató nem található vagy nem fogad foglalást." }, 404);
     const service = provider.services?.find((item: any) => item.id === serviceId && item.isAvailable !== false);
     if (!service) return json({ error: "A kiválasztott szolgáltatás nem elérhető." }, 404);
+    const matchingSlot = provider.slots?.some((slot: any) =>
+      slot.isAvailable !== false &&
+      slot.day === weekdayFor(bookingDate) &&
+      `${slot.startTime} - ${slot.endTime}` === bookingTime,
+    );
+    if (!matchingSlot) return json({ error: "A kiválasztott időpont nem szerepel a szolgáltató szabad idősávjai között." }, 409);
 
     const collision = (await allBookings(context.env)).some((booking) =>
       booking.providerId === providerId &&
