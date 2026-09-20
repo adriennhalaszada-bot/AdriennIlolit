@@ -1,5 +1,6 @@
 import { Layout } from "@/components/layout/Layout";
-import { useGetUserListings, getGetUserListingsQueryKey, useUpdateListing, useDeleteListing, useGetMe, getGetMeQueryKey } from "@workspace/api-client-react";
+import { useUpdateListing, useDeleteListing } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Edit2, Trash2, Eye, EyeOff, Plus, Package } from "lucide-react";
@@ -10,58 +11,22 @@ import { formatPrice, CONDITIONS } from "@/lib/constants";
 import { EditListingModal, ListingItemData } from "@/components/shared/EditListingModal";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-
-const MOCK_USER_LISTINGS = [
-  {
-    id: "list_1",
-    title: "Zara Elegáns Bőrdzseki M-es",
-    price: 14500,
-    condition: "LIKE_NEW",
-    status: "ACTIVE",
-    description: "Alig használt Zara női bőrdzseki eredeti állapotban.",
-    images: [{ url: "https://images.unsplash.com/photo-1551028719-00167b16eac5?w=500" }],
-    category: { name: "Ruhák" },
-    size: "M",
-    brand: "Zara"
-  },
-  {
-    id: "list_2",
-    title: "Nike Air Force 1 Sárga Sneaker (38)",
-    price: 22000,
-    condition: "NEW_WITH_TAGS",
-    status: "ACTIVE",
-    description: "Új címkés eredeti Nike sneaker.",
-    images: [{ url: "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?w=500" }],
-    category: { name: "Cipők" },
-    size: "38",
-    brand: "Nike"
-  }
-];
+import { getMyListings } from "@/lib/listingApi";
 
 export function DashboardListings() {
   const { toast } = useToast();
   const [editingListing, setEditingListing] = useState<ListingItemData | null>(null);
-  const { data: me } = useGetMe({
-    query: { queryKey: getGetMeQueryKey() }
-  });
-  const username = (me as any)?.username || "HoldfényVándor_21";
-  const { data, isLoading } = useGetUserListings(username, { status: "ALL" }, {
-    query: { enabled: !!username, queryKey: getGetUserListingsQueryKey(username, { status: "ALL" }) }
-  });
-
-  const rawItems = (data as any)?.items;
-  const items = (rawItems && rawItems.length > 0) ? rawItems : MOCK_USER_LISTINGS;
+  const { data, isLoading, isError } = useQuery({ queryKey: ["my-listings"], queryFn: getMyListings });
 
   const updateListing = useUpdateListing();
   const deleteListing = useDeleteListing();
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: getGetUserListingsQueryKey(username || "", { status: "ALL" }) });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["my-listings"] });
 
   const handleToggleVisibility = (id: string, currentStatus: string) => {
     const newStatus = currentStatus === "HIDDEN" ? "ACTIVE" : "HIDDEN";
     // Optimistic update — UI changes instantly, reverts if API fails
-    const qk = getGetUserListingsQueryKey(username || "", { status: "ALL" });
+    const qk = ["my-listings"];
     queryClient.setQueryData(qk, (old: any) =>
       old ? { ...old, items: old.items.map((item: any) => item.id === id ? { ...item, status: newStatus } : item) } : old
     );
@@ -117,6 +82,8 @@ export function DashboardListings() {
           <div className="space-y-3">
             {[1, 2, 3].map(i => <Skeleton key={i} className="h-28 rounded-2xl" />)}
           </div>
+        ) : isError ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-8 text-center text-sm font-semibold text-rose-700">A saját hirdetéseid nem tölthetők be. Frissítsd az oldalt, vagy jelentkezz be újra.</div>
         ) : data?.items?.length ? (
           <div className="space-y-3">
             {data.items.map(listing => {
