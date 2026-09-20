@@ -19,9 +19,13 @@ import { useToast } from "@/hooks/use-toast";
 import { getMyProviderProfile, saveMyProviderProfile } from "@/lib/providerApi";
 import { confirmProviderSubscription, createProviderSubscriptionCheckout, type SubscriptionPlan } from "@/lib/billingApi";
 import { Badge } from "@/components/ui/badge";
+import { ALL_PROVIDER_CATEGORIES } from "@/data/allProvidersData";
+
+const BEAUTY_SPECIALTIES = ALL_PROVIDER_CATEGORIES.find((category) => category.id === "beauty_health")?.subcategories ?? [];
 
 const schema = z.object({
   displayName: z.string().min(2, "Legalább 2 karakter").max(80, "Max. 80 karakter"),
+  specialty: z.string().min(1, "Válassz szakterületet"),
   bio: z.string().max(2000, "Max. 2000 karakter").optional(),
   profileImageUrl: z.string().optional(),
   region: z.string().min(1, "Kötelező"),
@@ -54,6 +58,7 @@ export function BeautyRegister() {
     resolver: zodResolver(schema),
     defaultValues: {
       displayName: "",
+      specialty: "",
       bio: "",
       profileImageUrl: "",
       region: "",
@@ -84,16 +89,18 @@ export function BeautyRegister() {
           setLocation("/providers/dashboard");
           return profile;
         }
+        const savedSpecialty = BEAUTY_SPECIALTIES.includes(profile.subCategory) ? profile.subCategory : "";
         form.reset({
           displayName: profile.displayName || "",
+          specialty: savedSpecialty,
           bio: profile.bio || "",
           profileImageUrl: profile.profileImage || "",
-          region: "Korábban megadva",
+          region: profile.region || "",
           county: profile.city || "",
           address: profile.address || "",
           phone: profile.phone || "",
         });
-        setStep(2);
+        setStep(savedSpecialty && profile.region ? 2 : 1);
         return profile;
       });
     if (payment === "cancelled") {
@@ -132,8 +139,9 @@ export function BeautyRegister() {
       await saveMyProviderProfile({
         displayName: data.displayName,
         category: "Szépség- és egészségipar",
-        subCategory: "Szépségipari szolgáltatás",
+        subCategory: data.specialty,
         city: data.county,
+        region: data.region,
         address: data.address || "",
         phone: data.phone,
         email,
@@ -208,6 +216,29 @@ export function BeautyRegister() {
                       <FormControl>
                         <Input placeholder="Pl. Kata Hajstúdió & Balayage Bar" className="rounded-xl" {...field} />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="specialty"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="font-bold text-slate-700">Szakterület *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="rounded-xl">
+                            <SelectValue placeholder="Válaszd ki a fő szakterületedet" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {BEAUTY_SPECIALTIES.map((specialty) => (
+                            <SelectItem key={specialty} value={specialty}>{specialty}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -356,7 +387,7 @@ export function BeautyRegister() {
                 <div>
                   <p className="font-extrabold text-slate-900 dark:text-slate-100">Stripe Checkout</p>
                   <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                    A kártyaszámot kizárólag a Stripe kezeli; az ILOLIT nem látja és nem tárolja. Sikeres fizetés után automatikusan visszatérsz a vezérlőpultra.
+                    {form.getValues("specialty")} · {form.getValues("county")}, {form.getValues("region")}. A kártyaszámot kizárólag a Stripe kezeli; az ILOLIT nem látja és nem tárolja. Sikeres fizetés után automatikusan visszatérsz a vezérlőpultra.
                   </p>
                 </div>
               </div>
