@@ -28,6 +28,7 @@ export function GeneralProviderDashboard() {
   const [category, setCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
   const [city, setCity] = useState("");
+  const [region, setRegion] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -82,6 +83,7 @@ export function GeneralProviderDashboard() {
         setCategory(profile.category);
         setSubCategory(profile.subCategory);
         setCity(profile.city);
+        setRegion(profile.region || "");
         setAddress(profile.address);
         setPhone(profile.phone);
         setEmail(profile.email);
@@ -122,7 +124,7 @@ export function GeneralProviderDashboard() {
     setIsSavingProfile(true);
     try {
       const saved = await saveMyProviderProfile({
-        displayName, category, subCategory, city, address, phone, email, bio,
+        displayName, category, subCategory, city, region, address, phone, email, bio,
         videoUrl, profileImage: profileImages[0] || "", profileImages, publishPortfolio, themeId, slots: customSlots,
         services: services.map((service) => ({
           ...service,
@@ -545,10 +547,14 @@ export function GeneralProviderDashboard() {
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="vallalkozas@pelda.hu" className="py-4 text-xs font-bold rounded-xl mt-1" />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Város & Megye</label>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Település</label>
                   <Input value={city} onChange={(e) => setCity(e.target.value)} className="py-4 text-xs font-bold rounded-xl mt-1" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Megye</label>
+                  <Input value={region} onChange={(e) => setRegion(e.target.value)} className="py-4 text-xs font-bold rounded-xl mt-1" />
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Pontos Cím</label>
