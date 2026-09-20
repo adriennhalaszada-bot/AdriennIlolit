@@ -228,6 +228,9 @@ export async function onRequest(context: PagesContext): Promise<Response> {
 
   if (method === "GET") {
     const url = new URL(context.request.url);
+    const mine = url.searchParams.get("mine") === "true";
+    const requestingUserId = await currentUserId(context);
+    if (mine && !requestingUserId) return json({ error: "A saját hirdetésekhez jelentkezz be újra." }, 401);
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit")) || 24));
     const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
     const listed = await context.env.MEDIA_BUCKET.list({ prefix: LISTING_PREFIX, limit: 1000 });
@@ -244,8 +247,11 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     const search = url.searchParams.get("search")?.trim().toLocaleLowerCase("hu");
     const condition = url.searchParams.get("condition");
     const listingType = url.searchParams.get("listingType");
+    const requestedStatus = url.searchParams.get("status");
     records = records.filter((listing: any) => {
-      if (listing.status !== "ACTIVE" || listing.isSold) return false;
+      if (mine && listing.userId !== requestingUserId) return false;
+      if (!mine && (listing.status !== "ACTIVE" || listing.isSold)) return false;
+      if (mine && requestedStatus && requestedStatus !== "ALL" && listing.status !== requestedStatus) return false;
       if (categorySlug && listing.category?.slug !== categorySlug) return false;
       if (subcategorySlug && listing.subcategory?.slug !== subcategorySlug) return false;
       if (condition && listing.condition !== condition) return false;
@@ -258,6 +264,7 @@ export async function onRequest(context: PagesContext): Promise<Response> {
       return true;
     });
     const start = (page - 1) * limit;
+    records = records.map((listing: any) => ({ ...listing, isOwner: Boolean(requestingUserId && listing.userId === requestingUserId) }));
     return json({
       items: records.slice(start, start + limit),
       total: records.length,
