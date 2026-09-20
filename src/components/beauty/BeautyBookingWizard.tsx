@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X, Calendar as CalendarIcon, Clock, Check, ShieldCheck, CreditCard, ArrowLeft, ArrowRight, Sparkles, BellRing, Smartphone, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,15 +31,33 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
   const { toast } = useToast();
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
 
+  const tomorrow = useMemo(() => {
+    const value = new Date();
+    value.setDate(value.getDate() + 1);
+    return value.toISOString().slice(0, 10);
+  }, []);
+
   // Booking Form State
-  const [selectedDate, setSelectedDate] = useState<string>("2026-08-30");
-  const [selectedSlot, setSelectedSlot] = useState<string>("14:00 - 16:00");
-  const [customerName, setCustomerName] = useState<string>("Kiss János");
-  const [customerPhone, setCustomerPhone] = useState<string>("+36 30 123 4567");
-  const [customerEmail, setCustomerEmail] = useState<string>("janos.kiss@example.com");
-  const [notes, setNotes] = useState<string>("Sötét barna festést szeretnék, természetes kinézetre...");
-  const [termsAccepted, setTermsAccepted] = useState<boolean>(true);
+  const [selectedDate, setSelectedDate] = useState<string>(tomorrow);
+  const [selectedSlot, setSelectedSlot] = useState<string>("");
+  const [customerName, setCustomerName] = useState<string>("");
+  const [customerPhone, setCustomerPhone] = useState<string>("");
+  const [customerEmail, setCustomerEmail] = useState<string>("");
+  const [notes, setNotes] = useState<string>("");
+  const [termsAccepted, setTermsAccepted] = useState<boolean>(false);
   const [paymentMethod, setPaymentMethod] = useState<"card" | "paypal" | "applepay" | "googlepay">("card");
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setStep(1);
+    setSelectedDate(tomorrow);
+    setSelectedSlot("");
+    setCustomerName("");
+    setCustomerPhone("");
+    setCustomerEmail("");
+    setNotes("");
+    setTermsAccepted(false);
+  }, [isOpen, service.id, tomorrow]);
 
   if (!isOpen) return null;
 
@@ -57,11 +75,23 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
   ];
 
   const handleCompleteBooking = () => {
+    if (!selectedDate || !selectedSlot || !customerName.trim() || !customerPhone.trim() || !customerEmail.trim()) {
+      toast({ title: "Hiányzó foglalási adatok", description: "Töltsd ki a dátumot, időpontot és az elérhetőségi adatokat.", variant: "destructive" });
+      return;
+    }
     if (!termsAccepted) {
       toast({ title: "Kérjük fogadd el az Általános Szerződési Feltételeket!", variant: "destructive" });
       return;
     }
     setStep(5); // Success screen
+  };
+
+  const goToConfirmation = () => {
+    if (!customerName.trim() || !customerPhone.trim() || !customerEmail.trim()) {
+      toast({ title: "A név, telefonszám és e-mail megadása kötelező.", variant: "destructive" });
+      return;
+    }
+    setStep(4);
   };
 
   return (
@@ -150,7 +180,7 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
 
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-700">Dátum Kiválasztása</label>
-                <Input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="rounded-xl font-bold" />
+                <Input type="date" min={tomorrow} value={selectedDate} onChange={(e) => { setSelectedDate(e.target.value); setSelectedSlot(""); }} className="rounded-xl font-bold" />
               </div>
 
               <div className="space-y-2">
@@ -184,7 +214,7 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
                 <Button variant="outline" onClick={() => setStep(1)} className="rounded-2xl font-bold py-6 px-6">
                   Vissza
                 </Button>
-                <Button onClick={() => setStep(3)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl py-6 text-base shadow-md">
+                <Button disabled={!selectedDate || !selectedSlot} onClick={() => setStep(3)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl py-6 text-base shadow-md">
                   Tovább a Személyes Adatokhoz ➔
                 </Button>
               </div>
@@ -239,7 +269,7 @@ export function BeautyBookingWizard({ isOpen, onClose, provider, service }: Beau
                 <Button variant="outline" onClick={() => setStep(2)} className="rounded-2xl font-bold py-6 px-6">
                   Vissza
                 </Button>
-                <Button onClick={() => setStep(4)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl py-6 text-base shadow-md">
+                <Button onClick={goToConfirmation} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl py-6 text-base shadow-md">
                   Tovább a Fizetéshez & Megerősítéshez ➔
                 </Button>
               </div>
