@@ -94,7 +94,8 @@ export function BeautyProviderProfile() {
     id: foundGeneralProvider.id,
     displayName: foundGeneralProvider.name,
     bio: foundGeneralProvider.bio,
-    region: `${foundGeneralProvider.city}, ${foundGeneralProvider.address}`,
+    region: foundGeneralProvider.address,
+    address: foundGeneralProvider.address,
     county: foundGeneralProvider.city,
     rating: foundGeneralProvider.rating,
     totalReviews: foundGeneralProvider.reviewCount,
@@ -104,6 +105,17 @@ export function BeautyProviderProfile() {
     phone: foundGeneralProvider.phone,
     templateId: foundGeneralProvider.templateId,
     videoUrl: (foundGeneralProvider as any).videoUrl,
+    profession: foundGeneralProvider.profession,
+    nextAvailable: foundGeneralProvider.nextSlot,
+    workingHours: [
+      { day: "Hétfő", hours: "08:00–17:00" },
+      { day: "Kedd", hours: "08:00–17:00" },
+      { day: "Szerda", hours: "08:00–17:00" },
+      { day: "Csütörtök", hours: "08:00–17:00" },
+      { day: "Péntek", hours: "08:00–16:00" },
+      { day: "Szombat", hours: "Előzetes egyeztetéssel" },
+      { day: "Vasárnap", hours: "Zárva" },
+    ],
     services: foundGeneralProvider.services.map(s => ({
       id: s.id,
       serviceType: "general",
@@ -229,6 +241,9 @@ function GlassProfile({ provider, theme, isFavorited, onToggleFavorite, reviews,
   const services: BeautyServiceOffering[] = provider.services ?? [];
   const availableServices = services.filter((s) => s.isAvailable !== false);
   const portfolio = provider.portfolio ?? [];
+  const workingHours = ((provider as any).workingHours ?? []) as Array<{ day: string; hours: string }>;
+  const profession = (provider as any).profession as string | undefined;
+  const nextAvailable = (provider as any).nextAvailable as string | undefined;
   const mainPhoto = provider.profileImageUrl ?? portfolio[0]?.imageUrl;
   const subPhotos = [portfolio[0]?.imageUrl, portfolio[1]?.imageUrl].filter(
     (p, i) => p && p !== mainPhoto,
@@ -287,6 +302,9 @@ function GlassProfile({ provider, theme, isFavorited, onToggleFavorite, reviews,
               {provider.totalReviews > 0 && <span className="text-muted-foreground">({provider.totalReviews} értékelés)</span>}
             </div>
             {provider.bio && <p className="text-sm leading-relaxed text-muted-foreground mb-4">{provider.bio}</p>}
+            {profession && (
+              <p className="text-sm font-bold text-emerald-700 mb-3">{profession}</p>
+            )}
             <div className="flex flex-col gap-1.5 text-sm text-muted-foreground">
               {provider.phone && (
                 <a href={`tel:${provider.phone}`} className="flex items-center gap-2 hover:opacity-80">
@@ -323,6 +341,30 @@ function GlassProfile({ provider, theme, isFavorited, onToggleFavorite, reviews,
             </div>
           </div>
         </div>
+
+        {workingHours.length > 0 && (
+          <section className="mb-10 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-5 rounded-3xl border border-slate-200 bg-white/80 p-5 sm:p-6 shadow-sm">
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2 mb-4">
+                <Clock className="w-5 h-5 text-emerald-600" /> Nyitvatartás és elérhetőség
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2">
+                {workingHours.map((entry) => (
+                  <div key={entry.day} className="flex items-center justify-between gap-4 border-b border-slate-100 py-1.5 text-sm">
+                    <span className="font-semibold text-slate-600">{entry.day}</span>
+                    <span className="font-bold text-slate-900">{entry.hours}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {nextAvailable && (
+              <div className="self-start rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-center min-w-44">
+                <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Következő szabad időpont</p>
+                <p className="text-lg font-black text-emerald-900 mt-1">{nextAvailable}</p>
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Multi-Service Selection & Intelligent Booking Engine */}
         <div className="mb-10">
