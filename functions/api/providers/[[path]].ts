@@ -57,6 +57,11 @@ function imageUrl(value: unknown): string {
   return url.startsWith("/api/media/file/") || /^https:\/\//i.test(url) ? url : "";
 }
 
+function mediaUrl(value: unknown): string {
+  const url = text(value, 1000);
+  return url.startsWith("/api/media/file/") || /^https:\/\//i.test(url) ? url : "";
+}
+
 function normalize(input: any, id: string, ownerId: string, existing?: any) {
   const now = new Date().toISOString();
   const requestedImages = Array.isArray(input.profileImages)
@@ -98,7 +103,7 @@ function normalize(input: any, id: string, ownerId: string, existing?: any) {
     phone: text(input.phone, 50),
     email: text(input.email, 180),
     bio: text(input.bio, 3000),
-    videoUrl: text(input.videoUrl, 500),
+    videoUrl: mediaUrl(input.videoUrl),
     profileImage: profileImages[0] || "",
     profileImages,
     publishPortfolio: input.publishPortfolio === true,
