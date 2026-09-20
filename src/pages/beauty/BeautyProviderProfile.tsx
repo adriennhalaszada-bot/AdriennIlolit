@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useLocation, Link } from "wouter";
 import { useUser } from "@clerk/react";
 import { Layout } from "@/components/layout/Layout";
@@ -32,6 +32,7 @@ import { ServiceWatchdogModal } from "@/components/providers/ServiceWatchdogModa
 import { cn } from "@/lib/utils";
 import { BeautyBookingWizard } from "@/components/beauty/BeautyBookingWizard";
 import { DEMO_GENERAL_PROVIDERS } from "@/data/allProvidersData";
+import { getProviderProfile, type ProviderProfileRecord } from "@/lib/providerApi";
 
 function toDateKey(d: Date) {
   const y = d.getFullYear();
@@ -52,6 +53,15 @@ export function BeautyProviderProfile() {
   }
   const { toast } = useToast();
   const [reviewPage] = useState(1);
+
+  const isStoredProviderId = Boolean(id?.startsWith("provider_"));
+  const [storedProvider, setStoredProvider] = useState<ProviderProfileRecord | null>(null);
+  useEffect(() => {
+    if (!id || !isStoredProviderId) return;
+    let active = true;
+    getProviderProfile(id).then((value) => active && setStoredProvider(value)).catch(() => {});
+    return () => { active = false; };
+  }, [id, isStoredProviderId]);
 
   const { data: provider, isLoading } = useGetBeautyProvider(id);
   const { data: reviewsData } = useGetBeautyProviderReviews(id, { page: reviewPage, limit: 10 });
@@ -87,10 +97,36 @@ export function BeautyProviderProfile() {
   };
 
   // Fallback to mock provider instantly if API query is loading or ID is mock
-  const isMockId = !id || id.startsWith("prov");
+  const isMockId = !id || id.startsWith("prov") || isStoredProviderId;
   const foundGeneralProvider = DEMO_GENERAL_PROVIDERS.find((p) => p.id === id);
 
-  const MOCK_PROVIDER: BeautyProvider = foundGeneralProvider ? {
+  const MOCK_PROVIDER: BeautyProvider = storedProvider ? {
+    id: storedProvider.id,
+    displayName: storedProvider.displayName,
+    bio: storedProvider.bio,
+    region: storedProvider.address,
+    address: storedProvider.address,
+    county: storedProvider.city,
+    rating: 0,
+    totalReviews: 0,
+    isVerified: false,
+    profileImageUrl: storedProvider.profileImage,
+    coverImageUrl: storedProvider.profileImage,
+    phone: storedProvider.phone,
+    templateId: storedProvider.themeId === "gold" ? "template2" : storedProvider.themeId === "steel" ? "template3" : "template1",
+    videoUrl: storedProvider.videoUrl,
+    profession: storedProvider.subCategory || storedProvider.category,
+    workingHours: Array.from(new Set(storedProvider.slots.map((slot) => slot.day))).map((day) => {
+      const daySlots = storedProvider.slots.filter((slot) => slot.day === day && slot.isAvailable);
+      return { day, hours: daySlots.length ? `${daySlots[0].startTime}–${daySlots[daySlots.length - 1].endTime}` : "Zárva" };
+    }),
+    services: storedProvider.services.map((service) => ({
+      ...service,
+      serviceType: "general",
+      category: storedProvider.subCategory || storedProvider.category,
+      isAvailable: service.isAvailable !== false,
+    })),
+  } as any : foundGeneralProvider ? {
     id: foundGeneralProvider.id,
     displayName: foundGeneralProvider.name,
     bio: foundGeneralProvider.bio,
@@ -165,7 +201,7 @@ export function BeautyProviderProfile() {
     setIsWizardOpen(true);
   };
 
-  const isGeneralProvider = !!foundGeneralProvider || (id && (id.startsWith("prov-gen-") || id.startsWith("prov_")));
+  const isGeneralProvider = Boolean(storedProvider || foundGeneralProvider || (id && (id.startsWith("prov-gen-") || id.startsWith("prov_") || id.startsWith("provider_"))));
 
   return (
     <Layout>
