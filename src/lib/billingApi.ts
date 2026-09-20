@@ -21,3 +21,17 @@ export function createProviderBillingPortal() {
     method: "POST",
   });
 }
+
+export function createBookingDepositCheckout(bookingId: string) {
+  return customFetch<{ checkoutUrl: string }>("/api/billing/booking-deposit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bookingId }),
+  });
+}
+
+export function confirmBookingDeposit(sessionId: string) {
+  return customFetch<{ paid: boolean; bookingId: string }>(
+    `/api/billing/booking-deposit/status?session_id=${encodeURIComponent(sessionId)}`,
+  );
+}
