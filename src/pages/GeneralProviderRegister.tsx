@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { ALL_PROVIDER_CATEGORIES } from "@/data/allProvidersData";
 import { useToast } from "@/hooks/use-toast";
+import { saveMyProviderProfile } from "@/lib/providerApi";
 
 type SubscriptionTier = "FREE" | "BASIC" | "PRO" | "PREMIUM";
 
@@ -20,12 +21,13 @@ export function GeneralProviderRegister() {
   const { toast } = useToast();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Form states
   const [businessName, setBusinessName] = useState("");
   const [category, setCategory] = useState(ALL_PROVIDER_CATEGORIES[0].name);
   const [profession, setProfession] = useState(ALL_PROVIDER_CATEGORIES[0].subcategories[0]);
-  const [city, setCity] = useState("Budapest");
+  const [city, setCity] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -59,14 +61,42 @@ export function GeneralProviderRegister() {
     setStep(2);
   };
 
-  const handleFinishRegistration = (e: React.FormEvent) => {
+  const handleFinishRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: "🎉 Sikeres Szolgáltatói Regisztráció!",
-      description: `Gratulálunk! A(z) "${businessName}" bemutatkozó profilod elkészült a(z) ${category} ágazatban.`
-    });
-    // Redirect to Provider Dashboard
-    setLocation("/providers/dashboard");
+    setIsSaving(true);
+    try {
+      await saveMyProviderProfile({
+        displayName: businessName.trim(),
+        category,
+        subCategory: profession,
+        city: city.trim(),
+        address: address.trim(),
+        phone: phone.trim(),
+        email: email.trim(),
+        bio: bio.trim(),
+        videoUrl: "",
+        profileImage: "",
+        profileImages: [],
+        publishPortfolio: false,
+        themeId: "emerald",
+        services: [],
+        slots: [],
+        isPublished: false,
+      });
+      toast({
+        title: "A szolgáltatói profilod elkészült",
+        description: "Adataidat elmentettük a Cloudflare tárhelyre. Adj hozzá szolgáltatást és foglalható idősávot a publikáláshoz.",
+      });
+      setLocation("/providers/dashboard");
+    } catch (error) {
+      toast({
+        title: "A profil létrehozása nem sikerült",
+        description: error instanceof Error ? error.message : "Jelentkezz be újra, majd próbáld meg ismét.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -306,7 +336,7 @@ export function GeneralProviderRegister() {
           <form onSubmit={handleFinishRegistration} className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 space-y-6 max-w-xl mx-auto">
             <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2 border-b pb-3">
               <CreditCard className="w-5 h-5 text-emerald-600" />
-              <span>3. Lépés: Fizetés & Profil Aktiválás</span>
+              <span>3. Lépés: Profil létrehozása</span>
             </h2>
 
             <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl space-y-2 border text-xs font-bold">
@@ -326,19 +356,13 @@ export function GeneralProviderRegister() {
               </div>
             </div>
 
-            {tier !== "FREE" && (
-              <div className="space-y-3">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Bankkártya Adatok (Stripe Szimuláció)</label>
-                <Input placeholder="4532 •••• •••• 8901" defaultValue="4532 8901 2345 6789" className="py-5 font-mono text-xs rounded-xl" />
-                <div className="grid grid-cols-2 gap-3">
-                  <Input placeholder="MM/YY" defaultValue="12/28" className="py-5 font-mono text-xs rounded-xl" />
-                  <Input placeholder="CVC" defaultValue="888" className="py-5 font-mono text-xs rounded-xl" />
-                </div>
-              </div>
-            )}
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+              <strong>Most nem kérünk bankkártyaadatot és nem történik terhelés.</strong>
+              <p className="mt-1 text-xs">A profilod piszkozatként jön létre. Előfizetés csak a biztonságos fizetési rendszer élesítése után, külön jóváhagyással indulhat.</p>
+            </div>
 
-            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-6 rounded-2xl text-base shadow-lg">
-              🚀 Előfizetés Indítása & Profil Megnyitása ➔
+            <Button type="submit" disabled={isSaving} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-6 rounded-2xl text-base shadow-lg">
+              {isSaving ? "Profil mentése…" : "🚀 Profil létrehozása és beállítása ➔"}
             </Button>
           </form>
         )}
