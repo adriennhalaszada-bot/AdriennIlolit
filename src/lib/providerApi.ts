@@ -62,6 +62,10 @@ export function getProviderProfile(id: string) {
   return customFetch<ProviderProfileRecord>(`/api/providers/${encodeURIComponent(id)}`);
 }
 
+export function getProviderProfiles() {
+  return customFetch<{ items: ProviderProfileRecord[]; total: number }>("/api/providers");
+}
+
 export function saveMyProviderProfile(profile: ProviderProfileRecord) {
   return customFetch<ProviderProfileRecord>("/api/providers/me", {
     method: "PUT",
