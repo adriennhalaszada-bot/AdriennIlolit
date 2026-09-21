@@ -37,6 +37,7 @@ export interface ProviderProfileRecord {
   profileImages?: string[];
   publishPortfolio?: boolean;
   themeId: string;
+  fontFamily?: string;
   services: ProviderServiceRecord[];
   slots: ProviderSlotRecord[];
   isPublished?: boolean;
