@@ -148,33 +148,6 @@ function TransactionCard({
   );
 }
 
-const MOCK_TX_ITEMS: TxItem[] = [
-  {
-    id: "tx_101",
-    status: "COMPLETED",
-    totalAmount: 16215,
-    listingPrice: 14500,
-    ilolitFee: 995,
-    createdAt: "2026-08-18",
-    paidAt: "2026-08-18",
-    listing: { title: "Zara Elegáns Bőrdzseki M-es", id: "list_1" },
-    buyer: { username: "Kovács Anna" },
-    seller: { username: "HoldfényVándor_21" }
-  },
-  {
-    id: "tx_102",
-    status: "COMPLETED",
-    totalAmount: 24370,
-    listingPrice: 22000,
-    ilolitFee: 1370,
-    createdAt: "2026-08-15",
-    paidAt: "2026-08-15",
-    listing: { title: "Nike Air Force 1 Sárga Sneaker (38)", id: "list_2" },
-    buyer: { username: "HoldfényVándor_21" },
-    seller: { username: "Molnár Balázs" }
-  }
-];
-
 export function DashboardTransactions() {
   const [role, setRole] = useState<"buyer" | "seller">("buyer");
   const qc = useQueryClient();
@@ -222,7 +195,7 @@ export function DashboardTransactions() {
   };
 
   const rawItems = (data as unknown as { items?: TxItem[] } | undefined)?.items;
-  const items = (rawItems && rawItems.length > 0) ? rawItems : MOCK_TX_ITEMS;
+  const items = rawItems ?? [];
   const payout = payoutSummary as unknown as {
     pendingEscrow?: number;
     confirmedPayout?: number;
