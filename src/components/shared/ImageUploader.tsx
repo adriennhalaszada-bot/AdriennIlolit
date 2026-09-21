@@ -21,6 +21,7 @@ export function ImageUploader({
   videoUrl = "",
   onVideoChange
 }: ImageUploaderProps) {
+  const images = Array.isArray(value) ? value : [];
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
   const [videoUploading, setVideoUploading] = useState(false);
@@ -29,9 +30,9 @@ export function ImageUploader({
   const isImageFile = (file: File): boolean => {
     if (!file) return false;
     if (file.type && file.type.startsWith("image/")) return true;
-    if (file.type && (file.type.includes("heic") || file.type.includes("heif"))) return true;
+    if (file.type && (file.type.includes("heic") || file.type.includes("heif"))) return false;
     const name = file.name?.toLowerCase() || "";
-    return /\.(jpe?g|png|gif|webp|heic|heif|avif|bmp|svg)$/i.test(name) || !file.type;
+    return /\.(jpe?g|png|gif|webp|avif)$/i.test(name);
   };
 
   const processFileToUrl = async (file: File): Promise<string> => {
@@ -51,7 +52,7 @@ export function ImageUploader({
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const remaining = maxImages - value.length;
+    const remaining = maxImages - images.length;
     if (remaining <= 0) {
       toast({ title: `Maximum ${maxImages} fotó tölthető fel`, variant: "destructive" });
       return;
@@ -60,23 +61,28 @@ export function ImageUploader({
     const toUpload = Array.from(files).slice(0, remaining);
     setUploading(true);
 
+    const newUrls: string[] = [];
+    const failures: string[] = [];
     try {
-      const newUrls: string[] = [];
       for (const file of toUpload) {
         if (!isImageFile(file)) {
-          toast({ title: `${file.name} nem támogatott képfájl`, variant: "destructive" });
+          failures.push(`${file.name}: csak JPG, PNG, WebP, GIF vagy AVIF tölthető fel`);
           continue;
         }
-
-        const url = await processFileToUrl(file);
-        if (url) {
-          newUrls.push(url);
+        try {
+          const url = await processFileToUrl(file);
+          if (url) newUrls.push(url);
+        } catch (error) {
+          failures.push(`${file.name}: ${error instanceof Error ? error.message : "feltöltési hiba"}`);
         }
       }
 
       if (newUrls.length > 0) {
-        onChange([...value, ...newUrls]);
+        onChange([...images, ...newUrls]);
         toast({ title: "Fotók sikeresen hozzáadva!" });
+      }
+      if (failures.length > 0) {
+        toast({ title: `${failures.length} fájl nem tölthető fel`, description: failures.join("; "), variant: "destructive" });
       }
     } catch (err: any) {
       toast({ title: "Feltöltési hiba", description: err?.message || "Kérjük próbáld újra a fotók kiválasztását.", variant: "destructive" });
@@ -141,7 +147,7 @@ export function ImageUploader({
   };
 
   const removeImage = (idx: number) => {
-    onChange(value.filter((_, i) => i !== idx));
+    onChange(images.filter((_, i) => i !== idx));
   };
 
   const handleDragStart = useCallback((idx: number, e: React.DragEvent) => {
@@ -162,13 +168,13 @@ export function ImageUploader({
       setOverIndex(null);
       return;
     }
-    const newOrder = [...value];
+    const newOrder = [...images];
     const [moved] = newOrder.splice(dragIndex, 1);
     newOrder.splice(idx, 0, moved);
     onChange(newOrder);
     setDragIndex(null);
     setOverIndex(null);
-  }, [dragIndex, value, onChange]);
+  }, [dragIndex, images, onChange]);
 
   const handleDragEnd = useCallback(() => {
     setDragIndex(null);
@@ -182,18 +188,18 @@ export function ImageUploader({
         <div className="flex items-center justify-between">
           <label className="text-xs font-black uppercase text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
             <span>📸 Termékfotók</span>
-            <span className="text-slate-400 font-normal">({value.length} / max. {maxImages} fotó)</span>
+            <span className="text-slate-400 font-normal">({images.length} / max. {maxImages} fotó)</span>
           </label>
         </div>
 
-        {value.length > 1 && (
+        {images.length > 1 && (
           <p className="text-xs text-muted-foreground flex items-center gap-1">
             <GripVertical className="w-3 h-3" /> Húzd a képeket a sorrend megváltoztatásához
           </p>
         )}
 
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-          {value.map((url, idx) => (
+          {images.map((url, idx) => (
             <div
               key={url}
               draggable
