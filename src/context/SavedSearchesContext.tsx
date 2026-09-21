@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { customFetch } from "@workspace/api-client-react";
 
 export interface SavedSearchItem {
   id: string;
@@ -26,71 +27,26 @@ interface SavedSearchesContextType {
   isSearchSaved: (title: string) => boolean;
 }
 
-const STORAGE_KEY = "ilolit_saved_searches_v1";
-
-const INITIAL_MOCK_SAVED_SEARCHES: SavedSearchItem[] = [
-  {
-    id: "ss-1",
-    title: "Eladó családi ház Miskolcon, 90 millió Ft alatt",
-    module: "realestate",
-    query: "",
-    location: "Miskolc",
-    maxPrice: 90000000,
-    filtersSummary: "Ingatlanok · Miskolc · Max 90M Ft",
-    url: "/real-estate?city=Miskolc&maxPrice=90000000",
-    notifyWeb: true,
-    notifyEmail: true,
-    savedAt: "2026-09-01T12:00:00Z",
-    matchCount: 8
-  },
-  {
-    id: "ss-2",
-    title: "BMW 3-as sorozat 2018 után, 10 millió Ft alatt",
-    module: "vehicles",
-    query: "BMW 3",
-    maxPrice: 10000000,
-    filtersSummary: "Járművek · BMW 3-as · Max 10M Ft · 2018+",
-    url: "/vehicles?brand=BMW&model=3-as+sorozat&maxPrice=10000000&minYear=2018",
-    notifyWeb: true,
-    notifyEmail: false,
-    savedAt: "2026-09-02T16:20:00Z",
-    matchCount: 4
-  },
-  {
-    id: "ss-3",
-    title: "Kozmetikus Miskolcon 10 km-en belül",
-    module: "beauty",
-    query: "kozmetikus",
-    location: "Miskolc",
-    radiusKm: 10,
-    filtersSummary: "Szépségipar · Kozmetikus · Miskolc (+10 km)",
-    url: "/beauty?city=Miskolc&mode=radius&radius=10&query=kozmetikus",
-    notifyWeb: true,
-    notifyEmail: true,
-    savedAt: "2026-09-03T10:10:00Z",
-    matchCount: 12
-  }
-];
-
 const SavedSearchesContext = createContext<SavedSearchesContextType | undefined>(undefined);
 
 export function SavedSearchesProvider({ children }: { children: React.ReactNode }) {
-  const [savedSearches, setSavedSearches] = useState<SavedSearchItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.warn("Could not load saved searches:", e);
-    }
-    return INITIAL_MOCK_SAVED_SEARCHES;
-  });
+  const [savedSearches, setSavedSearches] = useState<SavedSearchItem[]>([]);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(savedSearches));
-    } catch (e) {
-      console.warn("Could not save searches:", e);
-    }
+    customFetch<{ items: SavedSearchItem[] }>("/api/preferences/saved-searches")
+      .then((data) => setSavedSearches(Array.isArray(data.items) ? data.items : []))
+      .catch(() => setSavedSearches([]))
+      .finally(() => setHydrated(true));
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    customFetch("/api/preferences/saved-searches", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: savedSearches }),
+    }).catch((error) => console.warn("A mentett keresések mentése sikertelen:", error));
   }, [savedSearches]);
 
   const addSavedSearch = (search: Omit<SavedSearchItem, "id" | "savedAt">) => {
@@ -98,7 +54,7 @@ export function SavedSearchesProvider({ children }: { children: React.ReactNode 
       ...search,
       id: "ss-" + Date.now(),
       savedAt: new Date().toISOString(),
-      matchCount: Math.floor(Math.random() * 8) + 2
+      matchCount: search.matchCount
     };
     setSavedSearches((prev) => [newItem, ...prev]);
   };
