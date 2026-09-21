@@ -10,6 +10,7 @@ interface Env {
 type Context = EventContext<Env, string, Record<string, unknown>>;
 const PROVIDER_PREFIX = "data/providers/";
 const BOOKING_PREFIX = "data/bookings/";
+const LISTING_PREFIX = "data/listings/";
 
 function json(data: unknown, status = 200) {
   return Response.json(data, {
@@ -95,6 +96,23 @@ async function updateBookingPayment(env: Env, bookingId: string, payment: Record
   return updated;
 }
 
+async function activateListingPromotion(env: Env, listingId: string, days: number, payment: Record<string, unknown>) {
+  const key = `${LISTING_PREFIX}${listingId}.json`;
+  const object = await env.MEDIA_BUCKET.get(key);
+  if (!object) return null;
+  const listing = await object.json<any>();
+  const startsAt = new Date();
+  const currentEnd = listing.featuredUntil ? new Date(listing.featuredUntil) : null;
+  if (currentEnd && currentEnd > startsAt) startsAt.setTime(currentEnd.getTime());
+  const featuredUntil = new Date(startsAt.getTime() + days * 86400000).toISOString();
+  const updated = { ...listing, featuredUntil, promotionPayment: payment, updatedAt: new Date().toISOString() };
+  await env.MEDIA_BUCKET.put(key, JSON.stringify(updated), {
+    httpMetadata: { contentType: "application/json" },
+    customMetadata: { owner: listing.userId, updatedAt: updated.updatedAt },
+  });
+  return updated;
+}
+
 export const onRequest: PagesFunction<Env> = async (rawContext) => {
   const context = rawContext as Context;
   if (context.request.method === "OPTIONS") return json(null, 204);
@@ -109,6 +127,14 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     const object = event?.data?.object || {};
     if (event.type === "checkout.session.completed" && object.metadata?.kind === "booking_deposit" && object.metadata?.bookingId) {
       await updateBookingPayment(context.env, object.metadata.bookingId, {
+        status: object.payment_status === "paid" ? "paid" : "pending",
+        amount: Number(object.amount_total || 0),
+        stripeCheckoutSessionId: object.id || "",
+        stripePaymentIntentId: object.payment_intent || "",
+        paidAt: object.payment_status === "paid" ? new Date().toISOString() : undefined,
+      });
+    } else if (event.type === "checkout.session.completed" && object.metadata?.kind === "listing_promotion" && object.metadata?.listingId) {
+      await activateListingPromotion(context.env, object.metadata.listingId, Number(object.metadata.days) === 7 ? 7 : 1, {
         status: object.payment_status === "paid" ? "paid" : "pending",
         amount: Number(object.amount_total || 0),
         stripeCheckoutSessionId: object.id || "",
@@ -150,6 +176,45 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
   }
   const userId = await currentUserId(context.request, context.env);
   if (!userId) return json({ error: "A fizetéshez jelentkezz be." }, 401);
+  if (route[0] === "listing-promotion" && context.request.method === "POST") {
+    try {
+      const body = await context.request.json<{ listingId?: string; days?: number }>();
+      const listingId = typeof body.listingId === "string" ? body.listingId.trim().slice(0, 160) : "";
+      const days = Number(body.days) === 7 ? 7 : Number(body.days) === 1 ? 1 : 0;
+      if (!listingId || !days) return json({ error: "Érvénytelen kiemelési adatok." }, 400);
+      const object = await context.env.MEDIA_BUCKET.get(`${LISTING_PREFIX}${listingId}.json`);
+      if (!object) return json({ error: "A hirdetés nem található." }, 404);
+      const listing = await object.json<any>();
+      if (listing.userId !== userId) return json({ error: "Csak a saját hirdetésedet emelheted ki." }, 403);
+      if (listing.status !== "ACTIVE" || listing.isSold) return json({ error: "Csak aktív hirdetés emelhető ki." }, 409);
+      const amount = days === 7 ? 990 : 199;
+      const origin = new URL(context.request.url).origin;
+      const form = new URLSearchParams({
+        mode: "payment",
+        client_reference_id: userId,
+        "line_items[0][quantity]": "1",
+        "line_items[0][price_data][currency]": "huf",
+        "line_items[0][price_data][unit_amount]": String(amount),
+        "line_items[0][price_data][product_data][name]": `ILOLIT Top kiemelés – ${days} nap`,
+        "metadata[kind]": "listing_promotion",
+        "metadata[listingId]": listingId,
+        "metadata[ownerId]": userId,
+        "metadata[days]": String(days),
+        success_url: `${origin}/dashboard/listings?promotion=success`,
+        cancel_url: `${origin}/product/${encodeURIComponent(listingId)}?promotion=cancelled`,
+      });
+      const response = await stripeRequest(context.env, "/checkout/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: form,
+      });
+      const session = await response.json<any>();
+      if (!response.ok || !session.url) return json({ error: session?.error?.message || "A kiemelés fizetése nem indítható." }, 502);
+      return json({ checkoutUrl: session.url });
+    } catch (error: any) {
+      return json({ error: error?.message || "A kiemelés fizetése sikertelen." }, 500);
+    }
+  }
   if (route[0] === "booking-deposit") {
     try {
       if (context.request.method === "POST" && route.length === 1) {
