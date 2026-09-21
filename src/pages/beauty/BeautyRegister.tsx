@@ -336,7 +336,7 @@ export function BeautyRegister() {
                 />
 
                 <div className="space-y-2">
-                  <FormLabel className="font-bold text-slate-700">Profil / Szalon Kép</FormLabel>
+                  <label className="block text-sm font-bold text-slate-700">Profil / Szalon Kép</label>
                   <ImageUploader
                     value={profileImageUrl ? [profileImageUrl] : []}
                     onChange={(urls) => form.setValue("profileImageUrl", urls[0] || "")}
