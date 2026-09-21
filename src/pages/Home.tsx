@@ -61,49 +61,8 @@ interface ShowcaseItem {
   specs?: string[];
 }
 
-const MOCK_SHOWCASE_DATA: Record<ShowcaseTab, ShowcaseItem[]> = {
-  marketplace: [
-    { id: "m1", title: "Zara Elegáns Bőrdzseki M-es", price: 14500, location: "Budapest", imageUrl: "https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=600&q=80", subtitle: "Alig használt női bőrdzseki", badgeText: "Eladó" },
-    { id: "m2", title: "Canon AE-1 Analog Kamera", price: 45000, location: "Győr", imageUrl: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=600&q=80", subtitle: "Kiváló állapotú vintage kamera", badgeText: "Aukció" },
-    { id: "m3", title: "Sony WH-1000XM5 Fejhallgató", price: 95000, location: "Debrecen", imageUrl: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=600&q=80", subtitle: "Zajszűrős vezeték nélküli fejhallgató", badgeText: "Alkuképes" },
-    { id: "m4", title: "Nike Air Force 1 Sneaker (38)", price: 22000, location: "Szeged", imageUrl: "https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&w=600&q=80", subtitle: "Új címkés eredeti sneaker", badgeText: "Új" },
-  ],
-  beauty: [
-    { id: "b1", title: "Glamour Nail & Lash Stúdió", price: "9 500 Ft-tól", location: "Budapest V. kerület", imageUrl: "https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&w=600&q=80", subtitle: "Manikűr, műköröm és szempilla építés", rating: 4.9, reviewCount: 128 },
-    { id: "b2", title: "Chic Hair & Balayage Bar", price: "18 000 Ft-tól", location: "Budapest VI. kerület", imageUrl: "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=600&q=80", subtitle: "Fodrászat & prémium hajfestés", rating: 5.0, reviewCount: 89 },
-    { id: "b3", title: "Aura Premium Skin & Facials", price: "15 000 Ft-tól", location: "Budapest II. kerület", imageUrl: "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=600&q=80", subtitle: "Arckezelés & orvoskozmetika", rating: 4.8, reviewCount: 52 },
-    { id: "b4", title: "Dyson Airwrap Complete Long", price: "145 000 Ft", location: "Eladó Termék", imageUrl: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=600&q=80", subtitle: "Szépségápolási készülék garanciával", rating: 4.9, reviewCount: 34 },
-  ],
-  services: [
-    { id: "s1", title: "ProFix Felújítás & Klíma", price: "Egyedi ajánlat", location: "Pest megye & Budapest", imageUrl: "https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=600&q=80", subtitle: "Építőipar, lakásfelújítás és klímaszerelés", rating: 4.8, reviewCount: 64, isVerified: true },
-    { id: "s2", title: "Kovács Villanyszerelés", price: "8 000 Ft/óra", location: "Budapest & Környéke", imageUrl: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80", subtitle: "Teljes körű villanyszerelési munkák", rating: 4.9, reviewCount: 112, isVerified: true },
-    { id: "s3", title: "Express Költöztetés & Fuvar", price: "12 000 Ft/óra", location: "Országos lefedettség", imageUrl: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=600&q=80", subtitle: "Költöztetés, fuvarszervezés és raktározás", rating: 5.0, reviewCount: 45, isVerified: true },
-    { id: "s4", title: "PixelCraft Web & Design", price: "Egyedi ajánlat", location: "Online / Remote", imageUrl: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=600&q=80", subtitle: "Weboldal készítés & digitális marketing", rating: 4.9, reviewCount: 38, isVerified: true },
-  ],
-  realestate: [
-    { id: "prop-miskolc-1", title: "Felújított Tégla Lakás a Váci Utcában", price: "68.9 M Ft", location: "Budapest V. kerület", imageUrl: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=600&q=80", subtitle: "54 m² · 2 Szoba · 3. emelet", specs: ["54 m²", "2 szoba", "Tégla"] },
-    { id: "prop-kazinc-1", title: "Kertvárosi Családi Ház Garázzsal", price: "92.0 M Ft", location: "Budapest XVI. kerület", imageUrl: "https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=600&q=80", subtitle: "140 m² · 4 Szoba · 650 m² telek", specs: ["140 m²", "4 szoba", "Garázs"] },
-    { id: "prop-debrecen-1", title: "Modern Kiadó Studio Panorámával", price: "240 000 Ft/hó", location: "Budapest XI. kerület", imageUrl: "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=600&q=80", subtitle: "38 m² · 1 Szoba · Erkéllyel", specs: ["38 m²", "Kiadó", "Erkély"] },
-    { id: "prop-1", title: "Balatoni Vízparti Nyaraló Terasszal", price: "115.0 M Ft", location: "Siófok", imageUrl: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=600&q=80", subtitle: "85 m² · 3 Szoba · Közvetlen vízpart", specs: ["85 m²", "Vízparti", "Terasz"] },
-  ],
-  vehicles: [
-    { id: "car-miskolc-bmw", title: "BMW 320i M Sport Line (2022)", price: "11.8 M Ft", location: "Budapest", imageUrl: "https://images.unsplash.com/photo-1555215695-3004980ad54e?auto=format&fit=crop&w=600&q=80", subtitle: "42 000 km · Benzin · Automata", specs: ["2022", "42 000 km", "Benzin"] },
-    { id: "car-miskolc-audi", title: "Audi A6 Avant 50 TDI Quattro", price: "14.5 M Ft", location: "Győr", imageUrl: "https://images.unsplash.com/photo-1603584173870-7f23fdae1b7a?auto=format&fit=crop&w=600&q=80", subtitle: "78 000 km · Dízeles · Automata", specs: ["2021", "78 000 km", "Dízel"] },
-    { id: "car-debrecen-mercedes", title: "Volkswagen Golf VII 1.4 TSI", price: "4.9 M Ft", location: "Kecskemét", imageUrl: "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?auto=format&fit=crop&w=600&q=80", subtitle: "115 000 km · Benzin · Manuális", specs: ["2017", "115 000 km", "Benzin"] },
-    { id: "car-1", title: "Yamaha MT-07 ABS Motorkerékpár", price: "2.8 M Ft", location: "Székesfehérvár", imageUrl: "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=600&q=80", subtitle: "12 500 km · 689 cc · 2021", specs: ["2021", "12 500 km", "Motor"] },
-  ],
-  education: [
-    { id: "e1", title: "Mesteri Balayage & Színkeverési Technikák", price: "Ingyenes", location: "Online kurzus", imageUrl: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=600&q=80", subtitle: "6 órás gyakorlati videóképzés szalonfodrászoknak", specs: ["6 óra", "Kvíz", "Oklevél"] },
-    { id: "e2", title: "Digitális Piactéri Értékesítés Stratégiák", price: "Ingyenes", location: "Online kurzus", imageUrl: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=600&q=80", subtitle: "E-Commerce Akadémia eladóknak és kereskedőknek", specs: ["4 modul", "Interaktív"] },
-    { id: "e3", title: "Ingatlan Befektetési És Értékbecslési Alapok", price: "Ingyenes", location: "Online kurzus", imageUrl: "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=600&q=80", subtitle: "Gyakorlati ingatlanpiaci elemző és értékbecslő tanfolyam", specs: ["Ingatlan", "Elemzés"] },
-    { id: "e4", title: "Gépjármű Műszaki Állapotfelmérés Útmutató", price: "Ingyenes", location: "Online kurzus", imageUrl: "https://images.unsplash.com/photo-1555215695-3004980ad54e?auto=format&fit=crop&w=600&q=80", subtitle: "AutoExpert műszaki és rétegvastagság-mérési útmutató", specs: ["Jármű", "Útmutató"] },
-  ],
-};
-
-type ShowcaseTab = "marketplace" | "beauty" | "services" | "realestate" | "vehicles" | "education";
 
 export function Home() {
-  const [activeTab, setActiveTab] = useState<ShowcaseTab>("marketplace");
   const [searchValue, setSearchValue] = useState("");
   const [locationValue, setLocationValue] = useState("");
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
@@ -123,9 +82,7 @@ export function Home() {
     subtitle: listing.description || listing.category?.name || "Piactéri hirdetés",
     badgeText: listing.listingType === "AUCTION" ? "Licit" : listing.listingType === "NEGOTIABLE" ? "Alkuképes" : "Fix áras",
   }));
-  const showcaseItems = activeTab === "marketplace"
-    ? liveMarketplaceItems
-    : MOCK_SHOWCASE_DATA[activeTab] || [];
+  const showcaseItems = liveMarketplaceItems;
 
   return (
     <Layout>
@@ -246,50 +203,28 @@ export function Home() {
         </div>
       </section>
 
-      {/* ── 3. DYNAMIC SHOWCASE SECTION WITH TABBED LISTINGS ── */}
+      {/* ── 3. LIVE MARKETPLACE LISTINGS ── */}
       <section className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
           <div>
             <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-              Kiemelt Ajánlatok
+              Legfrissebb hirdetések
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Böngéssz az egyes modulok legfrissebb találatai között.
+              Valódi, jelenleg aktív piactéri hirdetések.
             </p>
           </div>
-
-          {/* Module Switcher Tabs */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-            {[
-              { id: "marketplace", label: "Piactér" },
-              { id: "beauty", label: "Szépségipar" },
-              { id: "services", label: "Szolgáltatások" },
-              { id: "realestate", label: "Ingatlanok" },
-              { id: "vehicles", label: "Járművek" },
-              { id: "education", label: "Oktatás" },
-            ].map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setActiveTab(t.id as ShowcaseTab)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition border ${
-                  activeTab === t.id
-                    ? "bg-emerald-600 text-white border-emerald-600"
-                    : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          <Button asChild variant="outline" className="rounded-xl font-bold">
+            <Link href="/marketplace">Összes hirdetés</Link>
+          </Button>
         </div>
 
         {/* Listings Grid */}
-        {activeTab === "marketplace" && isLoadingMarketplace ? (
+        {isLoadingMarketplace ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm font-semibold text-slate-600">
             A legfrissebb hirdetések betöltése…
           </div>
-        ) : activeTab === "marketplace" && hasMarketplaceError ? (
+        ) : hasMarketplaceError ? (
           <div className="rounded-2xl border border-rose-200 bg-white p-10 text-center text-sm font-semibold text-rose-700">
             A hirdetéseket most nem sikerült betölteni.
           </div>
@@ -308,21 +243,13 @@ export function Home() {
               location={item.location}
               subtitle={item.subtitle}
               imageUrl={item.imageUrl}
-              moduleKey={activeTab}
+              moduleKey="marketplace"
               badgeText={item.badgeText}
               rating={item.rating}
               reviewCount={item.reviewCount}
               isVerified={item.isVerified}
               specs={item.specs}
-              href={
-                activeTab === "marketplace"
-                  ? `/product/${item.id}`
-                  : activeTab === "realestate"
-                  ? `/real-estate?id=${item.id}`
-                  : activeTab === "vehicles"
-                  ? `/vehicles?id=${item.id}`
-                  : `/${activeTab}`
-              }
+              href={`/product/${item.id}`}
             />
           ))}
           </div>
