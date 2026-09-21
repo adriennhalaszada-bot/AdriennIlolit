@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useAuth } from "@clerk/react";
 import { Layout } from "@/components/layout/Layout";
 import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ type SubscriptionTier = "FREE" | "BASIC" | "PRO" | "PREMIUM";
 export function GeneralProviderRegister() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [isSaving, setIsSaving] = useState(false);
@@ -35,6 +37,10 @@ export function GeneralProviderRegister() {
 
   // Subscription state
   const [tier, setTier] = useState<SubscriptionTier>("PRO");
+
+  useEffect(() => {
+    if (isAuthLoaded && !isSignedIn) setLocation("/auth/login");
+  }, [isAuthLoaded, isSignedIn, setLocation]);
 
   // Subcategories for active category
   const selectedCategoryObj = ALL_PROVIDER_CATEGORIES.find(c => c.name === category);
@@ -63,6 +69,11 @@ export function GeneralProviderRegister() {
 
   const handleFinishRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAuthLoaded || !isSignedIn) {
+      toast({ title: "Jelentkezz be a vállalkozói fiók létrehozásához", variant: "destructive" });
+      setLocation("/auth/login");
+      return;
+    }
     setIsSaving(true);
     try {
       await saveMyProviderProfile({
