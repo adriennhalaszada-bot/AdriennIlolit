@@ -12,12 +12,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { ImageUploader } from "@/components/shared/ImageUploader";
 import { HU_COUNTIES, HU_CITIES_BY_COUNTY } from "@/lib/beautyConstants";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sparkles, ArrowLeft, Check, CreditCard, Loader2 } from "lucide-react";
+import { Sparkles, ArrowLeft, Check, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUser } from "@clerk/react";
 import { useToast } from "@/hooks/use-toast";
 import { getMyProviderProfile, saveMyProviderProfile } from "@/lib/providerApi";
-import { confirmProviderSubscription, createProviderSubscriptionCheckout, type SubscriptionPlan } from "@/lib/billingApi";
+import { confirmProviderSubscription, type SubscriptionPlan } from "@/lib/billingApi";
 import { Badge } from "@/components/ui/badge";
 import { ALL_PROVIDER_CATEGORIES } from "@/data/allProvidersData";
 
@@ -155,9 +155,11 @@ export function BeautyRegister() {
         slots: [],
         isPublished: false,
       });
-      const checkout = await createProviderSubscriptionCheckout(selectedTier, email);
-      if (!checkout.checkoutUrl) throw new Error("A Stripe fizetési oldal nem indítható.");
-      window.location.assign(checkout.checkoutUrl);
+      toast({
+        title: "A szépségipari szolgáltatói fiókod elkészült",
+        description: "Most add hozzá a szolgáltatásaidat, képeidet, videódat és foglalható időpontjaidat.",
+      });
+      setLocation("/providers/dashboard");
     } catch (err: any) {
       toast({
         title: "Hiba történt",
@@ -352,9 +354,9 @@ export function BeautyRegister() {
         ) : (
           <div className="bg-white dark:bg-slate-900 border rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
             <div className="text-center space-y-2 border-b pb-6">
-              <h2 className="text-2xl font-black text-slate-900 dark:text-slate-100">Előfizetés és biztonságos fizetés</h2>
+              <h2 className="text-2xl font-black text-slate-900 dark:text-slate-100">Profil létrehozása</h2>
               <p className="text-sm text-slate-500">
-                Válassz csomagot. A bankkártyás fizetés a Stripe biztonságos oldalán történik.
+                Először ingyenesen létrehozzuk a szerkeszthető vállalkozói profilodat. Fizetés csak a nyilvános közzététel aktiválásakor szükséges.
               </p>
             </div>
 
@@ -383,11 +385,11 @@ export function BeautyRegister() {
 
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
               <div className="flex items-start gap-3">
-                <CreditCard className="mt-0.5 h-5 w-5 flex-none text-emerald-600" />
+                <Check className="mt-0.5 h-5 w-5 flex-none text-emerald-600" />
                 <div>
-                  <p className="font-extrabold text-slate-900 dark:text-slate-100">Stripe Checkout</p>
+                  <p className="font-extrabold text-slate-900 dark:text-slate-100">Szerkeszthető szolgáltatói admin</p>
                   <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                    {form.getValues("specialty")} · {form.getValues("county")}, {form.getValues("region")}. A kártyaszámot kizárólag a Stripe kezeli; az ILOLIT nem látja és nem tárolja. Sikeres fizetés után automatikusan visszatérsz a vezérlőpultra.
+                    {form.getValues("specialty")} · {form.getValues("county")}, {form.getValues("region")}. A következő oldalon szolgáltatásokat, árakat, idősávokat, képeket, videót, betűtípust és megjelenést állíthatsz be.
                   </p>
                 </div>
               </div>
@@ -398,7 +400,7 @@ export function BeautyRegister() {
                 Vissza
               </Button>
               <Button disabled={isSaving} onClick={form.handleSubmit(onSubmit)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl py-6 text-base shadow-md">
-                {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Átirányítás...</> : "Tovább a biztonságos fizetéshez"}
+                {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Profil létrehozása...</> : "Szolgáltatói profil létrehozása"}
               </Button>
             </div>
           </div>
