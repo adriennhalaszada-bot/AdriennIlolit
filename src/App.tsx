@@ -119,7 +119,7 @@ function ClerkTokenSetter() {
       // Remove the legacy demo-login flag. Authentication must come from a
       // real Clerk session so protected API requests receive a valid JWT.
       localStorage.removeItem("ilolit_auth");
-      setAuthTokenGetter(() => getToken());
+      setAuthTokenGetter((options) => getToken(options));
       return () => setAuthTokenGetter(null);
     }, [getToken]);
   } catch (e) {
