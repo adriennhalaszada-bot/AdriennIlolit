@@ -5,6 +5,7 @@ import {
   useCreateListing, useUpdateListing, useGetListing, getGetListingQueryKey,
   useGetCategories, getGetCategoriesQueryKey,
   useGetMe, getGetMeQueryKey,
+  customFetch,
 } from "@workspace/api-client-react";
 import { queryClient } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
@@ -110,16 +111,30 @@ const STEPS = [
 
 function LolitTopModal({ listingId, onClose }: { listingId: string; onClose: () => void }) {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [selected, setSelected] = useState<"1" | "7" | null>(null);
+  const [isStartingPayment, setIsStartingPayment] = useState(false);
 
   const handleSkip = () => {
     onClose();
     setLocation(`/product/${listingId}`);
   };
 
-  const handlePromote = () => {
-    onClose();
-    setLocation(`/product/${listingId}`);
+  const handlePromote = async () => {
+    if (!selected || isStartingPayment) return;
+    setIsStartingPayment(true);
+    try {
+      const result = await customFetch<{ checkoutUrl: string }>("/api/billing/listing-promotion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listingId, days: Number(selected) }),
+      });
+      if (!result.checkoutUrl) throw new Error("A Stripe fizetési oldal nem indítható.");
+      window.location.assign(result.checkoutUrl);
+    } catch (error: any) {
+      toast({ title: "A kiemelés nem indítható", description: error?.message || "Próbáld újra később.", variant: "destructive" });
+      setIsStartingPayment(false);
+    }
   };
 
   return (
@@ -182,15 +197,13 @@ function LolitTopModal({ listingId, onClose }: { listingId: string; onClose: () 
           </Button>
           <Button
             className="flex-1 bg-amber-400 hover:bg-amber-500 text-black font-semibold"
-            disabled={!selected}
+            disabled={!selected || isStartingPayment}
             onClick={handlePromote}
           >
-            <Star className="w-4 h-4 mr-1" /> Kiemelem
+            <Star className="w-4 h-4 mr-1" /> {isStartingPayment ? "Stripe megnyitása…" : "Kiemelem"}
           </Button>
         </div>
-        <p className="text-[11px] text-center text-muted-foreground mt-3">
-          A fizetési integráció hamarosan elérhető
-        </p>
+        <p className="text-[11px] text-center text-muted-foreground mt-3">Biztonságos bankkártyás fizetés a Stripe oldalán.</p>
       </div>
     </div>
   );
