@@ -6,7 +6,7 @@ export type ErrorType<T = unknown> = ApiError<T>;
 
 export type BodyType<T> = T;
 
-export type AuthTokenGetter = () => Promise<string | null> | string | null;
+export type AuthTokenGetter = (options?: { skipCache?: boolean }) => Promise<string | null> | string | null;
 
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
@@ -89,6 +89,10 @@ function mergeHeaders(...sources: Array<HeadersInit | undefined>): Headers {
   }
 
   return headers;
+}
+
+function headersInitHasAuthorization(source: HeadersInit | undefined): boolean {
+  return source ? new Headers(source).has("authorization") : false;
 }
 
 function getMediaType(headers: Headers): string | null {
@@ -360,7 +364,19 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  let response = await fetch(input, { ...init, method, headers });
+
+  // Clerk session tokens are short lived. A tab left open for a while can
+  // therefore receive a 401 even though the user is still signed in. Refresh
+  // the token once and repeat the request; Blob/File and string bodies can be
+  // sent again safely. Never loop and never retry an explicitly supplied token.
+  if (response.status === 401 && _authTokenGetter && !headersInitHasAuthorization(headersInit)) {
+    const freshToken = await _authTokenGetter({ skipCache: true });
+    if (freshToken) {
+      headers.set("authorization", `Bearer ${freshToken}`);
+      response = await fetch(input, { ...init, method, headers });
+    }
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
@@ -369,4 +385,3 @@ export async function customFetch<T = unknown>(
 
   return (await parseSuccessBody(response, responseType, requestInfo)) as T;
 }
-
