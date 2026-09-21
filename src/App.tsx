@@ -44,7 +44,6 @@ import { BusinessCommissionDashboard } from "./pages/BusinessCommissionDashboard
 import { AdminCategoriesPage } from "./pages/AdminCategories";
 import { AdminDisputes } from "./pages/AdminDisputes";
 import { MediaManagerPage } from "./pages/MediaManagerPage";
-import { BeautyDevRoadmap } from "./components/beauty/BeautyDevRoadmap";
 import RealEstate from "./pages/RealEstate";
 import Vehicles from "./pages/Vehicles";
 import NotFound from "./pages/not-found";
@@ -331,7 +330,7 @@ function AppRouterInner() {
       <Route path="/beauty/:id" component={BeautyProviderProfile} />
       <Route path="/interactive-calendar"><Redirect to="/providers/dashboard" /></Route>
       <Route path="/media-manager" component={MediaManagerPage} />
-      <Route path="/beauty/roadmap" component={BeautyDevRoadmap} />
+      <Route path="/beauty/roadmap"><Redirect to="/beauty" /></Route>
       <Route path="/admin/categories" component={AdminCategoriesPage} />
       <Route path="/admin/disputes" component={AdminDisputes} />
 
@@ -443,7 +442,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v8.0_20260921_live_provider_flows";
+    const CURRENT_VER = "v8.1_20260921_stripe_promotions";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);
