@@ -109,6 +109,7 @@ function normalize(input: any, id: string, ownerId: string, existing?: any) {
     profileImages,
     publishPortfolio: input.publishPortfolio === true,
     themeId: text(input.themeId, 40) || "emerald",
+    fontFamily: text(input.fontFamily, 80) || text(existing?.fontFamily, 80) || "Inter",
     services,
     slots,
     subscription: existing?.subscription,
