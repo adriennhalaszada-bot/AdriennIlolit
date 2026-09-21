@@ -43,7 +43,6 @@ import { ShopPage } from "./pages/ShopPage";
 import { BusinessCommissionDashboard } from "./pages/BusinessCommissionDashboard";
 import { AdminCategoriesPage } from "./pages/AdminCategories";
 import { AdminDisputes } from "./pages/AdminDisputes";
-import { InteractiveCalendarBookingApp } from "./pages/InteractiveCalendarBookingApp";
 import { MediaManagerPage } from "./pages/MediaManagerPage";
 import { BeautyDevRoadmap } from "./components/beauty/BeautyDevRoadmap";
 import RealEstate from "./pages/RealEstate";
@@ -277,7 +276,7 @@ function AppRouterInner() {
       <Route path="/universal-search" component={UniversalSearch} />
       <Route path="/search" component={Search} />
       <Route path="/marketplace" component={Search} />
-      <Route path="/booking" component={InteractiveCalendarBookingApp} />
+      <Route path="/booking"><Redirect to="/providers" /></Route>
       <Route path="/providers/register" component={GeneralProviderRegister} />
       <Route path="/providers/dashboard" component={GeneralProviderDashboard} />
       <Route path="/providers/:id" component={BeautyProviderProfile} />
@@ -330,7 +329,7 @@ function AppRouterInner() {
       <Route path="/beauty/bookings" component={BeautyMyBookings} />
       <Route path="/beauty/:id/book/:serviceId" component={BeautyBookingRedirect} />
       <Route path="/beauty/:id" component={BeautyProviderProfile} />
-      <Route path="/interactive-calendar" component={InteractiveCalendarBookingApp} />
+      <Route path="/interactive-calendar"><Redirect to="/providers/dashboard" /></Route>
       <Route path="/media-manager" component={MediaManagerPage} />
       <Route path="/beauty/roadmap" component={BeautyDevRoadmap} />
       <Route path="/admin/categories" component={AdminCategoriesPage} />
@@ -444,7 +443,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v7.9_20260921_server_preferences";
+    const CURRENT_VER = "v8.0_20260921_live_provider_flows";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);
