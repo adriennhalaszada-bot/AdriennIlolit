@@ -311,6 +311,7 @@ function AppRouterInner() {
       <Route path="/messages/:id" component={Chat} />
 
       <Route path="/product/:id" component={Product} />
+      <Route path="/checkout/:listingId" component={Checkout} />
       <Route path="/sell" component={Sell} />
       <Route path="/sell/:id/edit" component={Sell} />
       <Route path="/profile" component={SettingsProfile} />
@@ -442,7 +443,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v8.1_20260921_stripe_promotions";
+    const CURRENT_VER = "v8.2_20260921_marketplace_checkout";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);
