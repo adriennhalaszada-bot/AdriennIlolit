@@ -13,6 +13,7 @@ import { ALL_PROVIDER_CATEGORIES } from "@/data/allProvidersData";
 import { Sparkles, Eye, Briefcase, CalendarDays, Bell, Check, X, Video, ShieldCheck, Clock, Settings, Palette, Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/lib/constants";
+import { FONT_OPTIONS } from "@/lib/beautyConstants";
 import { getMyProviderProfile, saveMyProviderProfile } from "@/lib/providerApi";
 import { getMyProviderBookings, respondToProviderBooking, type ProviderBookingRecord } from "@/lib/providerBookingApi";
 import { createProviderBillingPortal } from "@/lib/billingApi";
@@ -39,6 +40,7 @@ export function GeneralProviderDashboard() {
   const [profileImages, setProfileImages] = useState<string[]>([]);
   const [publishPortfolio, setPublishPortfolio] = useState(false);
   const [themeId, setThemeId] = useState("emerald");
+  const [fontFamily, setFontFamily] = useState("Inter");
   const [subscriptionStatus, setSubscriptionStatus] = useState<string>("inactive");
   const [subscriptionPlan, setSubscriptionPlan] = useState<string>("");
   const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string>("");
@@ -101,6 +103,7 @@ export function GeneralProviderDashboard() {
         setProfileImages(profile.profileImages?.length ? profile.profileImages : profile.profileImage ? [profile.profileImage] : []);
         setPublishPortfolio(profile.publishPortfolio === true);
         setThemeId(profile.themeId);
+        setFontFamily(profile.fontFamily || "Inter");
         setSubscriptionStatus(profile.subscription?.status || "inactive");
         setSubscriptionPlan(profile.subscription?.plan || "");
         setSubscriptionEndsAt(profile.subscription?.currentPeriodEnd || "");
@@ -141,7 +144,7 @@ export function GeneralProviderDashboard() {
     try {
       const saved = await saveMyProviderProfile({
         displayName, category, subCategory, city, region, address, phone, email, bio,
-        videoUrl, profileImage: profileImages[0] || "", profileImages, publishPortfolio, themeId, slots: customSlots,
+        videoUrl, profileImage: profileImages[0] || "", profileImages, publishPortfolio, themeId, fontFamily, slots: customSlots,
         services: services.map((service) => ({
           ...service,
           requiresDeposit: service.deposit > 0,
@@ -700,6 +703,19 @@ export function GeneralProviderDashboard() {
                     <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">Prémium exkluzív megjelenés VIP szolgáltatóknak.</p>
                   </div>
                 </div>
+              </div>
+
+              <div className="rounded-2xl border bg-slate-50 p-4">
+                <label className="text-xs font-black text-slate-800">Saját betűtípus</label>
+                <p className="mt-1 text-xs text-slate-500">A kiválasztott betűtípus a nyilvános bemutatkozó oldalon jelenik meg.</p>
+                <select
+                  value={fontFamily}
+                  onChange={(event) => setFontFamily(event.target.value)}
+                  className="mt-3 h-11 w-full rounded-xl border bg-white px-3 text-sm font-bold"
+                  style={{ fontFamily }}
+                >
+                  {FONT_OPTIONS.map((font) => <option key={font.value} value={font.value}>{font.label}</option>)}
+                </select>
               </div>
             </Card>
           </TabsContent>
