@@ -48,7 +48,6 @@ import { MediaManagerPage } from "./pages/MediaManagerPage";
 import { BeautyDevRoadmap } from "./components/beauty/BeautyDevRoadmap";
 import RealEstate from "./pages/RealEstate";
 import Vehicles from "./pages/Vehicles";
-import VehiclesDashboard from "./pages/VehiclesDashboard";
 import NotFound from "./pages/not-found";
 import { UniversalSearch } from "./pages/UniversalSearch";
 import { FavoritesProvider } from "./context/FavoritesContext";
@@ -295,7 +294,7 @@ function AppRouterInner() {
       <Route path="/jarmuvek" component={Vehicles} />
       <Route path="/jarmu" component={Vehicles} />
       <Route path="/autok" component={Vehicles} />
-      <Route path="/vehicles/dashboard" component={VehiclesDashboard} />
+      <Route path="/vehicles/dashboard"><Redirect to="/dashboard/listings" /></Route>
 
       <Route path="/education" component={EducationPage} />
       <Route path="/oktatas" component={EducationPage} />
@@ -445,7 +444,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v7.7_20260921_live_real_estate";
+    const CURRENT_VER = "v7.8_20260921_live_vehicles";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);
