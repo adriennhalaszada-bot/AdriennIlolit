@@ -128,6 +128,7 @@ export function BeautyProviderProfile() {
       title: `${storedProvider.displayName} portfólió ${index + 1}`,
     })),
     templateId: storedProvider.themeId === "gold" ? "template2" : storedProvider.themeId === "steel" ? "template3" : "template1",
+    fontFamily: storedProvider.fontFamily || "Inter",
     videoUrl: storedProvider.videoUrl,
     profession: storedProvider.subCategory || storedProvider.category,
     workingHours: Array.from(new Set(storedProvider.slots.map((slot) => slot.day))).map((day) => {
