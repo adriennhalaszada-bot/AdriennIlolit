@@ -6,6 +6,7 @@ import {
   useGetTransactions,
   getGetTransactionsQueryKey,
   useInitiatePayment,
+  customFetch,
 } from "@workspace/api-client-react";
 import { useParams, useLocation, useSearch } from "wouter";
 import { useState, useCallback } from "react";
@@ -110,47 +111,30 @@ export function Checkout() {
   > | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [transactionId, setTransactionId] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const handleProceedToPayment = useCallback(async () => {
     if (!listing) return;
-
+    setCheckoutError(null);
+    setIsRedirecting(true);
     try {
-      const draftTransaction =
-        draftTransactions?.items?.find((t) => t.status === "PENDING") ?? null;
-
-      let txId: string;
-
-      if (draftTransaction) {
-        txId = draftTransaction.id;
-      } else {
-        const tx = await createTransaction.mutateAsync({
-          data: {
-            listingId: listing.id,
-            isIlolitActive: true,
-            paymentMethod: "card",
-            shippingAddress: "Budapest",
-          },
-        });
-        txId = (tx as unknown as { id: string }).id;
-      }
-
-      setTransactionId(txId);
-
-      const piResult = await initiatePayment.mutateAsync({ id: txId, data: { channel: "web" } });
-      const pi = piResult as unknown as {
-        clientSecret: string;
-        publishableKey: string;
-        checkoutUrl: string;
-      };
-
-      const stripeInstance = loadStripe(pi.publishableKey);
-      setStripePromise(stripeInstance);
-      setClientSecret(pi.clientSecret);
-      setStep("payment");
-    } catch {
-      /* errors shown by mutation state */
+      const result = await customFetch<{ checkoutUrl: string; transactionId: string }>("/api/billing/marketplace-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listingId: listing.id,
+          parcelPoint: selectedParcelPoint,
+          shippingAddress: selectedParcelPoint?.address || "Személyes átvétel",
+        }),
+      });
+      if (!result.checkoutUrl) throw new Error("A Stripe fizetési oldal nem indítható.");
+      window.location.assign(result.checkoutUrl);
+    } catch (error: any) {
+      setCheckoutError(error?.message || "A fizetés előkészítése sikertelen.");
+      setIsRedirecting(false);
     }
-  }, [listing, draftTransactions, createTransaction, initiatePayment]);
+  }, [listing, selectedParcelPoint]);
 
   if (isLoading || !listing || (hasNegotiatedPrice && isDraftLoading))
     return (
@@ -271,12 +255,12 @@ export function Checkout() {
             className="w-full h-12 text-lg"
             onClick={handleProceedToPayment}
             disabled={
-              createTransaction.isPending || initiatePayment.isPending
+              createTransaction.isPending || initiatePayment.isPending || isRedirecting
             }
           >
             <CreditCard className="w-5 h-5 mr-2" />
-            {createTransaction.isPending || initiatePayment.isPending
-              ? "Előkészítés…"
+            {createTransaction.isPending || initiatePayment.isPending || isRedirecting
+              ? "Stripe megnyitása…"
               : `Tovább a fizetéshez (${formatPrice(total)})`}
           </Button>
         )}
@@ -303,6 +287,7 @@ export function Checkout() {
             Hiba történt. Kérjük próbáld újra.
           </p>
         )}
+        {checkoutError && <p className="text-sm text-destructive mt-3 text-center">{checkoutError}</p>}
       </div>
     </Layout>
   );
