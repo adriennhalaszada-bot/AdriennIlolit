@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "@clerk/react";
 import { useLocation, Link } from "wouter";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { createProviderBillingPortal } from "@/lib/billingApi";
 export function GeneralProviderDashboard() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const { isLoaded: isAuthLoaded, isSignedIn } = useAuth();
   const [providerId, setProviderId] = useState<string | null>(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -74,6 +76,13 @@ export function GeneralProviderDashboard() {
   };
 
   useEffect(() => {
+    if (!isAuthLoaded) return;
+    if (!isSignedIn) {
+      setIsLoadingProfile(false);
+      setIsLoadingBookings(false);
+      setLocation("/auth/login");
+      return;
+    }
     let active = true;
     getMyProviderProfile()
       .then((profile) => {
@@ -107,10 +116,17 @@ export function GeneralProviderDashboard() {
         })));
         setCustomSlots(profile.slots);
       })
-      .catch(() => {})
+      .catch((error) => {
+        if (!active) return;
+        toast({
+          title: "A vállalkozói profil nem tölthető be",
+          description: error instanceof Error ? error.message : "Próbálj meg ismét bejelentkezni.",
+          variant: "destructive",
+        });
+      })
       .finally(() => active && setIsLoadingProfile(false));
     return () => { active = false; };
-  }, []);
+  }, [isAuthLoaded, isSignedIn, setLocation, toast]);
 
   const handleSaveProfile = async () => {
     if (!displayName.trim() || !category || !subCategory || !city.trim() || !phone.trim() || !email.trim()) {
@@ -205,13 +221,21 @@ export function GeneralProviderDashboard() {
   const [bookings, setBookings] = useState<ProviderBookingRecord[]>([]);
 
   useEffect(() => {
+    if (!isAuthLoaded || !isSignedIn) return;
     let active = true;
     getMyProviderBookings()
       .then(({ items }) => active && setBookings(items.filter((booking) => booking.role === "provider")))
-      .catch(() => {})
+      .catch((error) => {
+        if (!active) return;
+        toast({
+          title: "A foglalások nem tölthetők be",
+          description: error instanceof Error ? error.message : "Próbáld újra később.",
+          variant: "destructive",
+        });
+      })
       .finally(() => active && setIsLoadingBookings(false));
     return () => { active = false; };
-  }, []);
+  }, [isAuthLoaded, isSignedIn, toast]);
 
   const handleAddService = (e: React.FormEvent) => {
     e.preventDefault();
