@@ -11,6 +11,7 @@ type Context = EventContext<Env, string, Record<string, unknown>>;
 const PROVIDER_PREFIX = "data/providers/";
 const BOOKING_PREFIX = "data/bookings/";
 const LISTING_PREFIX = "data/listings/";
+const TRANSACTION_PREFIX = "data/transactions/";
 
 function json(data: unknown, status = 200) {
   return Response.json(data, {
@@ -113,6 +114,31 @@ async function activateListingPromotion(env: Env, listingId: string, days: numbe
   return updated;
 }
 
+async function completeMarketplacePayment(env: Env, transactionId: string, session: any) {
+  const key = `${TRANSACTION_PREFIX}${transactionId}.json`;
+  const object = await env.MEDIA_BUCKET.get(key);
+  if (!object) return null;
+  const tx = await object.json<any>();
+  if (tx.status === "PAID_PENDING_CONFIRMATION" || tx.status === "COMPLETED") return tx;
+  const updatedAt = new Date().toISOString();
+  const updated = { ...tx, status: "PAID_PENDING_CONFIRMATION", paidAt: updatedAt, updatedAt,
+    stripeCheckoutSessionId: session.id || "", stripePaymentIntentId: session.payment_intent || "" };
+  await env.MEDIA_BUCKET.put(key, JSON.stringify(updated), {
+    httpMetadata: { contentType: "application/json" },
+    customMetadata: { buyerId: tx.buyerId, sellerId: tx.sellerId, status: updated.status },
+  });
+  const listingKey = `${LISTING_PREFIX}${tx.listingId}.json`;
+  const listingObject = await env.MEDIA_BUCKET.get(listingKey);
+  if (listingObject) {
+    const listing = await listingObject.json<any>();
+    await env.MEDIA_BUCKET.put(listingKey, JSON.stringify({ ...listing, isSold: true, status: "SOLD", soldAt: updatedAt, updatedAt }), {
+      httpMetadata: { contentType: "application/json" },
+      customMetadata: { owner: listing.userId, updatedAt },
+    });
+  }
+  return updated;
+}
+
 export const onRequest: PagesFunction<Env> = async (rawContext) => {
   const context = rawContext as Context;
   if (context.request.method === "OPTIONS") return json(null, 204);
@@ -141,6 +167,8 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         stripePaymentIntentId: object.payment_intent || "",
         paidAt: object.payment_status === "paid" ? new Date().toISOString() : undefined,
       });
+    } else if (event.type === "checkout.session.completed" && object.metadata?.kind === "marketplace_purchase" && object.metadata?.transactionId) {
+      if (object.payment_status === "paid") await completeMarketplacePayment(context.env, object.metadata.transactionId, object);
     } else if (event.type === "checkout.session.completed" && object.client_reference_id) {
       await updateSubscription(context.env, object.client_reference_id, {
         status: "active",
@@ -176,6 +204,71 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
   }
   const userId = await currentUserId(context.request, context.env);
   if (!userId) return json({ error: "A fizetéshez jelentkezz be." }, 401);
+  if (route[0] === "marketplace-checkout" && context.request.method === "POST") {
+    try {
+      const body = await context.request.json<{ listingId?: string; shippingAddress?: string; parcelPoint?: any }>();
+      const listingId = typeof body.listingId === "string" ? body.listingId.trim().slice(0, 160) : "";
+      const listingObject = listingId ? await context.env.MEDIA_BUCKET.get(`${LISTING_PREFIX}${listingId}.json`) : null;
+      if (!listingObject) return json({ error: "A hirdetés nem található." }, 404);
+      const listing = await listingObject.json<any>();
+      if (listing.userId === userId) return json({ error: "A saját hirdetésedet nem vásárolhatod meg." }, 409);
+      if (listing.status !== "ACTIVE" || listing.isSold) return json({ error: "A hirdetés már nem vásárolható meg." }, 409);
+      const existing = (await context.env.MEDIA_BUCKET.list({ prefix: TRANSACTION_PREFIX, limit: 1000 })).objects;
+      for (const item of existing) {
+        const object = await context.env.MEDIA_BUCKET.get(item.key);
+        const tx = object ? await object.json<any>() : null;
+        if (tx?.listingId === listingId && ["PAYMENT_PENDING", "PAID_PENDING_CONFIRMATION", "DISPUTED"].includes(tx.status)) {
+          return json({ error: "Ehhez a hirdetéshez már tartozik folyamatban lévő vásárlás." }, 409);
+        }
+      }
+      const listingPrice = Math.max(0, Math.round(Number(listing.price) || 0));
+      if (!listingPrice) return json({ error: "A hirdetés ára érvénytelen." }, 409);
+      const ilolitFee = Math.round(listingPrice * 0.05 + 280);
+      const shippingFee = Array.isArray(listing.shippingModes) && listing.shippingModes.includes("local_pickup") && !body.parcelPoint ? 0 : 990;
+      const totalAmount = listingPrice + ilolitFee + shippingFee;
+      const commission = Math.round(listingPrice * 0.02);
+      const transactionId = crypto.randomUUID();
+      const now = new Date().toISOString();
+      const tx = {
+        id: transactionId, listingId, buyerId: userId, sellerId: listing.userId,
+        status: "PAYMENT_PENDING", listingPrice, ilolitFee, shippingFee, totalAmount,
+        sellerCommission: commission, sellerPayout: listingPrice - commission, currency: "HUF",
+        shippingAddress: typeof body.shippingAddress === "string" ? body.shippingAddress.trim().slice(0, 500) : "",
+        parcelPoint: body.parcelPoint && typeof body.parcelPoint === "object" ? body.parcelPoint : null,
+        listing: { id: listing.id, title: listing.title, image: listing.images?.[0]?.url || "" },
+        buyer: { id: userId, username: null }, seller: { id: listing.userId, username: listing.user?.username || null },
+        createdAt: now, updatedAt: now,
+      };
+      await context.env.MEDIA_BUCKET.put(`${TRANSACTION_PREFIX}${transactionId}.json`, JSON.stringify(tx), {
+        httpMetadata: { contentType: "application/json" },
+        customMetadata: { buyerId: userId, sellerId: listing.userId, status: tx.status },
+      });
+      const origin = new URL(context.request.url).origin;
+      const form = new URLSearchParams({
+        mode: "payment", client_reference_id: userId,
+        "line_items[0][quantity]": "1", "line_items[0][price_data][currency]": "huf",
+        "line_items[0][price_data][unit_amount]": String(totalAmount),
+        "line_items[0][price_data][product_data][name]": `ILOLIT vásárlás – ${String(listing.title).slice(0, 120)}`,
+        "metadata[kind]": "marketplace_purchase", "metadata[transactionId]": transactionId,
+        "metadata[listingId]": listingId, "metadata[buyerId]": userId, "metadata[sellerId]": listing.userId,
+        success_url: `${origin}/checkout/success?tx=${transactionId}&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/checkout/cancel?tx=${transactionId}`,
+      });
+      const response = await stripeRequest(context.env, "/checkout/sessions", {
+        method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: form,
+      });
+      const session = await response.json<any>();
+      if (!response.ok || !session.url) return json({ error: session?.error?.message || "A fizetés nem indítható." }, 502);
+      tx.stripeCheckoutSessionId = session.id;
+      await context.env.MEDIA_BUCKET.put(`${TRANSACTION_PREFIX}${transactionId}.json`, JSON.stringify(tx), {
+        httpMetadata: { contentType: "application/json" },
+        customMetadata: { buyerId: userId, sellerId: listing.userId, status: tx.status },
+      });
+      return json({ checkoutUrl: session.url, transactionId });
+    } catch (error: any) {
+      return json({ error: error?.message || "A vásárlás előkészítése sikertelen." }, 500);
+    }
+  }
   if (route[0] === "listing-promotion" && context.request.method === "POST") {
     try {
       const body = await context.request.json<{ listingId?: string; days?: number }>();
