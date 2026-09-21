@@ -47,7 +47,6 @@ import { InteractiveCalendarBookingApp } from "./pages/InteractiveCalendarBookin
 import { MediaManagerPage } from "./pages/MediaManagerPage";
 import { BeautyDevRoadmap } from "./components/beauty/BeautyDevRoadmap";
 import RealEstate from "./pages/RealEstate";
-import RealEstateDashboard from "./pages/RealEstateDashboard";
 import Vehicles from "./pages/Vehicles";
 import VehiclesDashboard from "./pages/VehiclesDashboard";
 import NotFound from "./pages/not-found";
@@ -290,7 +289,7 @@ function AppRouterInner() {
       <Route path="/realestate" component={RealEstate} />
       <Route path="/ingatlan" component={RealEstate} />
       <Route path="/ingatlanok" component={RealEstate} />
-      <Route path="/real-estate/dashboard" component={RealEstateDashboard} />
+      <Route path="/real-estate/dashboard"><Redirect to="/dashboard/listings" /></Route>
 
       <Route path="/vehicles" component={Vehicles} />
       <Route path="/jarmuvek" component={Vehicles} />
@@ -446,7 +445,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v7.6_20260921_live_universal_search";
+    const CURRENT_VER = "v7.7_20260921_live_real_estate";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);
