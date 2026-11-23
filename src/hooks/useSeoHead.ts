@@ -73,7 +73,7 @@ const SEO_ROUTES: Record<string, { title: string; description: string }> = {
 };
 
 const DEFAULT_META = {
-  title: "ILOLIT | Minden, amire szükséged lehet – egy helyen",
+  title: "ILOLIT | Minden, amit keresel – egy helyen.",
   description: "Fedezd fel az ILOLIT világát: piactér, szépségipar, szolgáltatások, ingatlanok, járművek és interaktív oktatás egyetlen platformon.",
 };
 

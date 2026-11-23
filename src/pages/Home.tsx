@@ -96,7 +96,7 @@ export function Home() {
             </div>
             <div className="space-y-4">
               <h1 className="max-w-4xl text-4xl font-black tracking-tight text-slate-950 sm:text-5xl lg:text-6xl">
-                Amit keresel, intézd el egy helyen.
+                Minden, amit keresel – egy helyen.
               </h1>
               <p className="max-w-3xl text-base leading-relaxed text-slate-600 sm:text-lg">
                 Vásárolj és adj el, foglalj időpontot, találj szakembert, ingatlant,

@@ -75,7 +75,7 @@ const CLOTHING_SLUGS = ["noi-ruha", "ferfi-ruha", "gyerekruha", "cipo", "kiegesz
 const schema = z.object({
   title: z.string().min(3, "Legalább 3 karakter").max(100, "Max. 100 karakter"),
   description: z.string().min(10, "Legalább 10 karakter").max(5000, "Max. 5000 karakter"),
-  price: z.coerce.number().min(100, "Minimum 100 Ft").max(1000000, "Maximum 1.000.000 Ft").optional(),
+  price: z.coerce.number().finite("Érvényes összeget adj meg").min(100, "Minimum 100 Ft").optional(),
   condition: z.enum(["NEW_WITH_TAG", "NEW_WITHOUT_TAG", "VERY_GOOD", "GOOD", "ACCEPTABLE"]),
   categoryId: z.string().min(1, "Kötelező"),
   subcategoryId: z.string().nullable().optional(),
@@ -578,8 +578,8 @@ export function Sell() {
                   <FormField control={form.control} name="price" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Vételár (Ft)</FormLabel>
-                      <FormControl><Input type="number" min={100} max={1000000} placeholder="pl. 2500" {...field} /></FormControl>
-                      <p className="text-xs text-muted-foreground">Minimum 100 Ft · Maximum 1.000.000 Ft</p>
+                      <FormControl><Input type="number" min={100} placeholder="pl. 25 000 vagy 45 000 000" {...field} /></FormControl>
+                      <p className="text-xs text-muted-foreground">Minimum 100 Ft · Nincs felső összeghatár</p>
                       <FormMessage />
                     </FormItem>
                   )} />
