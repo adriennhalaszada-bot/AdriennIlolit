@@ -45,6 +45,10 @@ import { AdminCategoriesPage } from "./pages/AdminCategories";
 import { AdminDisputes } from "./pages/AdminDisputes";
 import { MediaManagerPage } from "./pages/MediaManagerPage";
 import RealEstate from "./pages/RealEstate";
+import RealEstateCreateWizard from "./pages/real-estate/RealEstateCreateWizard";
+import RealEstateDetail from "./pages/real-estate/RealEstateDetail";
+import RealEstateAdmin from "./pages/real-estate/RealEstateAdmin";
+import RealEstateMyViewings from "./pages/real-estate/RealEstateMyViewings";
 import Vehicles from "./pages/Vehicles";
 import NotFound from "./pages/not-found";
 import { UniversalSearch } from "./pages/UniversalSearch";
@@ -282,11 +286,17 @@ function AppRouterInner() {
       <Route path="/providers" component={ProvidersHome} />
       <Route path="/szolgaltatasok" component={ProvidersHome} />
 
+      <Route path="/real-estate/new" component={RealEstateCreateWizard} />
+      <Route path="/real-estate/admin/:id" component={RealEstateAdmin} />
+      <Route path="/real-estate/admin" component={RealEstateAdmin} />
+      <Route path="/real-estate/dashboard" component={RealEstateAdmin} />
+      <Route path="/real-estate/viewings" component={RealEstateMyViewings} />
+      <Route path="/real-estate/:id/edit" component={RealEstateCreateWizard} />
+      <Route path="/real-estate/:id" component={RealEstateDetail} />
       <Route path="/real-estate" component={RealEstate} />
       <Route path="/realestate" component={RealEstate} />
       <Route path="/ingatlan" component={RealEstate} />
       <Route path="/ingatlanok" component={RealEstate} />
-      <Route path="/real-estate/dashboard"><Redirect to="/dashboard/listings" /></Route>
 
       <Route path="/vehicles" component={Vehicles} />
       <Route path="/jarmuvek" component={Vehicles} />
@@ -443,7 +453,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v8.2_20260921_marketplace_checkout";
+    const CURRENT_VER = "v8.4_20261123_real_estate_redesign";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);

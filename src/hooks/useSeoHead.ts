@@ -26,6 +26,9 @@ const NOINDEX_ROUTES = [
   "/providers/dashboard",
   "/providers/register",
   "/real-estate/dashboard",
+  "/real-estate/admin",
+  "/real-estate/new",
+  "/real-estate/viewings",
   "/vehicles/dashboard",
   "/dashboard/commission",
 ];

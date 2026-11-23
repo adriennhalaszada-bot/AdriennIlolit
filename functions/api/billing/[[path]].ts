@@ -5,6 +5,7 @@ interface Env {
   CLERK_SECRET_KEY: string;
   STRIPE_SECRET_KEY: string;
   STRIPE_WEBHOOK_SECRET: string;
+  RENTAL_LISTING_FEE?: string;
 }
 
 type Context = EventContext<Env, string, Record<string, unknown>>;
@@ -12,6 +13,60 @@ const PROVIDER_PREFIX = "data/providers/";
 const BOOKING_PREFIX = "data/bookings/";
 const LISTING_PREFIX = "data/listings/";
 const TRANSACTION_PREFIX = "data/transactions/";
+const REAL_ESTATE_PREFIX = "data/real-estate/properties/";
+
+function computeRealEstateServerFee(transactionType: string, price: number, env: Env) {
+  if (transactionType === "rent") {
+    const parsed = env.RENTAL_LISTING_FEE !== undefined && env.RENTAL_LISTING_FEE !== "" ? Number(env.RENTAL_LISTING_FEE) : 499;
+    return {
+      fee: Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : 499,
+      tierLabel: "Kiadó ingatlan hirdetési díj (külön díjszabás)",
+    };
+  }
+  const safePrice = Math.max(0, Math.round(Number(price) || 0));
+  if (safePrice <= 10_000_000) return { fee: 499, tierLabel: "10 000 000 Ft-ig" };
+  if (safePrice <= 30_000_000) return { fee: 699, tierLabel: "10 000 001 – 30 000 000 Ft" };
+  if (safePrice <= 60_000_000) return { fee: 999, tierLabel: "30 000 001 – 60 000 000 Ft" };
+  return { fee: 1299, tierLabel: "60 000 001 Ft felett" };
+}
+
+async function activateRealEstateListing(env: Env, propertyId: string, session: any) {
+  const key = `${REAL_ESTATE_PREFIX}${propertyId}.json`;
+  const object = await env.MEDIA_BUCKET.get(key);
+  if (!object) return null;
+  const prop = await object.json<any>();
+  const now = new Date().toISOString();
+  const existingBilling = Array.isArray(prop.billing) ? prop.billing : [];
+  const alreadyRecorded = existingBilling.some((b: any) => b.stripeCheckoutSessionId === session.id && b.status === "paid");
+  const nextBilling = alreadyRecorded
+    ? existingBilling
+    : [
+        ...existingBilling.filter((b: any) => b.stripeCheckoutSessionId !== session.id),
+        {
+          id: crypto.randomUUID(),
+          amount: Number(session.amount_total || prop.listingFee || 0),
+          currency: "HUF",
+          status: "paid",
+          tierLabel: prop.listingFeeTier || "ILOLIT Ingatlan hirdetési díj",
+          stripeCheckoutSessionId: session.id || "",
+          stripePaymentIntentId: session.payment_intent || "",
+          createdAt: now,
+          paidAt: now,
+        },
+      ];
+  const updated = {
+    ...prop,
+    status: "ACTIVE",
+    activatedAt: prop.activatedAt || now,
+    billing: nextBilling,
+    updatedAt: now,
+  };
+  await env.MEDIA_BUCKET.put(key, JSON.stringify(updated), {
+    httpMetadata: { contentType: "application/json" },
+    customMetadata: { ownerId: prop.ownerId, status: updated.status },
+  });
+  return updated;
+}
 
 function json(data: unknown, status = 200) {
   return Response.json(data, {
@@ -169,6 +224,8 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       });
     } else if (event.type === "checkout.session.completed" && object.metadata?.kind === "marketplace_purchase" && object.metadata?.transactionId) {
       if (object.payment_status === "paid") await completeMarketplacePayment(context.env, object.metadata.transactionId, object);
+    } else if (event.type === "checkout.session.completed" && object.metadata?.kind === "real_estate_listing" && object.metadata?.propertyId) {
+      if (object.payment_status === "paid") await activateRealEstateListing(context.env, object.metadata.propertyId, object);
     } else if (event.type === "checkout.session.completed" && object.client_reference_id) {
       await updateSubscription(context.env, object.client_reference_id, {
         status: "active",
@@ -204,6 +261,116 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
   }
   const userId = await currentUserId(context.request, context.env);
   if (!userId) return json({ error: "A fizetéshez jelentkezz be." }, 401);
+  if (route[0] === "real-estate-checkout") {
+    try {
+      if (context.request.method === "POST" && route.length === 1) {
+        const body = await context.request.json<{ propertyId?: string }>();
+        const propertyId = typeof body.propertyId === "string" ? body.propertyId.trim().slice(0, 160) : "";
+        const propObj = propertyId ? await context.env.MEDIA_BUCKET.get(`${REAL_ESTATE_PREFIX}${propertyId}.json`) : null;
+        if (!propObj) return json({ error: "Az ingatlanhirdetés nem található." }, 404);
+        const prop = await propObj.json<any>();
+        if (prop.ownerId !== userId) return json({ error: "Csak a saját hirdetésedet fizetheted ki." }, 403);
+
+        // Always compute fee server-side from stored transactionType + price (user cannot override)
+        const { fee, tierLabel } = computeRealEstateServerFee(prop.transactionType, prop.price, context.env);
+        const now = new Date().toISOString();
+
+        if (fee <= 0) {
+          const updated = {
+            ...prop,
+            listingFee: 0,
+            listingFeeTier: tierLabel,
+            status: "ACTIVE",
+            activatedAt: prop.activatedAt || now,
+            updatedAt: now,
+          };
+          await context.env.MEDIA_BUCKET.put(`${REAL_ESTATE_PREFIX}${propertyId}.json`, JSON.stringify(updated), {
+            httpMetadata: { contentType: "application/json" },
+            customMetadata: { ownerId: prop.ownerId, status: "ACTIVE" },
+          });
+          return json({ activated: true, fee: 0, propertyId });
+        }
+
+        const origin = new URL(context.request.url).origin;
+        const form = new URLSearchParams({
+          mode: "payment",
+          client_reference_id: userId,
+          "line_items[0][quantity]": "1",
+          "line_items[0][price_data][currency]": "huf",
+          "line_items[0][price_data][unit_amount]": String(fee),
+          "line_items[0][price_data][product_data][name]": `ILOLIT Ingatlan hirdetési díj – ${tierLabel}`,
+          "metadata[kind]": "real_estate_listing",
+          "metadata[propertyId]": propertyId,
+          "metadata[ownerId]": userId,
+          "metadata[tierLabel]": tierLabel,
+          success_url: `${origin}/real-estate/admin/${encodeURIComponent(propertyId)}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${origin}/real-estate/admin/${encodeURIComponent(propertyId)}?payment=cancelled`,
+        });
+
+        const response = await stripeRequest(context.env, "/checkout/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: form,
+        });
+        const session = await response.json<any>();
+        if (!response.ok || !session.url) {
+          return json({ error: session?.error?.message || "A fizetési oldal nem indítható." }, 502);
+        }
+
+        const pendingBilling = [
+          ...(Array.isArray(prop.billing) ? prop.billing : []),
+          {
+            id: crypto.randomUUID(),
+            amount: fee,
+            currency: "HUF",
+            status: "pending",
+            tierLabel,
+            stripeCheckoutSessionId: session.id,
+            createdAt: now,
+          },
+        ];
+        await context.env.MEDIA_BUCKET.put(
+          `${REAL_ESTATE_PREFIX}${propertyId}.json`,
+          JSON.stringify({
+            ...prop,
+            listingFee: fee,
+            listingFeeTier: tierLabel,
+            status: prop.status === "ACTIVE" ? "ACTIVE" : "PAYMENT_PENDING",
+            billing: pendingBilling,
+            updatedAt: now,
+          }),
+          {
+            httpMetadata: { contentType: "application/json" },
+            customMetadata: { ownerId: prop.ownerId, status: "PAYMENT_PENDING" },
+          },
+        );
+        return json({ checkoutUrl: session.url, fee, propertyId });
+      }
+
+      if (context.request.method === "GET" && route[1] === "status") {
+        const sessionId = new URL(context.request.url).searchParams.get("session_id") || "";
+        if (!/^cs_(test_|live_)?[A-Za-z0-9]+$/.test(sessionId)) {
+          return json({ error: "Érvénytelen fizetési azonosító." }, 400);
+        }
+        const response = await stripeRequest(context.env, `/checkout/sessions/${encodeURIComponent(sessionId)}`);
+        const session = await response.json<any>();
+        if (!response.ok) return json({ error: session?.error?.message || "A fizetés nem ellenőrizhető." }, 502);
+        if (session.metadata?.kind !== "real_estate_listing" || session.metadata?.ownerId !== userId) {
+          return json({ error: "Ez a fizetés nem ehhez a fiókhoz tartozik." }, 403);
+        }
+        const paid = session.status === "complete" && session.payment_status === "paid";
+        const propertyId = String(session.metadata?.propertyId || "");
+        if (paid && propertyId) {
+          await activateRealEstateListing(context.env, propertyId, session);
+        }
+        return json({ paid, propertyId, status: paid ? "ACTIVE" : "PAYMENT_PENDING" });
+      }
+    } catch (error: any) {
+      return json({ error: error?.message || "Váratlan ingatlan-fizetési hiba történt." }, 500);
+    }
+    return json({ error: "Nem támogatott fizetési művelet." }, 405);
+  }
+
   if (route[0] === "marketplace-checkout" && context.request.method === "POST") {
     try {
       const body = await context.request.json<{ listingId?: string; shippingAddress?: string; parcelPoint?: any }>();

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Layout } from "@/components/layout/Layout";
 import {
@@ -214,6 +214,16 @@ export function Sell() {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id?: string }>();
   const isEdit = !!id;
+
+  // Real estate listings use the dedicated ILOLIT Ingatlan wizard (never marketplace shipping).
+  useEffect(() => {
+    if (isEdit) return;
+    const params = new URLSearchParams(window.location.search);
+    const slug = (params.get("categorySlug") || "").toLowerCase();
+    if (slug === "ingatlanok" || slug === "ingatlan" || slug === "real-estate") {
+      setLocation("/real-estate/new");
+    }
+  }, [isEdit, setLocation]);
   const [step, setStep] = useState(0);
   const [customSize, setCustomSize] = useState("");
   const [showCustomSize, setShowCustomSize] = useState(false);
@@ -303,6 +313,15 @@ export function Sell() {
       }));
 
   const selectedCategory = categories.find((c: any) => c.id === selectedCategoryId);
+
+  useEffect(() => {
+    if (isEdit) return;
+    const cid = String(selectedCategoryId || "").toLowerCase();
+    const cslug = String(selectedCategory?.slug || "").toLowerCase();
+    if (cid.startsWith("cat_ingatlan") || cslug === "ingatlanok") {
+      setLocation("/real-estate/new");
+    }
+  }, [isEdit, selectedCategoryId, selectedCategory?.slug, setLocation]);
   const subcategories: any[] = (selectedCategory as any)?.subcategories ?? [];
   const selectedSubcategoryId = form.watch("subcategoryId");
   const selectedSubcategory = subcategories.find((c: any) => c.id === selectedSubcategoryId);
