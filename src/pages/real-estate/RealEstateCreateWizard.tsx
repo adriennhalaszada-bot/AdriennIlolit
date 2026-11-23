@@ -179,10 +179,10 @@ export default function RealEstateCreateWizard() {
       }
     }
     if (step === 1) {
-      if (!exactAddress.postalCode.trim() || !exactAddress.city.trim() || !exactAddress.streetName.trim() || !exactAddress.houseNumber.trim()) {
+      if (!exactAddress.postalCode.trim() || !exactAddress.city.trim()) {
         toast({
           title: "Hiányzó címadatok",
-          description: "Az irányítószám, település, közterület neve és házszám megadása kötelező (a házszám nem lesz nyilvános).",
+          description: "Az irányítószám és a település megadása kötelező.",
           variant: "destructive",
         });
         return false;

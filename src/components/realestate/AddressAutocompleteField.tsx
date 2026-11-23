@@ -198,24 +198,24 @@ export function AddressAutocompleteField({
         )}
 
         <label className="block text-xs font-bold text-slate-700">
-          Közterület neve *
+          Közterület neve (opcionális)
           <input
             type="text"
             value={value.streetName}
             onChange={(e) => update({ streetName: e.target.value })}
             placeholder="pl. Váci, Kossuth Lajos"
             className={fieldCls}
-            required
           />
         </label>
 
         <label className="block text-xs font-bold text-slate-700">
-          Közterület jellege *
+          Közterület jellege (opcionális)
           <select
             value={value.streetType}
             onChange={(e) => update({ streetType: e.target.value })}
             className={fieldCls}
           >
+            <option value="">Nincs megadva</option>
             {STREET_TYPES.map((st) => (
               <option key={st} value={st}>
                 {st}
@@ -224,15 +224,52 @@ export function AddressAutocompleteField({
           </select>
         </label>
 
+        {/* Public visibility toggle for street name & type */}
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 sm:col-span-2">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <div className="text-xs">
+              <span className="font-bold text-slate-900">
+                Közterület neve és jellege láthatósága a publikus hirdetésben
+              </span>
+              <p className="mt-0.5 text-slate-500">
+                Te döntöd el, hogy a közterület megjelenjen-e nyilvánosan (házszám nélkül), vagy rejtve maradjon.
+              </p>
+            </div>
+            <div className="inline-flex shrink-0 rounded-xl border border-slate-200 bg-white p-1 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => update({ showPublicStreet: false })}
+                className={`rounded-lg px-3 py-1.5 transition ${
+                  !value.showPublicStreet
+                    ? "bg-emerald-600 text-white"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Rejtve marad
+              </button>
+              <button
+                type="button"
+                onClick={() => update({ showPublicStreet: true })}
+                className={`rounded-lg px-3 py-1.5 transition ${
+                  value.showPublicStreet
+                    ? "bg-emerald-600 text-white"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Megjelenhet
+              </button>
+            </div>
+          </div>
+        </div>
+
         <label className="block text-xs font-bold text-slate-700">
-          Házszám * (rejtve marad)
+          Házszám (opcionális – rejtve marad)
           <input
             type="text"
             value={value.houseNumber}
             onChange={(e) => update({ houseNumber: e.target.value })}
             placeholder="pl. 14/B"
             className={fieldCls}
-            required
           />
         </label>
 
@@ -260,22 +297,6 @@ export function AddressAutocompleteField({
           </label>
         )}
       </div>
-
-      {/* Optional public street toggle */}
-      <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-xs">
-        <input
-          type="checkbox"
-          checked={Boolean(value.showPublicStreet)}
-          onChange={(e) => update({ showPublicStreet: e.target.checked })}
-          className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-emerald-600"
-        />
-        <div>
-          <span className="font-bold text-slate-800">Az utcanév megjelenhet a publikus hirdetésben (házszám nélkül)</span>
-          <p className="mt-0.5 text-slate-500">
-            Ha nem jelölöd be, csak a település, kerület és városrész lesz nyilvános. A házszám sosem jelenik meg nyilvánosan.
-          </p>
-        </div>
-      </label>
 
       {/* Viewing instructions (only shown after approval) */}
       <label className="block text-xs font-bold text-slate-700">

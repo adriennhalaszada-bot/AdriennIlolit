@@ -538,8 +538,8 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       if (!price || price < 1000) {
         return json({ error: "Adj meg érvényes árat (legalább 1 000 Ft)." }, 400);
       }
-      if (!exactAddress.city || !exactAddress.postalCode || !exactAddress.streetName || !exactAddress.houseNumber) {
-        return json({ error: "A pontos cím (irányítószám, település, közterület neve, házszám) megadása kötelező." }, 400);
+      if (!exactAddress.city || !exactAddress.postalCode) {
+        return json({ error: "Az irányítószám és a település megadása kötelező." }, 400);
       }
 
       const id = crypto.randomUUID();
