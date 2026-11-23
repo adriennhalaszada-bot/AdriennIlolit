@@ -192,7 +192,7 @@ export function LocationSearchWidget({
               : "bg-white dark:bg-slate-900 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"
           }`}
         >
-          🏙️ Település szerint
+          Csak ezen a településen
         </button>
         <button
           type="button"
@@ -203,7 +203,7 @@ export function LocationSearchWidget({
               : "bg-white dark:bg-slate-900 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"
           }`}
         >
-          📍 Távolság szerint
+          Ettől a helytől X km-en belül
         </button>
       </div>
 
@@ -257,7 +257,7 @@ export function LocationSearchWidget({
             <option value="">Megyeszékhelyek gyorsválasztó...</option>
             {HUNGARIAN_COUNTY_SEATS.map((seat) => (
               <option key={seat} value={seat}>
-                📍 {seat}
+                {seat}
               </option>
             ))}
           </select>
@@ -276,7 +276,7 @@ export function LocationSearchWidget({
             <Navigation className="w-3.5 h-3.5" />
             {locationSearch.gpsStatus === "loading"
               ? "Helyzet meghatározása..."
-              : "📍 Saját településem"}
+              : "Saját településem"}
           </button>
 
           <GpsStatusBadge
@@ -333,7 +333,7 @@ export function LocationSearchWidget({
               className="mt-1.5 w-full flex items-center justify-center gap-2 py-1.5 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-60"
             >
               <Navigation className="w-3.5 h-3.5" />
-              📍 Jelenlegi helyzetem
+              Jelenlegi helyzetem
             </button>
 
             <GpsStatusBadge
