@@ -13,6 +13,7 @@ import type {
  */
 export const REAL_ESTATE_CONFIG = {
   rental_listing_fee: 499,
+  listingDurationDays: 30,
   recommendedMinPhotos: 5,
   maxPhotos: 25,
   maxFloorPlans: 5,

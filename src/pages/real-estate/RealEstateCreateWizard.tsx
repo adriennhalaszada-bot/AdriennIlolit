@@ -487,16 +487,20 @@ export default function RealEstateCreateWizard() {
                     </div>
                     <div className="text-left sm:text-right">
                       <p className="text-xs font-bold uppercase tracking-wider text-emerald-900/70">
-                        ILOLIT hirdetési díj
+                        ILOLIT hirdetési díj (30 napra)
                       </p>
-                      <p className="mt-0.5 text-2xl font-black text-emerald-700">{formatHuf(feeCalc.fee)}</p>
+                      <p className="mt-0.5 text-2xl font-black text-emerald-700">
+                        {formatHuf(feeCalc.fee)}{" "}
+                        <span className="text-sm font-bold text-emerald-800/80">/ 30 nap</span>
+                      </p>
                       <p className="text-[11px] font-semibold text-emerald-900/80">{feeCalc.tierLabel}</p>
                     </div>
                   </div>
                   <p className="mt-3 border-t border-emerald-200/80 pt-3 text-xs text-emerald-950/80">
-                    A hirdetési díjat a rendszer automatikusan számolja az ingatlan ára alapján. A sikeres fizetés
-                    után aktiválódik a hirdetésed, és automatikusan megnyílik a <strong>Saját Ingatlan Admin</strong>{" "}
-                    felület a megtekintési időpontok kezeléséhez.
+                    A hirdetési díjat a rendszer automatikusan számolja az ingatlan ára alapján, és{" "}
+                    <strong>30 napra érvényes</strong>. A 30 nap letelte után a hirdetés lejárt állapotba kerül, és
+                    ismételt befizetéssel újabb 30 napra hosszabbítható. A sikeres fizetés után automatikusan
+                    megnyílik a <strong>Saját Ingatlan Admin</strong> felület.
                   </p>
                 </div>
               </div>
@@ -1172,9 +1176,12 @@ export default function RealEstateCreateWizard() {
                     </div>
                     <div className="sm:text-right">
                       <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">
-                        ILOLIT hirdetési díj
+                        ILOLIT hirdetési díj (30 napra)
                       </p>
-                      <p className="mt-1 text-3xl font-black text-emerald-700">{formatHuf(feeCalc.fee)}</p>
+                      <p className="mt-1 text-3xl font-black text-emerald-700">
+                        {formatHuf(feeCalc.fee)}{" "}
+                        <span className="text-base font-bold text-emerald-800/80">/ 30 nap</span>
+                      </p>
                       <p className="text-xs font-semibold text-emerald-900/80">{feeCalc.tierLabel}</p>
                     </div>
                   </div>
@@ -1191,7 +1198,7 @@ export default function RealEstateCreateWizard() {
                           }`}
                         >
                           <p className="text-[11px]">{tier.range}</p>
-                          <p className="mt-0.5 font-black">{formatHuf(tier.fee)}</p>
+                          <p className="mt-0.5 font-black">{formatHuf(tier.fee)} / 30 nap</p>
                         </div>
                       ))}
                     </div>
@@ -1200,9 +1207,9 @@ export default function RealEstateCreateWizard() {
                   <div className="mt-4 flex items-start gap-2 text-xs text-emerald-950/80">
                     <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
                     <span>
-                      A díj tartalmazza a hirdetés aktiválását és a teljes <strong>Saját Ingatlan Admin</strong>{" "}
-                      felületet (megtekintési időpontkezelő, SMS-ellenőrzött érdeklődő-jóváhagyás, védett címmegosztás
-                      és statisztikák).
+                      A díj <strong>30 napos aktív hirdetési időszakot</strong> és a teljes{" "}
+                      <strong>Saját Ingatlan Admin</strong> felületet tartalmazza. 30 nap elteltével a hirdetés
+                      automatikusan lejár, és újabb fizetéssel hosszabbítható meg.
                     </span>
                   </div>
                 </div>
@@ -1245,8 +1252,8 @@ export default function RealEstateCreateWizard() {
                           <CreditCard className="mr-2 h-4 w-4" />
                         )}
                         {feeCalc.fee > 0
-                          ? `Fizetés és aktiválás (${formatHuf(feeCalc.fee)})`
-                          : "Hirdetés aktiválása"}
+                          ? `Fizetés és aktiválás 30 napra (${formatHuf(feeCalc.fee)})`
+                          : "Hirdetés aktiválása (30 napra)"}
                       </Button>
                     </>
                   )}

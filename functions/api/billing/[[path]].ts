@@ -30,6 +30,16 @@ function computeRealEstateServerFee(transactionType: string, price: number, env:
   return { fee: 1299, tierLabel: "60 000 001 Ft felett" };
 }
 
+const LISTING_PERIOD_DAYS = 30;
+const LISTING_PERIOD_MS = LISTING_PERIOD_DAYS * 86_400_000;
+
+function computeNextRealEstateExpiry(existingExpiresAt?: string | null): string {
+  const nowMs = Date.now();
+  const currentExpMs = existingExpiresAt ? new Date(existingExpiresAt).getTime() : 0;
+  const baseMs = Number.isFinite(currentExpMs) && currentExpMs > nowMs ? currentExpMs : nowMs;
+  return new Date(baseMs + LISTING_PERIOD_MS).toISOString();
+}
+
 async function activateRealEstateListing(env: Env, propertyId: string, session: any) {
   const key = `${REAL_ESTATE_PREFIX}${propertyId}.json`;
   const object = await env.MEDIA_BUCKET.get(key);
@@ -38,6 +48,9 @@ async function activateRealEstateListing(env: Env, propertyId: string, session: 
   const now = new Date().toISOString();
   const existingBilling = Array.isArray(prop.billing) ? prop.billing : [];
   const alreadyRecorded = existingBilling.some((b: any) => b.stripeCheckoutSessionId === session.id && b.status === "paid");
+  const nextExpiresAt = alreadyRecorded
+    ? prop.expiresAt || computeNextRealEstateExpiry(null)
+    : computeNextRealEstateExpiry(prop.expiresAt);
   const nextBilling = alreadyRecorded
     ? existingBilling
     : [
@@ -47,7 +60,9 @@ async function activateRealEstateListing(env: Env, propertyId: string, session: 
           amount: Number(session.amount_total || prop.listingFee || 0),
           currency: "HUF",
           status: "paid",
-          tierLabel: prop.listingFeeTier || "ILOLIT Ingatlan hirdetési díj",
+          tierLabel: `${prop.listingFeeTier || "ILOLIT Ingatlan hirdetési díj"} (30 nap)`,
+          periodDays: LISTING_PERIOD_DAYS,
+          expiresAt: nextExpiresAt,
           stripeCheckoutSessionId: session.id || "",
           stripePaymentIntentId: session.payment_intent || "",
           createdAt: now,
@@ -58,6 +73,7 @@ async function activateRealEstateListing(env: Env, propertyId: string, session: 
     ...prop,
     status: "ACTIVE",
     activatedAt: prop.activatedAt || now,
+    expiresAt: nextExpiresAt,
     billing: nextBilling,
     updatedAt: now,
   };
@@ -276,12 +292,14 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         const now = new Date().toISOString();
 
         if (fee <= 0) {
+          const nextExpiresAt = computeNextRealEstateExpiry(prop.expiresAt);
           const updated = {
             ...prop,
             listingFee: 0,
             listingFeeTier: tierLabel,
             status: "ACTIVE",
             activatedAt: prop.activatedAt || now,
+            expiresAt: nextExpiresAt,
             updatedAt: now,
           };
           await context.env.MEDIA_BUCKET.put(`${REAL_ESTATE_PREFIX}${propertyId}.json`, JSON.stringify(updated), {
@@ -298,11 +316,12 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           "line_items[0][quantity]": "1",
           "line_items[0][price_data][currency]": "huf",
           "line_items[0][price_data][unit_amount]": String(fee),
-          "line_items[0][price_data][product_data][name]": `ILOLIT Ingatlan hirdetési díj – ${tierLabel}`,
+          "line_items[0][price_data][product_data][name]": `ILOLIT Ingatlan hirdetési díj (30 nap) – ${tierLabel}`,
           "metadata[kind]": "real_estate_listing",
           "metadata[propertyId]": propertyId,
           "metadata[ownerId]": userId,
           "metadata[tierLabel]": tierLabel,
+          "metadata[periodDays]": String(LISTING_PERIOD_DAYS),
           success_url: `${origin}/real-estate/admin/${encodeURIComponent(propertyId)}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
           cancel_url: `${origin}/real-estate/admin/${encodeURIComponent(propertyId)}?payment=cancelled`,
         });

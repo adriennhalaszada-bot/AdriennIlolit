@@ -24,6 +24,42 @@ const NOTIFICATION_PREFIX = "data/real-estate/notifications/";
 const FAVORITE_PREFIX = "data/real-estate/favorites/";
 
 const DEFAULT_RENTAL_LISTING_FEE = 499;
+const LISTING_PERIOD_DAYS = 30;
+const LISTING_PERIOD_MS = LISTING_PERIOD_DAYS * 86_400_000;
+
+function computeNextExpiresAt(existingExpiresAt?: string | null): string {
+  const nowMs = Date.now();
+  const currentExpMs = existingExpiresAt ? new Date(existingExpiresAt).getTime() : 0;
+  const baseMs = Number.isFinite(currentExpMs) && currentExpMs > nowMs ? currentExpMs : nowMs;
+  return new Date(baseMs + LISTING_PERIOD_MS).toISOString();
+}
+
+function computeDaysRemaining(expiresAt?: string | null): number {
+  if (!expiresAt) return 0;
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  return diff > 0 ? Math.ceil(diff / 86_400_000) : 0;
+}
+
+async function enforceExpirationIfNeeded(env: Env, prop: any): Promise<any> {
+  if (!prop || prop.status !== "ACTIVE") return prop;
+  if (!prop.expiresAt) return prop;
+  const expMs = new Date(prop.expiresAt).getTime();
+  if (Number.isFinite(expMs) && expMs <= Date.now()) {
+    prop.status = "EXPIRED";
+    prop.updatedAt = new Date().toISOString();
+    await writeJson(env, `${PROPERTY_PREFIX}${prop.id}.json`, prop, {
+      ownerId: prop.ownerId,
+      status: "EXPIRED",
+    });
+    await pushNotification(env, prop.ownerId, {
+      type: "VIEWING_REVOKED",
+      title: "Ingatlanhirdetésed 30 napos időszaka lejárt",
+      body: `A(z) „${prop.title}” hirdetés lejárt. A Saját Ingatlan Adminban újabb 30 napra meghosszabbíthatod.`,
+      propertyId: prop.id,
+    });
+  }
+  return prop;
+}
 
 function json(data: unknown, status = 200): Response {
   return Response.json(data, {
@@ -270,6 +306,8 @@ function sanitizePropertyForViewer(
     isOwner,
     isFavorited: Boolean(favoriteSet?.has(prop.id)),
     activatedAt: prop.activatedAt,
+    expiresAt: prop.expiresAt,
+    daysRemaining: computeDaysRemaining(prop.expiresAt),
     createdAt: prop.createdAt,
     updatedAt: prop.updatedAt,
   };
@@ -426,11 +464,12 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       const txFilter = url.searchParams.get("transactionType");
       const catFilter = url.searchParams.get("category");
 
-      const [allProps, allViewings, userFavs] = await Promise.all([
+      const [rawProps, allViewings, userFavs] = await Promise.all([
         listAllProperties(env),
         listAllViewings(env),
         userId ? readJson<string[]>(env, `${FAVORITE_PREFIX}${userId}.json`) : Promise.resolve([]),
       ]);
+      const allProps = await Promise.all(rawProps.map((p) => enforceExpirationIfNeeded(env, p)));
 
       const favSet = new Set<string>(Array.isArray(userFavs) ? userFavs : []);
       const occupiedByProp = new Map<string, Set<string>>();
@@ -460,7 +499,8 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
 
     // GET /api/real-estate/properties/:id
     if (method === "GET" && propertyId && !sub) {
-      const prop = await readJson<any>(env, `${PROPERTY_PREFIX}${propertyId}.json`);
+      const rawProp = await readJson<any>(env, `${PROPERTY_PREFIX}${propertyId}.json`);
+      const prop = await enforceExpirationIfNeeded(env, rawProp);
       if (!prop || prop.status === "DELETED") {
         return json({ error: "Az ingatlanhirdetés nem található." }, 404);
       }
@@ -606,6 +646,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         },
         billing: [],
         activatedAt: initialStatus === "ACTIVE" ? now : undefined,
+        expiresAt: initialStatus === "ACTIVE" ? computeNextExpiresAt(null) : undefined,
         createdAt: now,
         updatedAt: now,
       };
@@ -706,10 +747,19 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       const allowed = new Set(["DRAFT", "PAYMENT_PENDING", "ACTIVE", "PAUSED", "SOLD", "RENTED", "EXPIRED", "DELETED"]);
       if (!allowed.has(nextStatus)) return json({ error: "Érvénytelen státusz." }, 400);
 
-      // Cannot manually force ACTIVE unless already paid (or fee is 0)
+      // Cannot manually force ACTIVE unless paid AND within active 30-day validity window
       const hasPaidBilling = Array.isArray(existing.billing) && existing.billing.some((b: any) => b.status === "paid");
-      if (nextStatus === "ACTIVE" && existing.listingFee > 0 && !hasPaidBilling && existing.status !== "PAUSED") {
-        return json({ error: "A hirdetés csak sikeres fizetés után aktiválható." }, 402);
+      const isStillValid = Boolean(existing.expiresAt && new Date(existing.expiresAt).getTime() > Date.now());
+      if (nextStatus === "ACTIVE" && existing.listingFee > 0 && (!hasPaidBilling || !isStillValid)) {
+        return json(
+          {
+            error:
+              existing.status === "EXPIRED" || !isStillValid
+                ? "A 30 napos hirdetési időszak lejárt. Az újbóli aktiváláshoz a hirdetési díj ismételt befizetése szükséges."
+                : "A hirdetés csak sikeres fizetés után aktiválható 30 napra.",
+          },
+          402,
+        );
       }
 
       existing.status = nextStatus;
@@ -736,25 +786,26 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       if (existing.ownerId !== userId) return json({ error: "Nincs jogosultságod." }, 403);
 
       const now = new Date().toISOString();
+      const nextExpiresAt = computeNextExpiresAt(existing.expiresAt);
       const billing = Array.isArray(existing.billing) ? existing.billing : [];
-      const alreadyHasTestPaid = billing.some((b: any) => b.status === "paid");
-      const nextBilling = alreadyHasTestPaid
-        ? billing
-        : [
-            ...billing,
-            {
-              id: crypto.randomUUID(),
-              amount: 0,
-              currency: "HUF",
-              status: "paid",
-              tierLabel: `Teszt üzemmód – próbaaktiválás (eredeti díj: ${existing.listingFee} Ft)`,
-              createdAt: now,
-              paidAt: now,
-            },
-          ];
+      const nextBilling = [
+        ...billing,
+        {
+          id: crypto.randomUUID(),
+          amount: 0,
+          currency: "HUF",
+          status: "paid",
+          tierLabel: `Teszt üzemmód – 30 napos próbaaktiválás (eredeti díj: ${existing.listingFee} Ft / 30 nap)`,
+          periodDays: LISTING_PERIOD_DAYS,
+          expiresAt: nextExpiresAt,
+          createdAt: now,
+          paidAt: now,
+        },
+      ];
 
       existing.status = "ACTIVE";
       existing.activatedAt = existing.activatedAt || now;
+      existing.expiresAt = nextExpiresAt;
       existing.billing = nextBilling;
       existing.updatedAt = now;
 
@@ -1347,7 +1398,8 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         );
       }
 
-      const prop = await readJson<any>(env, `${PROPERTY_PREFIX}${propertyId}.json`);
+      const rawProp = await readJson<any>(env, `${PROPERTY_PREFIX}${propertyId}.json`);
+      const prop = await enforceExpirationIfNeeded(env, rawProp);
       if (!prop || prop.status === "DELETED") {
         return json({ error: "Az ingatlanhirdetés nem található." }, 404);
       }

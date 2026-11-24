@@ -607,16 +607,23 @@ export default function RealEstateAdmin() {
 
               {/* Main Admin Content */}
               <div className="space-y-6 lg:col-span-9">
-                {/* Payment needed banner */}
-                {(activeProperty.status === "DRAFT" || activeProperty.status === "PAYMENT_PENDING") && (
+                {/* Payment / Renewal needed banner */}
+                {(activeProperty.status === "DRAFT" ||
+                  activeProperty.status === "PAYMENT_PENDING" ||
+                  activeProperty.status === "EXPIRED") && (
                   <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
                     <div className="flex items-start gap-3">
                       <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
                       <div className="text-xs text-amber-950">
-                        <p className="font-bold">A hirdetés még nem aktív ({STATUS_LABELS[activeProperty.status].label})</p>
+                        <p className="font-bold">
+                          {activeProperty.status === "EXPIRED"
+                            ? "A 30 napos hirdetési időszak lejárt – hosszabbítás szükséges"
+                            : `A hirdetés még nem aktív (${STATUS_LABELS[activeProperty.status].label})`}
+                        </p>
                         <p className="mt-0.5">
-                          ILOLIT hirdetési díj: <strong>{formatHuf(activeProperty.listingFee)}</strong> (
-                          {activeProperty.listingFeeTier}). A sikeres fizetés után azonnal megjelenik a keresőben.
+                          ILOLIT hirdetési díj: <strong>{formatHuf(activeProperty.listingFee)} / 30 nap</strong> (
+                          {activeProperty.listingFeeTier}). 30 nap elteltével a hirdetés ismételt fizetéssel
+                          hosszabbítható meg.
                         </p>
                       </div>
                     </div>
@@ -629,7 +636,7 @@ export default function RealEstateAdmin() {
                         className="rounded-xl border-emerald-300 bg-white text-xs font-bold text-emerald-800 hover:bg-emerald-50"
                       >
                         <ShieldCheck className="mr-1.5 h-4 w-4" />
-                        Teszt aktiválás (fizetés nélkül)
+                        Teszt aktiválás 30 napra (fizetés nélkül)
                       </Button>
                       <Button
                         type="button"
@@ -638,7 +645,9 @@ export default function RealEstateAdmin() {
                         className="rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700"
                       >
                         {checkoutBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <CreditCard className="mr-1.5 h-4 w-4" />}
-                        Fizetés és aktiválás ({formatHuf(activeProperty.listingFee)})
+                        {activeProperty.status === "EXPIRED"
+                          ? `Hosszabbítás 30 napra (${formatHuf(activeProperty.listingFee)})`
+                          : `Fizetés és aktiválás 30 napra (${formatHuf(activeProperty.listingFee)})`}
                       </Button>
                     </div>
                   </div>
@@ -677,6 +686,13 @@ export default function RealEstateAdmin() {
                             {getCategoryLabel(activeProperty.category)} ·{" "}
                             {formatPublicLocation(activeProperty.publicLocation)}
                           </p>
+                          {activeProperty.expiresAt && (
+                            <p className="mt-1 text-xs font-bold text-emerald-800">
+                              30 napos érvényesség vége:{" "}
+                              {new Date(activeProperty.expiresAt).toLocaleDateString("hu-HU")} (
+                              {activeProperty.daysRemaining ?? 0} nap hátra)
+                            </p>
+                          )}
                         </div>
                         <Button asChild variant="outline" size="sm" className="rounded-xl text-xs font-bold">
                           <Link href={`/real-estate/${activeProperty.id}`}>
@@ -1380,24 +1396,49 @@ export default function RealEstateAdmin() {
                 {/* ── 9. SZÁMLÁZÁS / FIZETÉS ── */}
                 {section === "billing" && (
                   <div className="rounded-2xl border border-slate-200 bg-white p-6">
-                    <h2 className="text-lg font-bold text-slate-950">Számlázás és fizetés</h2>
+                    <h2 className="text-lg font-bold text-slate-950">Számlázás és 30 napos hirdetési időszak</h2>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Minden befizetés 30 napos aktív megjelenést biztosít. 30 nap elteltével a hirdetés automatikusan
+                      lejár, és újabb fizetéssel hosszabbítható meg.
+                    </p>
 
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
                       <div>
                         <p className="text-xs font-semibold text-emerald-900/70">Automatikus hirdetési díjkategória</p>
                         <p className="mt-0.5 text-sm font-bold text-slate-950">{activeProperty.listingFeeTier}</p>
-                        <p className="text-xl font-black text-emerald-700">{formatHuf(activeProperty.listingFee)}</p>
+                        <p className="text-xl font-black text-emerald-700">
+                          {formatHuf(activeProperty.listingFee)}{" "}
+                          <span className="text-xs font-bold text-emerald-800/80">/ 30 nap</span>
+                        </p>
+                        {activeProperty.expiresAt && (
+                          <p className="mt-1 text-xs font-semibold text-slate-700">
+                            Jelenlegi érvényesség:{" "}
+                            <strong>{new Date(activeProperty.expiresAt).toLocaleDateString("hu-HU")}</strong> (
+                            {activeProperty.daysRemaining ?? 0} nap hátra)
+                          </p>
+                        )}
                       </div>
-                      {(activeProperty.status === "DRAFT" || activeProperty.status === "PAYMENT_PENDING") && (
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={checkoutBusy}
+                          onClick={handleTestActivate}
+                          className="rounded-xl border-emerald-300 bg-white text-xs font-bold text-emerald-800 hover:bg-emerald-50"
+                        >
+                          Teszt hosszabbítás +30 nap
+                        </Button>
                         <Button
                           type="button"
                           disabled={checkoutBusy}
                           onClick={handlePayNow}
                           className="rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700"
                         >
-                          Fizetés indítása
+                          {activeProperty.status === "ACTIVE"
+                            ? `Hosszabbítás +30 nappal (${formatHuf(activeProperty.listingFee)})`
+                            : `Fizetés 30 napra (${formatHuf(activeProperty.listingFee)})`}
                         </Button>
-                      )}
+                      </div>
                     </div>
 
                     <h3 className="mt-6 text-sm font-bold text-slate-900">Fizetési előzmények</h3>
@@ -1409,7 +1450,12 @@ export default function RealEstateAdmin() {
                           <div key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
                             <div>
                               <p className="font-bold text-slate-900">{b.tierLabel}</p>
-                              <p className="text-slate-500">{new Date(b.paidAt || b.createdAt).toLocaleString("hu-HU")}</p>
+                              <p className="text-slate-500">
+                                {new Date(b.paidAt || b.createdAt).toLocaleString("hu-HU")}
+                                {b.expiresAt
+                                  ? ` · Érvényes: ${new Date(b.expiresAt).toLocaleDateString("hu-HU")}-ig`
+                                  : ""}
+                              </p>
                             </div>
                             <div className="text-right">
                               <p className="font-black text-slate-950">{formatHuf(b.amount)}</p>
@@ -1420,7 +1466,7 @@ export default function RealEstateAdmin() {
                                     : "bg-amber-50 text-amber-800"
                                 }`}
                               >
-                                {b.status === "paid" ? "Kifizetve" : "Folyamatban"}
+                                {b.status === "paid" ? "Kifizetve (30 nap)" : "Folyamatban"}
                               </span>
                             </div>
                           </div>

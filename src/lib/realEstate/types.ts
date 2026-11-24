@@ -146,6 +146,8 @@ export interface PropertyBillingRecord {
   currency: string;
   status: "pending" | "paid" | "failed";
   tierLabel: string;
+  periodDays?: number;
+  expiresAt?: string;
   stripeCheckoutSessionId?: string;
   stripePaymentIntentId?: string;
   createdAt: string;
@@ -190,6 +192,8 @@ export interface RealEstateProperty {
   isOwner?: boolean;
   isFavorited?: boolean;
   activatedAt?: string;
+  expiresAt?: string;
+  daysRemaining?: number;
   createdAt: string;
   updatedAt: string;
 }
