@@ -936,7 +936,12 @@ export default function RealEstateDetail() {
                 </div>
               )}
 
-              {isClosed ? (
+              {latestBuyerViewing && !property.isOwner ? (
+                <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-medium text-slate-600">
+                  Egy adott ingatlanra vevőnként csak egyszer kérhető megtekintési időpont. A kérelmed aktuális
+                  állapotát fent látod, további kérdés esetén használhatod az alábbi üzenetküldőt.
+                </p>
+              ) : isClosed ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs font-semibold text-slate-600">
                   <AlertTriangle className="mb-1.5 h-4 w-4 text-amber-600" />
                   Erre az ingatlanra jelenleg nem kérhető új megtekintési időpont ({statusInfo?.label}).
@@ -1167,7 +1172,7 @@ export default function RealEstateDetail() {
                 className="h-11 rounded-xl bg-emerald-600 px-5 text-xs font-bold text-white hover:bg-emerald-700"
               >
                 <Calendar className="mr-1.5 h-4 w-4" />
-                Megtekintési időpontot kérek
+                {latestBuyerViewing ? "Megtekintési állapot" : "Megtekintési időpontot kérek"}
               </Button>
             </div>
           </div>

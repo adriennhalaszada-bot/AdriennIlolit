@@ -1386,8 +1386,8 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         })
         .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
         .map((v) => {
-          // Privacy: never expose buyer's phone number (not even masked) to the seller
-          const { requesterPhoneMasked: _omit, ...safeViewing } = v;
+          // Privacy: never expose buyer's phone number or phone hash to anyone
+          const { requesterPhoneMasked: _omit, requesterPhoneHash: _omitHash, ...safeViewing } = v;
           return enrichViewingReminders({
             ...safeViewing,
             role: v.ownerId === userId ? "owner" : "requester",
@@ -1476,15 +1476,21 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         return json({ error: "Óránként legfeljebb 5 megtekintési kérelmet küldhetsz." }, 429);
       }
 
-      // Prevent duplicate active request on same property by same user
-      const existingActive = allViewings.find(
+      // Strict rule: a buyer can only request a viewing ONCE per property (checked by userId and verified phone hash)
+      const existingRequest = allViewings.find(
         (v) =>
           v.propertyId === propertyId &&
-          v.requesterId === userId &&
-          ["PENDING", "APPROVED", "PROPOSED_NEW_TIME"].includes(v.status),
+          (v.requesterId === userId ||
+            (phoneRec.phoneHash && v.requesterPhoneHash && v.requesterPhoneHash === phoneRec.phoneHash)),
       );
-      if (existingActive) {
-        return json({ error: "Ehhez az ingatlanhoz már van folyamatban lévő megtekintési kérelmed." }, 409);
+      if (existingRequest) {
+        return json(
+          {
+            error:
+              "Erre az ingatlanra már küldtél megtekintési kérelmet. Egy adott ingatlanra egy vevő csak egyszer kérhet időpontot.",
+          },
+          409,
+        );
       }
 
       // Prevent slot double-booking
@@ -1509,6 +1515,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         requesterId: userId,
         requesterName,
         requesterPhoneVerified: true,
+        requesterPhoneHash: phoneRec.phoneHash || undefined,
         slotId: slot.id,
         date: slot.date,
         startTime: slot.startTime,
@@ -1547,7 +1554,8 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         }),
       ]);
 
-      return json(viewing, 201);
+      const { requesterPhoneHash: _stripHash, ...publicViewingResponse } = viewing;
+      return json(publicViewingResponse, 201);
     }
 
     const viewingId = route[1];
