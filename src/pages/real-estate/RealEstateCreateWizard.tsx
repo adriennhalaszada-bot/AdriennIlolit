@@ -230,7 +230,7 @@ export default function RealEstateCreateWizard() {
     submitForPayment,
   });
 
-  const handleSave = async (mode: "draft" | "pay") => {
+  const handleSave = async (mode: "draft" | "pay" | "test") => {
     if (!isSignedIn) {
       toast({ title: "A hirdetésfeladáshoz jelentkezz be.", variant: "destructive" });
       return;
@@ -246,6 +246,16 @@ export default function RealEstateCreateWizard() {
       } else {
         const created = await realEstateApi.createProperty(buildPayload(mode === "pay"));
         savedId = created.id;
+      }
+
+      if (mode === "test") {
+        await realEstateApi.testActivateProperty(savedId);
+        toast({
+          title: "Teszt aktiválás kész (fizetés nélkül)",
+          description: "Megnyitjuk a Saját Ingatlan Admin felületet.",
+        });
+        setLocation(`/real-estate/admin/${savedId}`);
+        return;
       }
 
       if (mode === "draft" || (isEdit && existingProp?.status === "ACTIVE")) {
@@ -1211,21 +1221,34 @@ export default function RealEstateCreateWizard() {
                   </Button>
 
                   {!(isEdit && existingProp?.status === "ACTIVE") && (
-                    <Button
-                      type="button"
-                      disabled={submitting}
-                      onClick={() => handleSave("pay")}
-                      className="h-12 flex-1 rounded-xl bg-emerald-600 px-6 text-sm font-bold text-white hover:bg-emerald-700"
-                    >
-                      {submitting ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <CreditCard className="mr-2 h-4 w-4" />
-                      )}
-                      {feeCalc.fee > 0
-                        ? `Fizetés és aktiválás (${formatHuf(feeCalc.fee)})`
-                        : "Hirdetés aktiválása"}
-                    </Button>
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={submitting}
+                        onClick={() => handleSave("test")}
+                        className="h-12 rounded-xl border-emerald-300 bg-emerald-50 px-5 text-sm font-bold text-emerald-800 hover:bg-emerald-100"
+                      >
+                        <ShieldCheck className="mr-2 h-4 w-4" />
+                        Teszt aktiválás (fizetés nélkül)
+                      </Button>
+
+                      <Button
+                        type="button"
+                        disabled={submitting}
+                        onClick={() => handleSave("pay")}
+                        className="h-12 flex-1 rounded-xl bg-emerald-600 px-6 text-sm font-bold text-white hover:bg-emerald-700"
+                      >
+                        {submitting ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <CreditCard className="mr-2 h-4 w-4" />
+                        )}
+                        {feeCalc.fee > 0
+                          ? `Fizetés és aktiválás (${formatHuf(feeCalc.fee)})`
+                          : "Hirdetés aktiválása"}
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>

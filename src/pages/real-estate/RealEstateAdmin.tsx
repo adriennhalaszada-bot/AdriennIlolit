@@ -407,6 +407,40 @@ export default function RealEstateAdmin() {
     }
   };
 
+  const handleTestActivate = async () => {
+    if (!activeProperty) return;
+    setCheckoutBusy(true);
+    try {
+      await realEstateApi.testActivateProperty(activeProperty.id);
+      refreshAll();
+      toast({
+        title: "Teszt aktiválás kész (fizetés nélkül)",
+        description: "A hirdetés most aktív – kipróbálhatod a tulajdonosi és publikus nézetet is.",
+      });
+    } catch (err: any) {
+      toast({ title: err?.message || "A teszt aktiválás nem sikerült.", variant: "destructive" });
+    } finally {
+      setCheckoutBusy(false);
+    }
+  };
+
+  const handleCreateTestViewing = async () => {
+    if (!activeProperty) return;
+    setViewingBusyId("test");
+    try {
+      await realEstateApi.createTestViewing(activeProperty.id);
+      refreshAll();
+      toast({
+        title: "Teszt megtekintési kérelem létrehozva",
+        description: "Most kipróbálhatod az Elfogadom / Másik időpontot ajánlok / Elutasítom gombokat.",
+      });
+    } catch (err: any) {
+      toast({ title: err?.message || "Nem sikerült létrehozni a teszt kérelmet.", variant: "destructive" });
+    } finally {
+      setViewingBusyId(null);
+    }
+  };
+
   const handleSendReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeProperty || !replyText.trim() || !replyTargetId) return;
@@ -586,15 +620,27 @@ export default function RealEstateAdmin() {
                         </p>
                       </div>
                     </div>
-                    <Button
-                      type="button"
-                      disabled={checkoutBusy}
-                      onClick={handlePayNow}
-                      className="rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700"
-                    >
-                      {checkoutBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <CreditCard className="mr-1.5 h-4 w-4" />}
-                      Fizetés és aktiválás ({formatHuf(activeProperty.listingFee)})
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={checkoutBusy}
+                        onClick={handleTestActivate}
+                        className="rounded-xl border-emerald-300 bg-white text-xs font-bold text-emerald-800 hover:bg-emerald-50"
+                      >
+                        <ShieldCheck className="mr-1.5 h-4 w-4" />
+                        Teszt aktiválás (fizetés nélkül)
+                      </Button>
+                      <Button
+                        type="button"
+                        disabled={checkoutBusy}
+                        onClick={handlePayNow}
+                        className="rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700"
+                      >
+                        {checkoutBusy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <CreditCard className="mr-1.5 h-4 w-4" />}
+                        Fizetés és aktiválás ({formatHuf(activeProperty.listingFee)})
+                      </Button>
+                    </div>
                   </div>
                 )}
 
@@ -1008,12 +1054,31 @@ export default function RealEstateAdmin() {
                 {section === "inquiries" && (
                   <div className="space-y-6">
                     <div className="rounded-2xl border border-slate-200 bg-white p-6">
-                      <h2 className="text-lg font-bold text-slate-950">
-                        Megtekintési kérelmek ({ownerViewings.length})
-                      </h2>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        A pontos cím csak akkor válik láthatóvá az érdeklődőnek, ha elfogadod a kérelmét.
-                      </p>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <h2 className="text-lg font-bold text-slate-950">
+                            Megtekintési kérelmek ({ownerViewings.length})
+                          </h2>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            A pontos cím csak akkor válik láthatóvá az érdeklődőnek, ha elfogadod a kérelmét.
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={viewingBusyId === "test"}
+                          onClick={handleCreateTestViewing}
+                          className="rounded-xl border-emerald-300 bg-emerald-50 text-xs font-bold text-emerald-800 hover:bg-emerald-100"
+                        >
+                          {viewingBusyId === "test" ? (
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Plus className="mr-1.5 h-3.5 w-3.5" />
+                          )}
+                          Teszt érdeklődői kérelem szimulálása
+                        </Button>
+                      </div>
 
                       {ownerViewings.length === 0 ? (
                         <p className="mt-4 text-xs text-slate-500">Még nem érkezett megtekintési kérelem.</p>

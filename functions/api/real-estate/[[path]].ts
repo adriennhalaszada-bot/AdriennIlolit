@@ -4,6 +4,7 @@ interface Env {
   MEDIA_BUCKET: R2Bucket;
   CLERK_SECRET_KEY: string;
   RENTAL_LISTING_FEE?: string;
+  REAL_ESTATE_TEST_MODE?: string;
   TWILIO_ACCOUNT_SID?: string;
   TWILIO_AUTH_TOKEN?: string;
   TWILIO_FROM_NUMBER?: string;
@@ -723,6 +724,147 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       });
 
       return json(sanitizePropertyForViewer(existing, userId, new Set()));
+    }
+
+    // POST /api/real-estate/properties/:id/test-activate (Owner test-mode activation without Stripe)
+    if (method === "POST" && propertyId && sub === "test-activate") {
+      if (env.REAL_ESTATE_TEST_MODE === "false") {
+        return json({ error: "A teszt üzemmód ki van kapcsolva." }, 403);
+      }
+      const existing = await readJson<any>(env, `${PROPERTY_PREFIX}${propertyId}.json`);
+      if (!existing || existing.status === "DELETED") return json({ error: "A hirdetés nem található." }, 404);
+      if (existing.ownerId !== userId) return json({ error: "Nincs jogosultságod." }, 403);
+
+      const now = new Date().toISOString();
+      const billing = Array.isArray(existing.billing) ? existing.billing : [];
+      const alreadyHasTestPaid = billing.some((b: any) => b.status === "paid");
+      const nextBilling = alreadyHasTestPaid
+        ? billing
+        : [
+            ...billing,
+            {
+              id: crypto.randomUUID(),
+              amount: 0,
+              currency: "HUF",
+              status: "paid",
+              tierLabel: `Teszt üzemmód – próbaaktiválás (eredeti díj: ${existing.listingFee} Ft)`,
+              createdAt: now,
+              paidAt: now,
+            },
+          ];
+
+      existing.status = "ACTIVE";
+      existing.activatedAt = existing.activatedAt || now;
+      existing.billing = nextBilling;
+      existing.updatedAt = now;
+
+      await writeJson(env, `${PROPERTY_PREFIX}${propertyId}.json`, existing, {
+        ownerId: userId,
+        status: "ACTIVE",
+      });
+
+      await appendAudit(env, propertyId, {
+        action: "VIEWING_APPROVED",
+        actorId: userId,
+        details: "Hirdetés aktiválva teszt üzemmódban (fizetés nélkül).",
+      });
+
+      return json(sanitizePropertyForViewer(existing, userId, new Set()));
+    }
+
+    // POST /api/real-estate/properties/:id/test-viewing (Owner simulates an incoming verified viewing request)
+    if (method === "POST" && propertyId && sub === "test-viewing") {
+      if (env.REAL_ESTATE_TEST_MODE === "false") {
+        return json({ error: "A teszt üzemmód ki van kapcsolva." }, 403);
+      }
+      const prop = await readJson<any>(env, `${PROPERTY_PREFIX}${propertyId}.json`);
+      if (!prop || prop.status === "DELETED") return json({ error: "A hirdetés nem található." }, 404);
+      if (prop.ownerId !== userId) return json({ error: "Nincs jogosultságod." }, 403);
+
+      const allViewings = await listAllViewings(env);
+      const occupied = new Set(
+        allViewings
+          .filter((v) => v.propertyId === propertyId && (v.status === "PENDING" || v.status === "APPROVED"))
+          .map((v) => v.slotId),
+      );
+      const slots: any[] = Array.isArray(prop.viewingSlots) ? prop.viewingSlots : [];
+      let chosenSlot = slots.find((s) => !s.isBlocked && !occupied.has(s.id));
+
+      // If no slots exist yet, create one automatically for tomorrow 16:00 so testing is 1-click
+      const now = new Date().toISOString();
+      if (!chosenSlot) {
+        const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+        chosenSlot = {
+          id: crypto.randomUUID(),
+          date: tomorrow,
+          startTime: "16:00",
+          endTime: "16:30",
+          durationMinutes: 30,
+          isBlocked: false,
+          createdAt: now,
+        };
+        prop.viewingSlots = [...slots, chosenSlot];
+        await writeJson(env, `${PROPERTY_PREFIX}${propertyId}.json`, prop, {
+          ownerId: prop.ownerId,
+          status: prop.status,
+        });
+      }
+
+      const testRequesterId = `test_requester_${crypto.randomUUID().slice(0, 8)}`;
+      // Mark test requester phone verified so APPROVE works cleanly
+      await writeJson(env, `${PHONE_PREFIX}${testRequesterId}.json`, {
+        userId: testRequesterId,
+        phone: "+36301234567",
+        phoneVerified: true,
+        verifiedAt: now,
+      });
+
+      const viewing = {
+        id: crypto.randomUUID(),
+        propertyId,
+        propertyTitle: prop.title,
+        propertyPublicLocation: formatPublicLocationString(prop.publicLocation),
+        propertyCoverImage: prop.photos?.[0]?.url || "",
+        propertyPrice: Number(prop.price || 0),
+        propertyTransactionType: prop.transactionType,
+        ownerId: prop.ownerId,
+        ownerName: prop.ownerName || "ILOLIT hirdető",
+        requesterId: testRequesterId,
+        requesterName: "Teszt Érdeklődő (Kovács Anna)",
+        requesterPhoneVerified: true,
+        requesterPhoneMasked: "+363 *** **67",
+        slotId: chosenSlot.id,
+        date: chosenSlot.date,
+        startTime: chosenSlot.startTime,
+        endTime: chosenSlot.endTime,
+        durationMinutes: chosenSlot.durationMinutes,
+        message: "Teszt megtekintési kérelem: szívesen megnézném az ingatlant ebben az időpontban.",
+        status: "PENDING",
+        reminder24hEnabled: true,
+        reminder2hEnabled: true,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      await writeJson(env, `${VIEWING_PREFIX}${viewing.id}.json`, viewing, {
+        propertyId,
+        ownerId: prop.ownerId,
+        requesterId: testRequesterId,
+      });
+
+      await Promise.all([
+        syncPropertyStats(env, propertyId),
+        appendAudit(env, propertyId, {
+          action: "VIEWING_REQUESTED",
+          actorId: testRequesterId,
+          actorName: viewing.requesterName,
+          viewingId: viewing.id,
+          slotSummary: `${chosenSlot.date} ${chosenSlot.startTime}-${chosenSlot.endTime}`,
+          details: "Teszt megtekintési kérelem létrehozva a hirdetői nézet kipróbálásához.",
+        }),
+      ]);
+
+      return json(enrichViewingReminders({ ...viewing, role: "owner" }), 201);
     }
 
     // POST /api/real-estate/properties/:id/favorite

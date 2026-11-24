@@ -56,6 +56,20 @@ export const realEstateApi = {
     });
   },
 
+  testActivateProperty(id: string) {
+    return customFetch<RealEstateProperty>(
+      `/api/real-estate/properties/${encodeURIComponent(id)}/test-activate`,
+      { method: "POST" },
+    );
+  },
+
+  createTestViewing(propertyId: string) {
+    return customFetch<ViewingRequest>(
+      `/api/real-estate/properties/${encodeURIComponent(propertyId)}/test-viewing`,
+      { method: "POST" },
+    );
+  },
+
   toggleFavorite(id: string) {
     return customFetch<{ favorited: boolean; favoritesCount: number }>(
       `/api/real-estate/properties/${encodeURIComponent(id)}/favorite`,
