@@ -1,297 +1,897 @@
+import { useEffect, useState } from "react";
+import { Link, useLocation } from "wouter";
+import { useUser, useClerk } from "@clerk/react";
+import { useGetMe } from "@workspace/api-client-react";
 import { Layout } from "@/components/layout/Layout";
+import { useUnifiedAppointments } from "@/context/UnifiedAppointmentsContext";
+import { useNotifications } from "@/context/NotificationsContext";
 import {
-  useGetMe,
-} from "@workspace/api-client-react";
+  APPOINTMENT_STATUS_META,
+  formatHuDate,
+  formatHuShortDate,
+} from "@/lib/appointments/types";
+import { PropertyViewingsSection } from "@/components/appointments/PropertyViewingsSection";
+import { VehicleViewingsSection } from "@/components/appointments/VehicleViewingsSection";
+import { UnifiedCalendarSection } from "@/components/appointments/UnifiedCalendarSection";
+import { NotificationsCenterSection } from "@/components/appointments/NotificationsCenterSection";
 import { formatPrice } from "@/lib/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { User, Package, CalendarCheck, Heart, Bell, LogOut, Clock, ChevronRight, GraduationCap, Home as HomeIcon, Loader2 } from "lucide-react";
-import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { useUser, useClerk } from "@clerk/react";
 import { cancelProviderBooking, getMyProviderBookings, type ProviderBookingRecord } from "@/lib/providerBookingApi";
+import {
+  Bell,
+  Building2,
+  Calendar,
+  CalendarCheck,
+  Car,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  GraduationCap,
+  Heart,
+  Home as HomeIcon,
+  Loader2,
+  Lock,
+  LogOut,
+  MapPin,
+  Package,
+  ShieldCheck,
+  User,
+  Wrench,
+} from "lucide-react";
 
-export function Dashboard() {
+export type DashboardTabId =
+  | "profile"
+  | "orders"
+  | "bookings_services"
+  | "bookings_properties"
+  | "bookings_vehicles"
+  | "calendar"
+  | "favorites"
+  | "courses"
+  | "listings"
+  | "notifications";
+
+interface DashboardProps {
+  forcedTab?: DashboardTabId;
+  highlightAppointmentId?: string;
+  params?: Record<string, string | undefined>;
+}
+
+function resolveInitialTab(location: string, forcedTab?: DashboardTabId): DashboardTabId {
+  if (forcedTab) return forcedTab;
+  if (location.startsWith("/dashboard/bookings/properties") || location.startsWith("/appointments/property")) {
+    return "bookings_properties";
+  }
+  if (location.startsWith("/dashboard/bookings/vehicles") || location.startsWith("/appointments/vehicle")) {
+    return "bookings_vehicles";
+  }
+  if (location.startsWith("/dashboard/bookings/services")) {
+    return "bookings_services";
+  }
+  if (location.startsWith("/dashboard/calendar")) {
+    return "calendar";
+  }
+  if (location.startsWith("/dashboard/notifications")) {
+    return "notifications";
+  }
+  const params = new URLSearchParams(window.location.search);
+  const tab = params.get("tab");
+  if (tab === "bookings") return "bookings_services";
+  if (
+    tab === "profile" ||
+    tab === "orders" ||
+    tab === "bookings_services" ||
+    tab === "bookings_properties" ||
+    tab === "bookings_vehicles" ||
+    tab === "calendar" ||
+    tab === "favorites" ||
+    tab === "courses" ||
+    tab === "listings" ||
+    tab === "notifications"
+  ) {
+    return tab;
+  }
+  return "profile";
+}
+
+export function Dashboard({ forcedTab, highlightAppointmentId }: DashboardProps = {}) {
   const { user: clerkUser } = useUser();
   const { signOut } = useClerk();
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
-  const searchParams = new URLSearchParams(window.location.search);
-  const initialTab = (searchParams.get("tab") as any) || "profile";
-  const [activeTab, setActiveTab] = useState<"profile" | "orders" | "bookings" | "favorites" | "courses" | "listings" | "notifications">(initialTab);
-
+  const [location, setLocation] = useLocation();
   const { data: me } = useGetMe();
+
+  const {
+    counts,
+    nextUpcoming,
+    unreadCount: unifiedUnread,
+    refreshAll,
+  } = useUnifiedAppointments();
+  const { unreadCount: legacyUnread } = useNotifications();
+  const totalUnreadNotifications = unifiedUnread + legacyUnread;
+
+  const [activeTab, setActiveTab] = useState<DashboardTabId>(() =>
+    resolveInitialTab(location, forcedTab),
+  );
+
+  useEffect(() => {
+    setActiveTab(resolveInitialTab(location, forcedTab));
+  }, [location, forcedTab]);
+
+  // Service bookings state (preserved 100% compatibility with provider booking API)
   const [bookings, setBookings] = useState<ProviderBookingRecord[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
   useEffect(() => {
     let active = true;
-    getMyProviderBookings().then((result) => {
-      if (active) setBookings(result.items.filter((booking) => booking.role === "customer"));
-    }).catch(() => {}).finally(() => active && setBookingsLoading(false));
-    return () => { active = false; };
+    getMyProviderBookings()
+      .then((result) => {
+        if (active) setBookings(result.items.filter((booking) => booking.role === "customer"));
+      })
+      .catch(() => {})
+      .finally(() => active && setBookingsLoading(false));
+    return () => {
+      active = false;
+    };
   }, []);
 
   const cancelBooking = async (booking: ProviderBookingRecord) => {
     try {
       const updated = await cancelProviderBooking(booking.id);
-      setBookings((items) => items.map((item) => item.id === updated.id ? updated : item));
+      setBookings((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+      await refreshAll();
       toast({ title: "A foglalást lemondtad." });
     } catch (error) {
-      toast({ title: "A lemondás nem sikerült", description: error instanceof Error ? error.message : "Próbáld újra.", variant: "destructive" });
+      toast({
+        title: "A lemondás nem sikerült",
+        description: error instanceof Error ? error.message : "Próbáld újra.",
+        variant: "destructive",
+      });
     }
   };
 
+  const navigateTab = (tab: DashboardTabId) => {
+    setActiveTab(tab);
+    if (tab === "bookings_properties") setLocation("/dashboard/bookings/properties");
+    else if (tab === "bookings_vehicles") setLocation("/dashboard/bookings/vehicles");
+    else if (tab === "bookings_services") setLocation("/dashboard/bookings/services");
+    else if (tab === "calendar") setLocation("/dashboard/calendar");
+    else if (tab === "notifications") setLocation("/dashboard/notifications");
+    else if (location !== "/dashboard") setLocation(`/dashboard?tab=${tab}`);
+  };
+
+  const serviceActiveCount =
+    counts.service || bookings.filter((b) => b.status === "PENDING" || b.status === "CONFIRMED").length;
+  const totalBookingsActive = serviceActiveCount + counts.property + counts.vehicle;
+
+  const isBookingsSectionActive =
+    activeTab === "bookings_services" ||
+    activeTab === "bookings_properties" ||
+    activeTab === "bookings_vehicles" ||
+    activeTab === "calendar";
+
   return (
     <Layout>
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        <div className="flex flex-col md:flex-row gap-8">
-          {/* Left Sidebar Navigation */}
-          <aside className="w-full md:w-64 space-y-2 flex-shrink-0">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 space-y-4 shadow-sm text-center">
-              <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-700 font-black text-2xl flex items-center justify-center mx-auto border-2 border-emerald-500 shadow-sm">
-                {clerkUser?.firstName ? clerkUser.firstName.substring(0, 1) : "I"}
+      <div className="min-h-screen bg-slate-50/70 pb-20">
+        <div className="container mx-auto max-w-6xl px-4 py-8">
+          <div className="flex flex-col gap-7 md:flex-row">
+            {/* Left Sidebar Navigation — Exact Requested Fiókom Menu Structure */}
+            <aside className="w-full shrink-0 space-y-4 md:w-72">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 text-center shadow-xs">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border-2 border-emerald-500 bg-emerald-50 text-xl font-black text-emerald-700">
+                  {clerkUser?.firstName ? clerkUser.firstName.substring(0, 1) : "I"}
+                </div>
+                <div className="mt-3">
+                  <h3 className="text-base font-extrabold text-slate-950">
+                    {clerkUser?.fullName || (me as any)?.fullName || "ILOLIT Felhasználó"}
+                  </h3>
+                  <p className="text-xs font-semibold text-slate-500">
+                    @{clerkUser?.username || (me as any)?.username || "ilolit_user"}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-extrabold text-lg text-slate-900 dark:text-slate-100">
-                  {clerkUser?.fullName || (me as any)?.fullName || "ILOLIT Felhasználó"}
-                </h3>
-                <p className="text-xs text-slate-500 font-bold">@{clerkUser?.username || (me as any)?.username || "ilolit_user"}</p>
-              </div>
-            </div>
 
-            <nav className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-3 space-y-1 shadow-sm font-bold text-sm">
-              {[
-                { id: "profile", label: "Profilom & Adatok", icon: User },
-                { id: "orders", label: "Rendeléseim", icon: Package },
-                { id: "bookings", label: "Foglalásaim", icon: CalendarCheck },
-                { id: "favorites", label: "Kedvenceim", icon: Heart },
-                { id: "courses", label: "Kurzusaim & Oktatás", icon: GraduationCap },
-                { id: "listings", label: "Hirdetéseim & Börze", icon: HomeIcon },
-                { id: "notifications", label: "Értesítések & Riasztások", icon: Bell },
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id as typeof activeTab)}
-                  className={`w-full flex items-center justify-between p-3 rounded-2xl transition-all cursor-pointer ${
-                    activeTab === item.id
-                      ? "bg-emerald-600 text-white font-extrabold shadow-md shadow-emerald-600/20"
-                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <item.icon className="w-4 h-4" />
-                    <span>{item.label}</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 opacity-50" />
-                </button>
-              ))}
-
-              <button
-                onClick={async () => {
-                  try {
-                    await signOut({ redirectUrl: "/" });
-                  } catch (error) {
-                    console.error("Clerk sign-out failed:", error);
-                  } finally {
-                    localStorage.removeItem("ilolit_auth");
-                    localStorage.removeItem("ilolit_user");
-                    window.dispatchEvent(new Event("ilolit_auth_change"));
-                    window.location.assign("/");
-                  }
-                }}
-                className="w-full flex items-center gap-3 p-3 rounded-2xl text-rose-600 hover:bg-rose-50 font-bold transition-all mt-4 cursor-pointer"
+              <nav
+                aria-label="Fiókom menü"
+                className="space-y-1 rounded-3xl border border-slate-200 bg-white p-3 text-sm font-bold shadow-xs"
               >
-                <LogOut className="w-4 h-4" />
-                <span>Kijelentkezés</span>
-              </button>
-            </nav>
-          </aside>
+                {/* 1. Profilom & Adatok */}
+                <SidebarButton
+                  active={activeTab === "profile"}
+                  icon={User}
+                  label="Profilom & Adatok"
+                  onClick={() => navigateTab("profile")}
+                />
 
-          {/* Main Content Area */}
-          <main className="flex-1 space-y-6">
-            {/* Profilom Tab */}
-            {activeTab === "profile" && (
-              <Card className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-6">
-                <CardHeader className="p-0 border-b pb-4">
-                  <CardTitle className="text-xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <User className="w-5 h-5 text-emerald-600" /> Profilom & Fiókbeállítások
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0 space-y-4 pt-2">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-extrabold text-slate-700 dark:text-slate-300">Teljes név</label>
-                      <Input value={clerkUser?.fullName || (me as any)?.fullName || ""} readOnly className="rounded-xl font-semibold" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-extrabold text-slate-700 dark:text-slate-300">E-mail cím</label>
-                      <Input value={clerkUser?.primaryEmailAddress?.emailAddress || (me as any)?.email || ""} readOnly className="rounded-xl bg-slate-50 font-semibold" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-extrabold text-slate-700 dark:text-slate-300">Telefonszám</label>
-                      <Input value={clerkUser?.primaryPhoneNumber?.phoneNumber || ""} readOnly placeholder="Nincs megadva" className="rounded-xl font-semibold" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-extrabold text-slate-700 dark:text-slate-300">Szállítási & Számlázási cím</label>
-                      <Input value="" readOnly placeholder="Nincs megadva" className="rounded-xl font-semibold" />
+                {/* 2. Rendeléseim */}
+                <SidebarButton
+                  active={activeTab === "orders"}
+                  icon={Package}
+                  label="Rendeléseim"
+                  onClick={() => navigateTab("orders")}
+                />
+
+                {/* 3. Foglalásaim + ALWAYS visible dedicated submenus with live counts */}
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-2">
+                  <div className="flex items-center justify-between px-2 py-1.5">
+                    <span
+                      className={`flex items-center gap-2 text-xs font-black uppercase tracking-wider ${
+                        isBookingsSectionActive ? "text-emerald-700" : "text-slate-700"
+                      }`}
+                    >
+                      <CalendarCheck className="h-4 w-4 text-emerald-600" />
+                      Foglalásaim
+                    </span>
+                    {totalBookingsActive > 0 && (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+                        {totalBookingsActive}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-1 space-y-1">
+                    <SubMenuItem
+                      active={activeTab === "bookings_services"}
+                      icon={Wrench}
+                      label="Szolgáltatási foglalásaim"
+                      count={serviceActiveCount}
+                      onClick={() => navigateTab("bookings_services")}
+                    />
+                    <SubMenuItem
+                      active={activeTab === "bookings_properties"}
+                      icon={Building2}
+                      label="Ingatlan megtekintéseim"
+                      count={counts.property}
+                      emphasize={counts.property > 0 || counts.propertyProposed > 0}
+                      onClick={() => navigateTab("bookings_properties")}
+                    />
+                    <SubMenuItem
+                      active={activeTab === "bookings_vehicles"}
+                      icon={Car}
+                      label="Jármű megtekintéseim"
+                      count={counts.vehicle + counts.sellerVehiclePending}
+                      emphasize={counts.vehicle > 0 || counts.sellerVehiclePending > 0}
+                      onClick={() => navigateTab("bookings_vehicles")}
+                    />
+                    <SubMenuItem
+                      active={activeTab === "calendar"}
+                      icon={Calendar}
+                      label="Naptáram"
+                      onClick={() => navigateTab("calendar")}
+                    />
+                  </div>
+                </div>
+
+                {/* 4. Kedvenceim */}
+                <SidebarButton
+                  active={activeTab === "favorites"}
+                  icon={Heart}
+                  label="Kedvenceim"
+                  onClick={() => navigateTab("favorites")}
+                />
+
+                {/* 5. Kurzusaim & Oktatás */}
+                <SidebarButton
+                  active={activeTab === "courses"}
+                  icon={GraduationCap}
+                  label="Kurzusaim & Oktatás"
+                  onClick={() => navigateTab("courses")}
+                />
+
+                {/* 6. Hirdetéseim & Börze */}
+                <SidebarButton
+                  active={activeTab === "listings"}
+                  icon={HomeIcon}
+                  label="Hirdetéseim & Börze"
+                  onClick={() => navigateTab("listings")}
+                />
+
+                {/* 7. Értesítések & Riasztások */}
+                <SidebarButton
+                  active={activeTab === "notifications"}
+                  icon={Bell}
+                  label="Értesítések & Riasztások"
+                  badge={totalUnreadNotifications}
+                  onClick={() => navigateTab("notifications")}
+                />
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await signOut({ redirectUrl: "/" });
+                    } catch (error) {
+                      console.error("Clerk sign-out failed:", error);
+                    } finally {
+                      localStorage.removeItem("ilolit_auth");
+                      localStorage.removeItem("ilolit_user");
+                      window.dispatchEvent(new Event("ilolit_auth_change"));
+                      window.location.assign("/");
+                    }
+                  }}
+                  className="mt-3 flex w-full cursor-pointer items-center gap-3 rounded-2xl p-3 text-rose-600 transition hover:bg-rose-50"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Kijelentkezés</span>
+                </button>
+              </nav>
+            </aside>
+
+            {/* Main Content Area */}
+            <main className="min-w-0 flex-1 space-y-6">
+              {/* TOP BLOCK: "Következő megtekintésed" + Instant Status Overview */}
+              <div className="space-y-4">
+                {nextUpcoming && (
+                  <div className="overflow-hidden rounded-3xl border border-emerald-200 bg-white shadow-xs">
+                    <div className="flex flex-col justify-between gap-4 p-5 sm:flex-row sm:items-center sm:p-6">
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-16 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                          {nextUpcoming.cover_image ? (
+                            <img
+                              src={nextUpcoming.cover_image}
+                              alt={nextUpcoming.title}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : nextUpcoming.appointment_type === "VEHICLE_VIEWING" ? (
+                            <Car className="h-7 w-7 text-slate-400" />
+                          ) : nextUpcoming.appointment_type === "SERVICE" ? (
+                            <Wrench className="h-7 w-7 text-slate-400" />
+                          ) : (
+                            <Building2 className="h-7 w-7 text-slate-400" />
+                          )}
+                        </div>
+
+                        <div className="min-w-0 space-y-1.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] font-black uppercase tracking-wider text-emerald-700">
+                              Következő megtekintésed
+                            </span>
+                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-bold text-slate-700">
+                              {nextUpcoming.appointment_type === "PROPERTY_VIEWING"
+                                ? "Ingatlan"
+                                : nextUpcoming.appointment_type === "VEHICLE_VIEWING"
+                                  ? "Jármű"
+                                  : "Szolgáltatás"}
+                            </span>
+                            <span
+                              className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${
+                                APPOINTMENT_STATUS_META[nextUpcoming.status].className
+                              }`}
+                            >
+                              {APPOINTMENT_STATUS_META[nextUpcoming.status].label}
+                            </span>
+                          </div>
+
+                          <h2 className="truncate text-base font-black text-slate-950 sm:text-lg">
+                            {nextUpcoming.title}
+                          </h2>
+
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+                            {nextUpcoming.approx_location && (
+                              <span className="inline-flex items-center gap-1 font-semibold text-slate-800">
+                                <MapPin className="h-3.5 w-3.5 text-emerald-600" />
+                                {nextUpcoming.approx_location}
+                              </span>
+                            )}
+                            <span className="inline-flex items-center gap-1 font-bold text-slate-900">
+                              <Clock className="h-3.5 w-3.5 text-emerald-600" />
+                              {formatHuShortDate(nextUpcoming.date)} {nextUpcoming.start_time}
+                            </span>
+                            <span className="inline-flex items-center gap-1 font-medium text-slate-600">
+                              {nextUpcoming.location_released ? (
+                                <>
+                                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+                                  Pontos helyszín elérhető
+                                </>
+                              ) : (
+                                <>
+                                  <Lock className="h-3.5 w-3.5 text-slate-400" />
+                                  Helyszín visszaigazolás után nyílik
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Button
+                        asChild
+                        className="h-11 shrink-0 rounded-xl bg-emerald-600 px-5 text-xs font-bold text-white hover:bg-emerald-700"
+                      >
+                        <Link href={nextUpcoming.web_url}>Megtekintés részletei</Link>
+                      </Button>
                     </div>
                   </div>
-                  <div className="pt-4 flex justify-end gap-3">
-                    <Button asChild className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl px-6 cursor-pointer"><Link href="/settings/profile">Adatok szerkesztése</Link></Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                )}
 
-            {/* Rendeléseim Tab */}
-            {activeTab === "orders" && (
-              <Card className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-6">
-                <CardHeader className="p-0 border-b pb-4">
-                  <CardTitle className="text-xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <Package className="w-5 h-5 text-emerald-600" /> Rendeléseim (Piactér)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0 space-y-3 pt-2">
-                  <div className="rounded-2xl border bg-slate-50 p-8 text-center dark:bg-slate-800/50"><Package className="mx-auto mb-2 h-8 w-8 text-slate-400" /><p className="font-extrabold">Nincs megjeleníthető rendelés</p><p className="mt-1 text-xs text-muted-foreground">Itt kizárólag a valóban létrejött piactéri rendelések fognak megjelenni.</p></div>
-                </CardContent>
-              </Card>
-            )}
+                {/* At-a-Glance Summary Strip (always visible on Fiókom overview) */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={() => navigateTab("bookings_properties")}
+                    className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${
+                      activeTab === "bookings_properties"
+                        ? "border-emerald-500 bg-emerald-50/50"
+                        : "border-slate-200 bg-white hover:border-emerald-300"
+                    }`}
+                  >
+                    <div>
+                      <p className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
+                        <Building2 className="h-4 w-4 text-emerald-600" />
+                        Ingatlan megtekintések
+                      </p>
+                      <p className="mt-1.5 text-lg font-black text-slate-950">{counts.property}</p>
+                      <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+                        {counts.propertyConfirmed} visszaigazolva · {counts.propertyPending} függőben
+                      </p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                  </button>
 
-            {/* Foglalásaim Tab */}
-            {activeTab === "bookings" && (
-              <Card className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-6">
-                <CardHeader className="p-0 border-b pb-4">
-                  <CardTitle className="text-xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <CalendarCheck className="w-5 h-5 text-emerald-600" /> Időpontfoglalásaim (Szolgáltatások)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0 space-y-3 pt-2">
-                  {bookingsLoading && <div className="flex justify-center gap-2 py-10 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" /> Foglalások betöltése…</div>}
-                  {!bookingsLoading && bookings.length === 0 && <div className="rounded-2xl border bg-slate-50 p-8 text-center dark:bg-slate-800/50"><CalendarCheck className="mx-auto mb-2 h-8 w-8 text-slate-400" /><p className="font-extrabold">Még nincs foglalásod</p><Button asChild variant="outline" className="mt-4 rounded-xl"><Link href="/providers">Szolgáltatók keresése</Link></Button></div>}
-                  {bookings.map((b) => (
-                    <div key={b.id} className="p-4 rounded-2xl border bg-slate-50 dark:bg-slate-800/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                      <div>
-                        <h4 className="font-extrabold text-slate-900 dark:text-slate-100">{b.providerName}</h4>
-                        <p className="text-xs text-slate-700 dark:text-slate-300 font-extrabold mt-0.5">{b.serviceName}</p>
-                        <p className="text-xs text-slate-500 mt-1 flex items-center gap-1 font-medium">
-                          <Clock className="w-3.5 h-3.5 text-emerald-600" /> {b.bookingDate} · {b.bookingTime}
+                  <button
+                    type="button"
+                    onClick={() => navigateTab("bookings_vehicles")}
+                    className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${
+                      activeTab === "bookings_vehicles"
+                        ? "border-emerald-500 bg-emerald-50/50"
+                        : "border-slate-200 bg-white hover:border-emerald-300"
+                    }`}
+                  >
+                    <div>
+                      <p className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
+                        <Car className="h-4 w-4 text-emerald-600" />
+                        Jármű megtekintések
+                      </p>
+                      <p className="mt-1.5 text-lg font-black text-slate-950">{counts.vehicle}</p>
+                      <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+                        {counts.vehicleConfirmed} visszaigazolva · {counts.vehiclePending} függőben
+                      </p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigateTab("bookings_services")}
+                    className={`flex items-center justify-between rounded-2xl border p-4 text-left transition ${
+                      activeTab === "bookings_services"
+                        ? "border-emerald-500 bg-emerald-50/50"
+                        : "border-slate-200 bg-white hover:border-emerald-300"
+                    }`}
+                  >
+                    <div>
+                      <p className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
+                        <Wrench className="h-4 w-4 text-emerald-600" />
+                        Szolgáltatások
+                      </p>
+                      <p className="mt-1.5 text-lg font-black text-slate-950">{serviceActiveCount}</p>
+                      <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+                        Aktív időpontfoglalások
+                      </p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                  </button>
+                </div>
+              </div>
+
+              {/* ACTIVE PANEL CONTENT */}
+              {activeTab === "bookings_properties" && (
+                <Card className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+                  <PropertyViewingsSection highlightAppointmentId={highlightAppointmentId} />
+                </Card>
+              )}
+
+              {activeTab === "bookings_vehicles" && (
+                <Card className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+                  <VehicleViewingsSection highlightAppointmentId={highlightAppointmentId} />
+                </Card>
+              )}
+
+              {activeTab === "calendar" && (
+                <Card className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+                  <UnifiedCalendarSection />
+                </Card>
+              )}
+
+              {activeTab === "notifications" && (
+                <Card className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+                  <NotificationsCenterSection />
+                </Card>
+              )}
+
+              {/* Szolgáltatási foglalásaim */}
+              {activeTab === "bookings_services" && (
+                <Card className="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
+                  <CardHeader className="flex flex-row items-center justify-between border-b p-0 pb-4">
+                    <CardTitle className="flex items-center gap-2 text-xl font-black text-slate-950">
+                      <Wrench className="h-5 w-5 text-emerald-600" />
+                      Szolgáltatási foglalásaim
+                    </CardTitle>
+                    <Button asChild size="sm" variant="outline" className="rounded-xl text-xs font-bold">
+                      <Link href="/providers">Szolgáltatók keresése</Link>
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="space-y-3 p-0 pt-2">
+                    {bookingsLoading && (
+                      <div className="flex justify-center gap-2 py-10 text-sm text-slate-500">
+                        <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
+                        Foglalások betöltése...
+                      </div>
+                    )}
+                    {!bookingsLoading && bookings.length === 0 && (
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
+                        <CalendarCheck className="mx-auto mb-2 h-8 w-8 text-slate-400" />
+                        <p className="font-bold text-slate-900">Még nincs szolgáltatási foglalásod</p>
+                        <Button asChild variant="outline" className="mt-4 rounded-xl text-xs font-bold">
+                          <Link href="/providers">Szolgáltatók keresése</Link>
+                        </Button>
+                      </div>
+                    )}
+                    {bookings.map((b) => (
+                      <div
+                        key={b.id}
+                        className="flex flex-col items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:flex-row sm:items-center"
+                      >
+                        <div>
+                          <h4 className="font-bold text-slate-950">{b.providerName}</h4>
+                          <p className="mt-0.5 text-xs font-semibold text-slate-700">{b.serviceName}</p>
+                          <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                            <Clock className="h-3.5 w-3.5 text-emerald-600" />
+                            {formatHuDate(b.bookingDate)} · {b.bookingTime}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <span className="text-base font-black text-emerald-700">{formatPrice(b.price)}</span>
+                          <Badge
+                            variant="outline"
+                            className={
+                              b.status === "CONFIRMED"
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                : b.status === "PENDING"
+                                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                                  : "border-slate-200 bg-white text-slate-600"
+                            }
+                          >
+                            {b.status === "CONFIRMED"
+                              ? "Visszaigazolva"
+                              : b.status === "PENDING"
+                                ? "Visszaigazolásra vár"
+                                : b.status === "CANCELLED"
+                                  ? "Lemondva"
+                                  : "Elutasítva"}
+                          </Badge>
+                          {b.depositAmount > 0 && (
+                            <Badge
+                              variant="outline"
+                              className={
+                                b.depositPayment?.status === "paid"
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                                  : "border-amber-200 bg-amber-50 text-amber-900"
+                              }
+                            >
+                              {b.depositPayment?.status === "paid"
+                                ? "Előleg kifizetve"
+                                : `Előleg: ${formatPrice(b.depositAmount)}`}
+                            </Badge>
+                          )}
+                          {(["PENDING", "CONFIRMED"] as string[]).includes(b.status) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-xl border-rose-200 text-xs font-bold text-rose-700 hover:bg-rose-50"
+                              onClick={() => cancelBooking(b)}
+                            >
+                              Lemondás
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Profilom & Adatok */}
+              {activeTab === "profile" && (
+                <Card className="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
+                  <CardHeader className="border-b p-0 pb-4">
+                    <CardTitle className="flex items-center gap-2 text-xl font-black text-slate-950">
+                      <User className="h-5 w-5 text-emerald-600" />
+                      Profilom &amp; Adatok
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4 p-0 pt-2">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-700">Teljes név</label>
+                        <Input
+                          value={clerkUser?.fullName || (me as any)?.fullName || ""}
+                          readOnly
+                          className="rounded-xl font-semibold"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-700">E-mail cím</label>
+                        <Input
+                          value={clerkUser?.primaryEmailAddress?.emailAddress || (me as any)?.email || ""}
+                          readOnly
+                          className="rounded-xl bg-slate-50 font-semibold"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-700">Telefonszám</label>
+                        <Input
+                          value={clerkUser?.primaryPhoneNumber?.phoneNumber || ""}
+                          readOnly
+                          placeholder="Nincs megadva"
+                          className="rounded-xl font-semibold"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-slate-700">Szállítási &amp; Számlázási cím</label>
+                        <Input value="" readOnly placeholder="Nincs megadva" className="rounded-xl font-semibold" />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-3 pt-4">
+                      <Button
+                        asChild
+                        className="rounded-xl bg-emerald-600 px-6 font-bold text-white hover:bg-emerald-700"
+                      >
+                        <Link href="/settings/profile">Adatok szerkesztése</Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Rendeléseim */}
+              {activeTab === "orders" && (
+                <Card className="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
+                  <CardHeader className="border-b p-0 pb-4">
+                    <CardTitle className="flex items-center gap-2 text-xl font-black text-slate-950">
+                      <Package className="h-5 w-5 text-emerald-600" />
+                      Rendeléseim (Piactér)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 p-0 pt-2">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
+                      <Package className="mx-auto mb-2 h-8 w-8 text-slate-400" />
+                      <p className="font-bold text-slate-900">Nincs megjeleníthető rendelés</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Itt kizárólag a valóban létrejött piactéri rendelések jelennek meg.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Kedvenceim */}
+              {activeTab === "favorites" && (
+                <Card className="space-y-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
+                  <CardHeader className="border-b p-0 pb-4">
+                    <CardTitle className="flex items-center gap-2 text-xl font-black text-slate-950">
+                      <Heart className="h-5 w-5 text-emerald-600" />
+                      Kedvenceim
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 p-0 pt-2">
+                    <p className="text-sm text-slate-600">
+                      Elmentett termékek, szolgáltatók, ingatlanok, járművek és kurzusok egy közös listában.
+                    </p>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
+                      <Heart className="mx-auto mb-2 h-8 w-8 text-slate-400" />
+                      <p className="font-bold text-slate-900">A kedvenceid a külön kedvencek oldalon érhetők el</p>
+                      <Button asChild variant="outline" className="mt-4 rounded-xl text-xs font-bold">
+                        <Link href="/dashboard/favorites">Kedvencek megnyitása</Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Kurzusaim & Oktatás */}
+              {activeTab === "courses" && (
+                <Card className="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
+                  <CardHeader className="border-b p-0 pb-4">
+                    <CardTitle className="flex items-center gap-2 text-xl font-black text-slate-950">
+                      <GraduationCap className="h-5 w-5 text-emerald-600" />
+                      Kurzusaim &amp; Oktatás
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4 p-0 pt-2">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
+                      <GraduationCap className="mx-auto mb-2 h-8 w-8 text-slate-400" />
+                      <p className="font-bold text-slate-900">Nincs aktív kurzusod</p>
+                      <Button asChild variant="outline" className="mt-4 rounded-xl text-xs font-bold">
+                        <Link href="/education">Kurzusok megtekintése</Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Hirdetéseim & Börze */}
+              {activeTab === "listings" && (
+                <Card className="space-y-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
+                  <CardHeader className="flex flex-row items-center justify-between border-b p-0 pb-4">
+                    <CardTitle className="flex items-center gap-2 text-xl font-black text-slate-950">
+                      <HomeIcon className="h-5 w-5 text-emerald-600" />
+                      Hirdetéseim &amp; Börze
+                    </CardTitle>
+                    <Button
+                      asChild
+                      size="sm"
+                      className="rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700"
+                    >
+                      <Link href="/sell">Új hirdetés</Link>
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="space-y-6 p-0 pt-2">
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">
+                        Ágazati irányítópultok
+                      </h4>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                        <Link
+                          href="/real-estate/admin"
+                          className="group block space-y-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-emerald-500 hover:bg-emerald-50/40"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                              <Building2 className="h-4 w-4 text-emerald-600" />
+                              Saját Ingatlan Admin
+                            </span>
+                            <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-emerald-600" />
+                          </div>
+                          <p className="text-xs text-slate-600">
+                            Hirdetett ingatlanok, megtekintési idősávok és jóváhagyások.
+                          </p>
+                        </Link>
+
+                        <Link
+                          href="/dashboard/bookings/vehicles"
+                          className="group block space-y-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-emerald-500 hover:bg-emerald-50/40"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                              <Car className="h-4 w-4 text-emerald-600" />
+                              Jármű megtekintések
+                            </span>
+                            <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-emerald-600" />
+                          </div>
+                          <p className="text-xs text-slate-600">
+                            Beérkezett járműmegtekintési kérelmek és időpont-visszaigazolások.
+                          </p>
+                        </Link>
+
+                        <Link
+                          href="/providers/dashboard"
+                          className="group block space-y-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-emerald-500 hover:bg-emerald-50/40"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                              <Wrench className="h-4 w-4 text-emerald-600" />
+                              Szolgáltatói Admin
+                            </span>
+                            <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-emerald-600" />
+                          </div>
+                          <p className="text-xs text-slate-600">
+                            Szolgáltatói naptár, árlista és beérkezett ügyfélfoglalások.
+                          </p>
+                        </Link>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 border-t border-slate-200 pt-4">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-500">
+                        Piactéri &amp; jármű hirdetéseim
+                      </h4>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center">
+                        <p className="text-sm font-bold text-slate-900">
+                          A hirdetéseid kezeléséhez nyisd meg a hirdetéskezelőt.
                         </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-base font-black text-emerald-600">{formatPrice(b.price)}</span>
-                        <Badge variant="outline">{b.status === "CONFIRMED" ? "Megerősítve" : b.status === "PENDING" ? "Válaszra vár" : b.status === "CANCELLED" ? "Lemondva" : "Elutasítva"}</Badge>
-                        {b.depositAmount > 0 && <Badge variant="outline" className={b.depositPayment?.status === "paid" ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-amber-300 bg-amber-50 text-amber-900"}>
-                          {b.depositPayment?.status === "paid" ? "Előleg kifizetve" : `Előleg: ${formatPrice(b.depositAmount)}`}
-                        </Badge>}
-                        {b.depositPayment?.refundStatus === "required" && <Badge className="bg-rose-600 text-white">Visszatérítés rendezendő</Badge>}
-                        {(["PENDING", "CONFIRMED"] as string[]).includes(b.status) && <Button variant="outline" size="sm" className="rounded-xl text-xs text-rose-600 border-rose-300 hover:bg-rose-50 font-extrabold cursor-pointer" onClick={() => cancelBooking(b)}>
-                          Lemondás
-                        </Button>}
+                        <Button asChild variant="outline" className="mt-3 rounded-xl text-xs font-bold">
+                          <Link href="/dashboard/listings">Saját hirdetések</Link>
+                        </Button>
                       </div>
                     </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Kedvencek Tab */}
-            {activeTab === "favorites" && (
-              <Card className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-4">
-                <CardHeader className="p-0 border-b pb-4">
-                  <CardTitle className="text-xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <Heart className="w-5 h-5 text-rose-500" /> Universal Kedvenceim
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0 space-y-3 pt-2">
-                  <p className="text-sm text-slate-600 font-medium">Elmentett termékek, szolgáltatók, ingatlanok és kurzusok egy közös listában.</p>
-                  <div className="rounded-2xl border bg-slate-50 p-8 text-center dark:bg-slate-800/40"><Heart className="mx-auto mb-2 h-8 w-8 text-slate-400" /><p className="font-extrabold">A kedvenceid a külön kedvencek oldalon érhetők el</p><Button asChild variant="outline" className="mt-4 rounded-xl"><Link href="/dashboard/favorites">Kedvencek megnyitása</Link></Button></div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Kurzusaim Tab */}
-            {activeTab === "courses" && (
-              <Card className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-6">
-                <CardHeader className="p-0 border-b pb-4">
-                  <CardTitle className="text-xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <GraduationCap className="w-5 h-5 text-purple-600" /> Kurzusaim (ILOLIT Oktatás)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0 space-y-4 pt-2">
-                  <div className="rounded-2xl border bg-slate-50 p-8 text-center dark:bg-slate-800/40"><GraduationCap className="mx-auto mb-2 h-8 w-8 text-slate-400" /><p className="font-extrabold">Nincs aktív kurzusod</p><Button asChild variant="outline" className="mt-4 rounded-xl"><Link href="/education">Kurzusok megtekintése</Link></Button></div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Hirdetéseim & Szolgáltatói Kezelőpultok Tab */}
-            {activeTab === "listings" && (
-              <Card className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-6">
-                <CardHeader className="p-0 border-b pb-4 flex flex-row items-center justify-between">
-                  <CardTitle className="text-xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <HomeIcon className="w-5 h-5 text-amber-500" /> Saját Hirdetéseim & Szolgáltatói Portáljaim
-                  </CardTitle>
-                  <Button asChild size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl">
-                    <Link href="/sell">+ Új Hirdetés</Link>
-                  </Button>
-                </CardHeader>
-                <CardContent className="p-0 pt-2 space-y-6">
-                  {/* Quick-Access Vertical Dashboards */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider">Ágazati Irányítópultok & Kezelők</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      <Link href="/real-estate/dashboard" className="p-4 rounded-2xl border border-slate-200 hover:border-emerald-500 bg-emerald-50/40 hover:bg-emerald-50 transition space-y-2 block group">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-black text-emerald-800 flex items-center gap-1">🏢 Ingatlan Kezelőpult</span>
-                          <ChevronRight className="w-4 h-4 text-emerald-600 group-hover:translate-x-1 transition" />
-                        </div>
-                        <p className="text-xs text-slate-600 font-medium">Hirdetett ingatlanok, megtekintési idősávok és vevőjelölti időpontok.</p>
-                      </Link>
-
-                      <Link href="/vehicles/dashboard" className="p-4 rounded-2xl border border-slate-200 hover:border-slate-800 bg-slate-100/50 hover:bg-slate-100 transition space-y-2 block group">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-black text-slate-900 flex items-center gap-1">🚗 Jármű Kezelőpult</span>
-                          <ChevronRight className="w-4 h-4 text-slate-700 group-hover:translate-x-1 transition" />
-                        </div>
-                        <p className="text-xs text-slate-600 font-medium">Autó/motor hirdetések, tesztvezetés foglalások és ajánlatok.</p>
-                      </Link>
-
-                      <Link href="/providers/dashboard" className="p-4 rounded-2xl border border-slate-200 hover:border-rose-400 bg-rose-50/40 hover:bg-rose-50 transition space-y-2 block group">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-black text-rose-800 flex items-center gap-1">💄 Szépségápolási Admin</span>
-                          <ChevronRight className="w-4 h-4 text-rose-600 group-hover:translate-x-1 transition" />
-                        </div>
-                        <p className="text-xs text-slate-600 font-medium">Szalon naptár, szolgáltatás árlista, munkatársak és NAV nyugta.</p>
-                      </Link>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 pt-4 border-t">
-                    <h4 className="text-xs font-black uppercase text-slate-500 tracking-wider">Aktív Piactéri & Ágazati Hirdetéseim</h4>
-                    <div className="rounded-2xl border bg-slate-50 p-6 text-center dark:bg-slate-800/40"><p className="text-sm font-extrabold">A hirdetéseid kezeléséhez nyisd meg a piactéri hirdetéskezelőt.</p><Button asChild variant="outline" className="mt-3 rounded-xl"><Link href="/dashboard/listings">Saját hirdetések</Link></Button></div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Értesítések Tab */}
-            {activeTab === "notifications" && (
-              <Card className="rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-4">
-                <CardHeader className="p-0 border-b pb-4">
-                  <CardTitle className="text-xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <Bell className="w-5 h-5 text-amber-500" /> Értesítések & Mentett Keresések
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0 space-y-3 pt-2">
-                  <div className="rounded-2xl border bg-slate-50 p-8 text-center dark:bg-slate-800/40"><Bell className="mx-auto mb-2 h-8 w-8 text-slate-400" /><p className="font-extrabold">Valódi értesítéseid az értesítési központban láthatók</p><Button asChild variant="outline" className="mt-4 rounded-xl"><Link href="/notifications">Értesítések megnyitása</Link></Button></div>
-                </CardContent>
-              </Card>
-            )}
-          </main>
+                  </CardContent>
+                </Card>
+              )}
+            </main>
+          </div>
         </div>
       </div>
     </Layout>
+  );
+}
+
+function SidebarButton({
+  active,
+  icon: Icon,
+  label,
+  badge,
+  onClick,
+}: {
+  active: boolean;
+  icon: any;
+  label: string;
+  badge?: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full cursor-pointer items-center justify-between rounded-2xl p-3 transition ${
+        active
+          ? "bg-emerald-600 font-extrabold text-white shadow-sm"
+          : "text-slate-700 hover:bg-slate-100"
+      }`}
+    >
+      <span className="flex items-center gap-3">
+        <Icon className={`h-4 w-4 ${active ? "text-white" : "text-slate-500"}`} />
+        <span className="truncate">{label}</span>
+      </span>
+      <span className="flex items-center gap-1.5">
+        {badge !== undefined && badge > 0 && (
+          <span
+            className={`min-w-5 rounded-full px-1.5 py-0.5 text-center text-[11px] font-bold ${
+              active ? "bg-white/20 text-white" : "bg-emerald-600 text-white"
+            }`}
+          >
+            {badge}
+          </span>
+        )}
+        <ChevronRight className="h-4 w-4 opacity-50" />
+      </span>
+    </button>
+  );
+}
+
+function SubMenuItem({
+  active,
+  icon: Icon,
+  label,
+  count,
+  emphasize,
+  onClick,
+}: {
+  active: boolean;
+  icon: any;
+  label: string;
+  count?: number;
+  emphasize?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full cursor-pointer items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition ${
+        active
+          ? "bg-emerald-600 font-bold text-white"
+          : emphasize
+            ? "bg-white font-bold text-slate-950 border border-emerald-200 hover:bg-emerald-50/60"
+            : "text-slate-700 hover:bg-white"
+      }`}
+    >
+      <span className="flex items-center gap-2 truncate">
+        <Icon className={`h-3.5 w-3.5 shrink-0 ${active ? "text-white" : "text-emerald-600"}`} />
+        <span className="truncate">{label}</span>
+      </span>
+      {count !== undefined && count > 0 && (
+        <span
+          className={`ml-2 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+            active ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
+          }`}
+        >
+          {count}
+        </span>
+      )}
+    </button>
   );
 }

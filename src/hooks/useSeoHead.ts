@@ -9,6 +9,8 @@ const BASE_URL = "https://ilolit.com";
 const NOINDEX_ROUTES = [
   "/auth/",
   "/dashboard",
+  "/account",
+  "/appointments/",
   "/settings",
   "/admin",
   "/checkout",

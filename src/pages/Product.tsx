@@ -40,6 +40,7 @@ import { AlertTriangle, Star, CheckCircle, Flag } from "lucide-react";
 import { OfferModal } from "@/components/marketplace/OfferModal";
 import { BundleDiscountSection } from "@/components/marketplace/BundleDiscountSection";
 import { FollowSellerButton } from "@/components/marketplace/FollowSellerButton";
+import { VehicleViewingCard } from "@/components/shared/VehicleViewingCard";
 
 function useCountdown(endsAt: string | Date | undefined) {
   const [timeLeft, setTimeLeft] = useState("");
@@ -283,6 +284,9 @@ export function Product() {
 
   const imageUrl = listing.images?.[0]?.url || "https://placehold.co/800x800/e2e8f0/1e293b?text=Nincs+kép";
   const minNextBid = auction ? auction.currentPrice + auction.minBidIncrement : 0;
+  const isVehicleListing =
+    listing.category?.slug === "jarmuvek" ||
+    String((listing as any).categoryId || "").startsWith("cat_jarmuvek");
 
   return (
     <Layout>
@@ -424,7 +428,14 @@ export function Product() {
                 )}
               </div>
 
-              {/* Shipping modes & FoxPost/Packeta Widget */}
+              {/* Vehicle Viewing Booking Card OR Marketplace Shipping modes */}
+              {isVehicleListing ? (
+                <VehicleViewingCard
+                  listingId={listing.id}
+                  listingTitle={listing.title}
+                  isOwner={isOwner}
+                />
+              ) : (
               <div className="space-y-2.5 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200 dark:border-slate-700">
                 <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
                   <span>Szállítási lehetőségek & Csomagpontok:</span>
@@ -450,6 +461,7 @@ export function Product() {
                   </Button>
                 </div>
               </div>
+              )}
             </div>
 
             {/* AUCTION panel */}

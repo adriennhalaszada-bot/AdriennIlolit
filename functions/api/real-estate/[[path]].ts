@@ -1,4 +1,5 @@
 import { verifyToken } from "@clerk/backend";
+import { buildAppointmentLinks, emitUnifiedNotification } from "../../_shared/unifiedNotifications";
 
 interface Env {
   MEDIA_BUCKET: R2Bucket;
@@ -358,6 +359,14 @@ async function pushNotification(
     body: string;
     propertyId?: string;
     viewingId?: string;
+    listingTitle?: string;
+    coverImage?: string;
+    date?: string;
+    startTime?: string;
+    shortLocation?: string;
+    popupRequired?: boolean;
+    pushTitle?: string;
+    pushBody?: string;
   },
 ) {
   const key = `${NOTIFICATION_PREFIX}${userId}.json`;
@@ -372,6 +381,49 @@ async function pushNotification(
     ...existing,
   ].slice(0, 200);
   await writeJson(env, key, next);
+
+  // Also emit into the unified notifications + device/web push system (privacy-safe: never exact address)
+  const eventType =
+    notif.type === "VIEWING_APPROVED"
+      ? "APPOINTMENT_CONFIRMED"
+      : notif.type === "VIEWING_PROPOSED"
+        ? "APPOINTMENT_PROPOSED_NEW_TIME"
+        : notif.type === "VIEWING_REJECTED"
+          ? "APPOINTMENT_REJECTED"
+          : notif.type === "VIEWING_REVOKED" || notif.type === "VIEWING_CANCELLED"
+            ? "APPOINTMENT_CANCELLED"
+            : "APPOINTMENT_REQUESTED";
+
+  const links = notif.viewingId
+    ? buildAppointmentLinks("PROPERTY_VIEWING", notif.viewingId)
+    : { deepLink: "ilolit://appointments/property", webUrl: "/dashboard/bookings/properties" };
+
+  await emitUnifiedNotification(
+    env,
+    userId,
+    {
+      category: "INGATLAN",
+      eventType,
+      title: notif.title,
+      body: notif.body,
+      appointmentId: notif.viewingId,
+      appointmentType: "PROPERTY_VIEWING",
+      listingId: notif.propertyId,
+      listingTitle: notif.listingTitle,
+      coverImage: notif.coverImage,
+      date: notif.date,
+      startTime: notif.startTime,
+      shortLocation: notif.shortLocation,
+      deepLink: links.deepLink,
+      webUrl: links.webUrl,
+      popupRequired: notif.popupRequired ?? ["APPOINTMENT_CONFIRMED", "APPOINTMENT_PROPOSED_NEW_TIME", "APPOINTMENT_CANCELLED", "APPOINTMENT_REJECTED"].includes(eventType),
+    },
+    {
+      sendPush: true,
+      pushTitle: notif.pushTitle || notif.title,
+      pushBody: notif.pushBody || notif.body,
+    },
+  );
 }
 
 async function listAllViewings(env: Env): Promise<any[]> {
@@ -1675,10 +1727,18 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           }),
           pushNotification(env, viewing.requesterId, {
             type: "VIEWING_APPROVED",
-            title: "Megtekintés jóváhagyva – a pontos cím elérhető",
-            body: `A hirdető elfogadta a megtekintést: ${viewing.propertyTitle} (${viewing.date} ${viewing.startTime}). Nyisd meg a Megtekintés részleteit!`,
+            title: "Megtekintésed visszaigazolva",
+            body: `Jó hír! A hirdető elfogadta az ingatlan megtekintési kérelmedet (${viewing.date} ${viewing.startTime}).`,
             propertyId: viewing.propertyId,
             viewingId: viewing.id,
+            listingTitle: viewing.propertyTitle,
+            coverImage: viewing.propertyCoverImage,
+            date: viewing.date,
+            startTime: viewing.startTime,
+            shortLocation: viewing.propertyPublicLocation,
+            popupRequired: true,
+            pushTitle: "Megtekintés visszaigazolva",
+            pushBody: `Az ingatlan megtekintését a hirdető visszaigazolta. ${viewing.date} ${viewing.startTime}. Koppints a részletekért.`,
           }),
         ]);
         return json(enrichViewingReminders({ ...viewing, role: "owner" }));
@@ -1716,10 +1776,18 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           }),
           pushNotification(env, viewing.requesterId, {
             type: "VIEWING_PROPOSED",
-            title: "A hirdető másik időpontot ajánlott",
-            body: `Új javaslat a(z) „${viewing.propertyTitle}” megtekintésére: ${proposedDate} ${proposedStartTime}.`,
+            title: "Új időpont elfogadásra vár",
+            body: `A hirdető másik időpontot javasolt a(z) „${viewing.propertyTitle}” megtekintésére: ${proposedDate} ${proposedStartTime}.`,
             propertyId: viewing.propertyId,
             viewingId: viewing.id,
+            listingTitle: viewing.propertyTitle,
+            coverImage: viewing.propertyCoverImage,
+            date: proposedDate,
+            startTime: proposedStartTime,
+            shortLocation: viewing.propertyPublicLocation,
+            popupRequired: true,
+            pushTitle: "Új időpont elfogadásra vár",
+            pushBody: `A hirdető másik megtekintési időpontot javasolt (${proposedDate} ${proposedStartTime}). Koppints az elfogadáshoz.`,
           }),
         ]);
         return json(enrichViewingReminders({ ...viewing, role: "owner" }));
@@ -1750,6 +1818,12 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
             body: `A hirdető nem tudta elfogadni a(z) ${viewing.date} ${viewing.startTime} időpontot (${viewing.propertyTitle}).`,
             propertyId: viewing.propertyId,
             viewingId: viewing.id,
+            listingTitle: viewing.propertyTitle,
+            coverImage: viewing.propertyCoverImage,
+            date: viewing.date,
+            startTime: viewing.startTime,
+            shortLocation: viewing.propertyPublicLocation,
+            popupRequired: true,
           }),
         ]);
         return json(enrichViewingReminders({ ...viewing, role: "owner" }));
@@ -1776,10 +1850,16 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           }),
           pushNotification(env, viewing.requesterId, {
             type: "VIEWING_REVOKED",
-            title: "Megtekintés visszavonva",
-            body: `A hirdető visszavonta a(z) ${viewing.date} ${viewing.startTime} megtekintést (${viewing.propertyTitle}).`,
+            title: "Megtekintés lemondva",
+            body: `A hirdető lemondta a(z) ${viewing.date} ${viewing.startTime} megtekintést (${viewing.propertyTitle}).`,
             propertyId: viewing.propertyId,
             viewingId: viewing.id,
+            listingTitle: viewing.propertyTitle,
+            coverImage: viewing.propertyCoverImage,
+            date: viewing.date,
+            startTime: viewing.startTime,
+            shortLocation: viewing.propertyPublicLocation,
+            popupRequired: true,
           }),
         ]);
         return json(enrichViewingReminders({ ...viewing, role: "owner" }));

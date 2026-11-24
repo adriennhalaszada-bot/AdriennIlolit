@@ -1,20 +1,54 @@
 import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
-import { Bell, Check, Trash2, Settings, Sparkles, AlertCircle, Calendar, BookOpen, Tag } from "lucide-react";
-import { useNotifications, NotificationCategory } from "@/context/NotificationsContext";
+import {
+  Bell,
+  Building2,
+  Car,
+  Check,
+  GraduationCap,
+  Settings,
+  Store,
+  Trash2,
+  Wrench,
+} from "lucide-react";
+import { useNotifications } from "@/context/NotificationsContext";
+import { useUnifiedAppointments } from "@/context/UnifiedAppointmentsContext";
+import {
+  NOTIFICATION_CATEGORY_LABELS,
+  type UnifiedNotificationCategory,
+} from "@/lib/appointments/types";
 
-const CATEGORY_ICONS: Record<NotificationCategory, any> = {
-  price_drop: Tag,
-  saved_search: Sparkles,
-  appointment: Calendar,
-  course: BookOpen,
-  back_in_stock: Tag,
-  system: AlertCircle,
+const CATEGORY_ICONS: Record<UnifiedNotificationCategory, any> = {
+  INGATLAN: Building2,
+  JARMU: Car,
+  SZOLGALTATAS: Wrench,
+  PIACTER: Store,
+  OKTATAS: GraduationCap,
 };
+
+function mapLegacyCat(cat: string): UnifiedNotificationCategory {
+  if (cat === "course") return "OKTATAS";
+  if (cat === "appointment") return "SZOLGALTATAS";
+  return "PIACTER";
+}
 
 export function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
-  const { notifications, unreadCount, markAsRead, markAllAsRead, deleteNotification } = useNotifications();
+  const {
+    notifications: unifiedNotifs,
+    unreadCount: unifiedUnread,
+    markNotificationRead,
+    markAllNotificationsRead,
+    deleteNotification: deleteUnified,
+  } = useUnifiedAppointments();
+  const {
+    notifications: legacyNotifs,
+    unreadCount: legacyUnread,
+    markAsRead: markLegacyRead,
+    markAllAsRead: markAllLegacyRead,
+    deleteNotification: deleteLegacy,
+  } = useNotifications();
+
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -27,38 +61,70 @@ export function NotificationDropdown() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const combined = [
+    ...unifiedNotifs.map((n) => ({
+      id: n.id,
+      source: "unified" as const,
+      category: n.category,
+      title: n.title,
+      body: n.body,
+      read: n.read,
+      url: n.webUrl || "/dashboard/bookings/properties",
+      createdAt: n.createdAt,
+    })),
+    ...legacyNotifs.map((n) => ({
+      id: `pref_${n.id}`,
+      rawId: n.id,
+      source: "legacy" as const,
+      category: mapLegacyCat(n.category),
+      title: n.title,
+      body: n.message,
+      read: n.read,
+      url: n.actionUrl || "/notifications",
+      createdAt: n.timestamp,
+    })),
+  ]
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+    .slice(0, 20);
+
+  const totalUnread = unifiedUnread + legacyUnread;
+
+  const handleMarkAll = () => {
+    void markAllNotificationsRead();
+    markAllLegacyRead();
+  };
+
   return (
     <div className="relative" ref={menuRef}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
-        aria-label="Értesítések"
+        className="relative cursor-pointer rounded-xl border border-slate-200 bg-white p-2.5 text-slate-700 transition hover:bg-slate-50"
+        aria-label={totalUnread > 0 ? `Értesítések (${totalUnread})` : "Értesítések"}
       >
-        <Bell className="w-4 h-4 text-slate-700 dark:text-slate-200" />
-        {unreadCount > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center animate-pulse">
-            {unreadCount}
+        <Bell className="h-4 w-4 text-slate-700" />
+        {totalUnread > 0 && (
+          <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-black text-white shadow-xs">
+            {totalUnread > 99 ? "99+" : totalUnread}
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 md:w-96 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 z-[999] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-          {/* Header */}
-          <div className="p-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-950/50">
+        <div className="animate-in fade-in zoom-in-95 absolute right-0 z-[999] mt-2 w-80 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl duration-150 md:w-96">
+          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 p-3.5">
             <div className="flex items-center gap-2">
-              <Bell className="w-4 h-4 text-emerald-600" />
-              <span className="font-extrabold text-xs text-slate-900 dark:text-white">
-                Értesítések ({unreadCount} új)
+              <Bell className="h-4 w-4 text-emerald-600" />
+              <span className="text-xs font-extrabold text-slate-900">
+                Értesítések {totalUnread > 0 ? `(${totalUnread})` : ""}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              {unreadCount > 0 && (
+              {totalUnread > 0 && (
                 <button
                   type="button"
-                  onClick={markAllAsRead}
-                  className="text-[10px] font-extrabold text-emerald-600 hover:underline"
+                  onClick={handleMarkAll}
+                  className="text-[11px] font-bold text-emerald-700 hover:underline"
                 >
                   Mindet olvasottá
                 </button>
@@ -66,66 +132,82 @@ export function NotificationDropdown() {
               <Link
                 href="/notifications"
                 onClick={() => setIsOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600"
+                className="p-1 text-slate-400 hover:text-slate-700"
+                title="Értesítések és beállítások"
               >
-                <Settings className="w-3.5 h-3.5" />
+                <Settings className="h-3.5 w-3.5" />
               </Link>
             </div>
           </div>
 
-          {/* List */}
-          <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
-            {notifications.length === 0 ? (
+          <div className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
+            {combined.length === 0 ? (
               <div className="p-8 text-center text-xs font-semibold text-slate-400">
                 Nincsenek értesítések.
               </div>
             ) : (
-              notifications.map((n) => {
+              combined.map((n) => {
                 const Icon = CATEGORY_ICONS[n.category] || Bell;
                 return (
                   <div
                     key={n.id}
-                    className={`p-3 text-xs transition flex gap-3 ${
-                      !n.read
-                        ? "bg-emerald-50/40 dark:bg-emerald-950/20 font-medium"
-                        : "hover:bg-slate-50 dark:hover:bg-slate-800/50 opacity-80"
+                    className={`flex gap-3 p-3 text-xs transition ${
+                      !n.read ? "bg-emerald-50/50 font-medium" : "opacity-85 hover:bg-slate-50"
                     }`}
                   >
-                    <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 shrink-0 h-fit mt-0.5">
-                      <Icon className="w-3.5 h-3.5" />
+                    <div className="mt-0.5 h-fit shrink-0 rounded-xl border border-emerald-200 bg-emerald-50 p-2 text-emerald-700">
+                      <Icon className="h-3.5 w-3.5" />
                     </div>
-                    <div className="flex-1 space-y-1">
+                    <div className="min-w-0 flex-1 space-y-1">
                       <div className="flex items-start justify-between gap-1">
-                        <Link
-                          href={n.actionUrl || "#"}
-                          onClick={() => {
-                            markAsRead(n.id);
-                            setIsOpen(false);
-                          }}
-                          className="font-extrabold text-slate-900 dark:text-white hover:text-emerald-600 transition"
-                        >
-                          {n.title}
-                        </Link>
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                            {NOTIFICATION_CATEGORY_LABELS[n.category]}
+                          </span>
+                          <Link
+                            href={n.url}
+                            onClick={() => {
+                              if (!n.read) {
+                                if (n.source === "unified") void markNotificationRead(n.id);
+                                else markLegacyRead(n.rawId);
+                              }
+                              setIsOpen(false);
+                            }}
+                            className="block font-bold text-slate-900 transition hover:text-emerald-700"
+                          >
+                            {n.title}
+                          </Link>
+                        </div>
                         <button
                           type="button"
-                          onClick={() => deleteNotification(n.id)}
-                          className="text-slate-400 hover:text-rose-600 p-0.5 transition"
+                          onClick={() => {
+                            if (n.source === "unified") void deleteUnified(n.id);
+                            else deleteLegacy(n.rawId);
+                          }}
+                          className="p-0.5 text-slate-400 transition hover:text-rose-600"
+                          aria-label="Törlés"
                         >
-                          <Trash2 className="w-3 h-3" />
+                          <Trash2 className="h-3 w-3" />
                         </button>
                       </div>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                        {n.message}
-                      </p>
-                      <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1">
-                        <span>{new Date(n.timestamp).toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" })}</span>
+                      <p className="text-[11px] leading-relaxed text-slate-600">{n.body}</p>
+                      <div className="flex items-center justify-between pt-0.5 text-[10px] text-slate-400">
+                        <span>
+                          {new Date(n.createdAt).toLocaleTimeString("hu-HU", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
                         {!n.read && (
                           <button
                             type="button"
-                            onClick={() => markAsRead(n.id)}
-                            className="text-emerald-600 font-bold hover:underline flex items-center gap-1"
+                            onClick={() => {
+                              if (n.source === "unified") void markNotificationRead(n.id);
+                              else markLegacyRead(n.rawId);
+                            }}
+                            className="flex items-center gap-1 font-bold text-emerald-700 hover:underline"
                           >
-                            <Check className="w-2.5 h-2.5" /> Olvasott
+                            <Check className="h-2.5 w-2.5" /> Olvasott
                           </button>
                         )}
                       </div>
@@ -136,14 +218,13 @@ export function NotificationDropdown() {
             )}
           </div>
 
-          {/* Footer */}
-          <div className="p-2.5 bg-slate-50 dark:bg-slate-950 text-center border-t border-slate-100 dark:border-slate-800">
+          <div className="border-t border-slate-100 bg-slate-50 p-2.5 text-center">
             <Link
               href="/notifications"
               onClick={() => setIsOpen(false)}
-              className="text-xs font-extrabold text-emerald-600 hover:underline"
+              className="text-xs font-extrabold text-emerald-700 hover:underline"
             >
-              Összes értesítés & Beállítások ➔
+              Összes értesítés &amp; Riasztások megnyitása
             </Link>
           </div>
         </div>

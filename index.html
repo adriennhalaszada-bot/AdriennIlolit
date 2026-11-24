@@ -3,7 +3,7 @@
   <head>
     <script>
       (function() {
-        var CURRENT_BUILD = "v9.1_20261124_delete_old_viewings";
+        var CURRENT_BUILD = "v9.2_20261124_unified_appointments_account";
         try {
           var savedBuild = localStorage.getItem("ilolit_build_id");
           if (savedBuild !== CURRENT_BUILD) {
@@ -19,6 +19,10 @@
               });
             }
             window.location.reload();
+          } else if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+              navigator.serviceWorker.register('/sw.js').catch(function() {});
+            });
           }
         } catch(e) {}
       })();

@@ -1,4 +1,5 @@
 import { verifyToken } from "@clerk/backend";
+import { emitUnifiedNotification } from "../../_shared/unifiedNotifications";
 
 interface Env {
   MEDIA_BUCKET: R2Bucket;
@@ -183,6 +184,22 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     booking.status = input.status;
     booking.updatedAt = new Date().toISOString();
     await writeBooking(context.env, booking);
+    await emitUnifiedNotification(context.env, booking.customerId, {
+      category: "SZOLGALTATAS",
+      eventType: input.status === "CONFIRMED" ? "APPOINTMENT_CONFIRMED" : "APPOINTMENT_REJECTED",
+      title: input.status === "CONFIRMED" ? "Szolgáltatási foglalás visszaigazolva" : "Szolgáltatási foglalás elutasítva",
+      body: `${booking.providerName} – ${booking.serviceName} (${booking.bookingDate} ${booking.bookingTime}).`,
+      appointmentId: booking.id,
+      appointmentType: "SERVICE",
+      listingId: booking.providerId,
+      listingTitle: `${booking.providerName} – ${booking.serviceName}`,
+      date: booking.bookingDate,
+      startTime: String(booking.bookingTime || "").slice(0, 5),
+      shortLocation: booking.providerName,
+      deepLink: `ilolit://appointments/service/${booking.id}`,
+      webUrl: "/dashboard/bookings/services",
+      popupRequired: true,
+    });
     return json(booking);
   }
 
@@ -221,6 +238,22 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     booking.rescheduledCount = Number(booking.rescheduledCount || 0) + 1;
     booking.updatedAt = new Date().toISOString();
     await writeBooking(context.env, booking);
+    await emitUnifiedNotification(context.env, booking.providerOwnerId, {
+      category: "SZOLGALTATAS",
+      eventType: "APPOINTMENT_PROPOSED_NEW_TIME",
+      title: "Szolgáltatási időpont átütemezve",
+      body: `${booking.customerName} új időpontot kért: ${booking.serviceName} (${booking.bookingDate} ${booking.bookingTime}).`,
+      appointmentId: booking.id,
+      appointmentType: "SERVICE",
+      listingId: booking.providerId,
+      listingTitle: `${booking.providerName} – ${booking.serviceName}`,
+      date: booking.bookingDate,
+      startTime: String(booking.bookingTime || "").slice(0, 5),
+      shortLocation: booking.providerName,
+      deepLink: `ilolit://appointments/service/${booking.id}`,
+      webUrl: "/providers/dashboard",
+      popupRequired: true,
+    });
     return json(booking);
   }
 
@@ -241,6 +274,23 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     }
     booking.updatedAt = new Date().toISOString();
     await writeBooking(context.env, booking);
+    const notifyTarget = booking.providerOwnerId === userId ? booking.customerId : booking.providerOwnerId;
+    await emitUnifiedNotification(context.env, notifyTarget, {
+      category: "SZOLGALTATAS",
+      eventType: "APPOINTMENT_CANCELLED",
+      title: "Szolgáltatási foglalás lemondva",
+      body: `${booking.providerName} – ${booking.serviceName} (${booking.bookingDate} ${booking.bookingTime}) lemondásra került.`,
+      appointmentId: booking.id,
+      appointmentType: "SERVICE",
+      listingId: booking.providerId,
+      listingTitle: `${booking.providerName} – ${booking.serviceName}`,
+      date: booking.bookingDate,
+      startTime: String(booking.bookingTime || "").slice(0, 5),
+      shortLocation: booking.providerName,
+      deepLink: `ilolit://appointments/service/${booking.id}`,
+      webUrl: "/dashboard/bookings/services",
+      popupRequired: true,
+    });
     return json(booking);
   }
 

@@ -8,6 +8,9 @@ import { NotificationDropdown } from "@/components/shared/NotificationDropdown";
 import { ComparisonBar } from "@/components/shared/ComparisonBar";
 import { ComparisonModal } from "@/components/shared/ComparisonModal";
 import { TestControlModal } from "@/components/shared/TestControlModal";
+import { AppointmentRealtimePopup } from "@/components/appointments/AppointmentRealtimePopup";
+import { useUnifiedAppointments } from "@/context/UnifiedAppointmentsContext";
+import { useNotifications } from "@/context/NotificationsContext";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [sms, setSms] = useState<{ phone: string; message: string; timestamp: string } | null>(null);
@@ -38,6 +41,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Floating Comparison Bar & Modal */}
       <ComparisonBar />
       <ComparisonModal />
+
+      {/* Real-time Appointment Confirmation & Update Modal / Mobile Bottom Sheet */}
+      <AppointmentRealtimePopup />
 
       {/* Test Control Modal */}
       <TestControlModal
@@ -80,6 +86,9 @@ function DesktopNav({ onOpenTestModal }: { onOpenTestModal?: () => void }) {
   const [, navigate] = useLocation();
   const [location] = useLocation();
   const { isSignedIn, isLoaded } = useUser();
+  const { unreadCount: unifiedUnread } = useUnifiedAppointments();
+  const { unreadCount: legacyUnread } = useNotifications();
+  const totalUnread = unifiedUnread + legacyUnread;
   const showTestControls = import.meta.env.DEV;
 
   const navItems = [
@@ -178,8 +187,13 @@ function DesktopNav({ onOpenTestModal }: { onOpenTestModal?: () => void }) {
                   },
                 }}
               />
-              <Link href="/dashboard" className="hidden sm:inline text-xs md:text-sm font-extrabold text-emerald-700">
-                Fiókom
+              <Link href="/dashboard" className="hidden items-center gap-1.5 text-xs font-extrabold text-emerald-700 sm:inline-flex md:text-sm">
+                <span>Fiókom</span>
+                {totalUnread > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-600 px-1.5 text-[10px] font-black text-white">
+                    {totalUnread > 99 ? "99+" : totalUnread}
+                  </span>
+                )}
               </Link>
             </div>
           ) : (
@@ -198,6 +212,9 @@ function DesktopNav({ onOpenTestModal }: { onOpenTestModal?: () => void }) {
 
 function MobileNav() {
   const [location] = useLocation();
+  const { unreadCount: unifiedUnread } = useUnifiedAppointments();
+  const { unreadCount: legacyUnread } = useNotifications();
+  const totalUnread = unifiedUnread + legacyUnread;
   let isSignedIn = false;
   try {
     const userRes = useUser();
@@ -226,7 +243,14 @@ function MobileNav() {
               "flex flex-col items-center justify-center flex-1 h-full space-y-1 text-slate-500 transition-colors shrink-0",
               isActive && "text-emerald-600 font-bold"
             )}>
-              <link.icon className={cn("w-4 h-4", isActive && "text-emerald-600")} />
+              <span className="relative">
+                <link.icon className={cn("w-4 h-4", isActive && "text-emerald-600")} />
+                {link.label === "Fiók" && totalUnread > 0 && (
+                  <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-600 px-1 text-[9px] font-black text-white">
+                    {totalUnread > 9 ? "9+" : totalUnread}
+                  </span>
+                )}
+              </span>
               <span className="text-[9px] font-extrabold truncate">{link.label}</span>
             </Link>
           );

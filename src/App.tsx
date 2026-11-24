@@ -55,7 +55,12 @@ import { UniversalSearch } from "./pages/UniversalSearch";
 import { FavoritesProvider } from "./context/FavoritesContext";
 import { SavedSearchesProvider } from "./context/SavedSearchesContext";
 import { NotificationsProvider } from "./context/NotificationsContext";
+import { UnifiedAppointmentsProvider } from "./context/UnifiedAppointmentsContext";
 import { ComparisonProvider } from "./context/ComparisonContext";
+import {
+  PropertyAppointmentDeepLink,
+  VehicleAppointmentDeepLink,
+} from "./pages/appointments/AppointmentDeepLinkPage";
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: any }> {
   constructor(props: { children: ReactNode }) {
@@ -310,12 +315,19 @@ function AppRouterInner() {
       {/* Keep the concrete dashboard routes before the dashboard root.
           These used to live behind a catch-all route, which left direct
           Cloudflare page loads such as /dashboard/listings completely blank. */}
+      <Route path="/appointments/property/:id" component={PropertyAppointmentDeepLink} />
+      <Route path="/appointments/vehicle/:id" component={VehicleAppointmentDeepLink} />
+      <Route path="/dashboard/bookings/services" component={Dashboard} />
+      <Route path="/dashboard/bookings/properties" component={Dashboard} />
+      <Route path="/dashboard/bookings/vehicles" component={Dashboard} />
+      <Route path="/dashboard/calendar" component={Dashboard} />
+      <Route path="/dashboard/notifications" component={Dashboard} />
       <Route path="/dashboard/listings" component={DashboardListings} />
       <Route path="/dashboard/favorites" component={DashboardFavorites} />
       <Route path="/dashboard/transactions" component={DashboardTransactions} />
       <Route path="/account" component={Dashboard} />
       <Route path="/dashboard" component={Dashboard} />
-      <Route path="/notifications" component={Hirdetesfigyelo} />
+      <Route path="/notifications" component={Notifications} />
       <Route path="/hirdetesfigyelo" component={Hirdetesfigyelo} />
       <Route path="/messages" component={Messages} />
       <Route path="/messages/:id" component={Chat} />
@@ -370,7 +382,7 @@ function AppRouterInner() {
               <UsernameGuardRoute path="/sell" component={Sell} />
               <UsernameGuardRoute path="/sell/:id/edit" component={Sell} />
               <UsernameGuardRoute path="/checkout" component={Checkout} />
-              <UsernameGuardRoute path="/notifications" component={Hirdetesfigyelo} />
+              <UsernameGuardRoute path="/notifications" component={Notifications} />
               <UsernameGuardRoute path="/hirdetesfigyelo" component={Hirdetesfigyelo} />
               <UsernameGuardRoute path="/kedvenc-eladok" component={KedvencEladok} />
               <UsernameGuardRoute path="/profile" component={SettingsProfile} />
@@ -453,7 +465,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v9.1_20261124_delete_old_viewings";
+    const CURRENT_VER = "v9.2_20261124_unified_appointments_account";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);
@@ -496,7 +508,9 @@ function App() {
                       signUpUrl={`${basePath}/auth/register`}
                     >
                       <SafeClerkTokenSetter />
-                      <AppRouterInner />
+                      <UnifiedAppointmentsProvider>
+                        <AppRouterInner />
+                      </UnifiedAppointmentsProvider>
                     </ClerkProvider>
                   </ErrorBoundary>
                 </WouterRouter>

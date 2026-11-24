@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { LocationSearchWidget } from "@/components/shared/LocationSearchWidget";
 import { DEFAULT_LOCATION_STATE, applyLocationFilter } from "@/lib/locationFilter";
 import { useLocationQueryState } from "@/hooks/useLocationQueryState";
-import { Car, Gauge, MapPin, Package, PlusCircle, Search } from "lucide-react";
+import { Calendar, Car, Gauge, MapPin, Package, PlusCircle, Search } from "lucide-react";
 
 // Compatibility for old modules that are no longer routed. An empty collection
 // ensures demo vehicles can never leak into the public site.
@@ -43,9 +43,14 @@ export default function Vehicles() {
                 <h1 className="mt-2 text-3xl font-black text-slate-950 md:text-4xl">Eladó járművek</h1>
                 <p className="mt-2 max-w-2xl text-sm text-slate-600">Kizárólag aktív, ténylegesen elmentett járműhirdetések.</p>
               </div>
-              <Button asChild className="h-12 rounded-xl bg-emerald-600 px-6 font-bold text-white hover:bg-emerald-700">
-                <Link href="/sell?categorySlug=jarmuvek"><PlusCircle className="mr-2 h-5 w-5" /> Járműhirdetés feladása</Link>
-              </Button>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button asChild variant="outline" className="h-12 rounded-xl border-slate-200 px-5 font-bold text-slate-800 hover:bg-slate-50">
+                  <Link href="/dashboard/bookings/vehicles"><Calendar className="mr-2 h-4 w-4 text-emerald-600" /> Jármű megtekintéseim</Link>
+                </Button>
+                <Button asChild className="h-12 rounded-xl bg-emerald-600 px-6 font-bold text-white hover:bg-emerald-700">
+                  <Link href="/sell?categorySlug=jarmuvek"><PlusCircle className="mr-2 h-5 w-5" /> Járműhirdetés feladása</Link>
+                </Button>
+              </div>
             </div>
           </div>
         </section>
