@@ -213,6 +213,13 @@ export const realEstateApi = {
     });
   },
 
+  deleteViewing(viewingId: string) {
+    return customFetch<{ deleted: boolean; id: string }>(
+      `/api/real-estate/viewings/${encodeURIComponent(viewingId)}`,
+      { method: "DELETE" },
+    );
+  },
+
   // Audit log, messages, blocks, reports, notifications
   getAuditLog(propertyId: string) {
     return customFetch<{ items: AuditLogEntry[] }>(

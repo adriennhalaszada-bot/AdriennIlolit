@@ -1379,8 +1379,9 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       const propertyFilter = url.searchParams.get("propertyId");
       const items = (await listAllViewings(env))
         .filter((v) => {
-          const involved = v.ownerId === userId || v.requesterId === userId;
-          if (!involved) return false;
+          const isOwnerVisible = v.ownerId === userId && !v.hiddenByOwner;
+          const isRequesterVisible = v.requesterId === userId && !v.hiddenByRequester;
+          if (!isOwnerVisible && !isRequesterVisible) return false;
           if (propertyFilter && v.propertyId !== propertyFilter) return false;
           return true;
         })
@@ -1868,6 +1869,42 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       ]);
 
       return json(enrichViewingReminders({ ...viewing, role: "requester" }));
+    }
+
+    // DELETE /api/real-estate/viewings/:id (Manually delete old or cancelled/rejected/revoked viewings)
+    if (method === "DELETE" && viewingId && !action) {
+      const viewing = await readJson<any>(env, `${VIEWING_PREFIX}${viewingId}.json`);
+      if (!viewing || (viewing.ownerId !== userId && viewing.requesterId !== userId)) {
+        return json({ error: "A megtekintési kérelem nem található." }, 404);
+      }
+
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const isClosed = ["REJECTED", "REVOKED_BY_OWNER", "CANCELLED_BY_REQUESTER"].includes(viewing.status);
+      const isPast = Boolean(viewing.date && viewing.date < todayIso);
+
+      if (!isClosed && !isPast) {
+        return json(
+          {
+            error:
+              "Aktív, jövőbeli megtekintés nem törölhető közvetlenül – előbb utasítsd el, vond vissza vagy mondd le.",
+          },
+          409,
+        );
+      }
+
+      // Simulated test requests can be permanently removed by the owner
+      if (viewing.ownerId === userId && String(viewing.requesterId || "").startsWith("test_requester_")) {
+        await env.MEDIA_BUCKET.delete(`${VIEWING_PREFIX}${viewingId}.json`);
+        await syncPropertyStats(env, viewing.propertyId);
+        return json({ deleted: true, id: viewingId });
+      }
+
+      if (viewing.ownerId === userId) viewing.hiddenByOwner = true;
+      if (viewing.requesterId === userId) viewing.hiddenByRequester = true;
+      viewing.updatedAt = new Date().toISOString();
+      await writeJson(env, `${VIEWING_PREFIX}${viewingId}.json`, viewing);
+
+      return json({ deleted: true, id: viewingId });
     }
 
     // PATCH /api/real-estate/viewings/:id/reminders

@@ -21,6 +21,7 @@ import {
   MapPin,
   Phone,
   ShieldCheck,
+  Trash2,
   XCircle,
 } from "lucide-react";
 
@@ -107,6 +108,24 @@ export default function RealEstateMyViewings() {
       queryClient.invalidateQueries({ queryKey: ["real-estate-my-viewings"] });
     } catch (err: any) {
       toast({ title: err?.message || "Nem sikerült menteni az emlékeztetőt.", variant: "destructive" });
+    }
+  };
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const canDeleteViewing = (v: ViewingRequest) =>
+    ["REJECTED", "REVOKED_BY_OWNER", "CANCELLED_BY_REQUESTER"].includes(v.status) || v.date < todayIso;
+
+  const handleDeleteFromList = async (v: ViewingRequest) => {
+    if (!window.confirm("Biztosan törlöd ezt a régi/lemondott megtekintést a listádból?")) return;
+    setBusyId(v.id);
+    try {
+      await realEstateApi.deleteViewing(v.id);
+      queryClient.invalidateQueries({ queryKey: ["real-estate-my-viewings"] });
+      toast({ title: "Törölve a listából" });
+    } catch (err: any) {
+      toast({ title: err?.message || "Nem sikerült törölni.", variant: "destructive" });
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -310,6 +329,20 @@ export default function RealEstateMyViewings() {
                           >
                             <XCircle className="mr-1.5 h-4 w-4" />
                             Megtekintés lemondása
+                          </Button>
+                        )}
+
+                        {canDeleteViewing(v) && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={busyId === v.id}
+                            onClick={() => handleDeleteFromList(v)}
+                            className="rounded-xl border-slate-200 text-xs font-bold text-slate-600 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                          >
+                            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                            Törlés
                           </Button>
                         )}
                       </div>

@@ -213,6 +213,10 @@ export default function RealEstateAdmin() {
   const ownerViewings = (viewingsData?.items || []).filter((v) => v.role === "owner");
   const pendingViewings = ownerViewings.filter((v) => v.status === "PENDING");
   const approvedViewings = ownerViewings.filter((v) => v.status === "APPROVED");
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const isDeletableViewing = (v: ViewingRequest) =>
+    ["REJECTED", "REVOKED_BY_OWNER", "CANCELLED_BY_REQUESTER"].includes(v.status) || v.date < todayIso;
+  const deletableViewings = ownerViewings.filter(isDeletableViewing);
   const auditLogs = auditData?.items || [];
   const messages = messagesData?.items || [];
 
@@ -335,6 +339,37 @@ export default function RealEstateAdmin() {
       toast({ title: "Felhasználó letiltva" });
     } catch (err: any) {
       toast({ title: err?.message || "Nem sikerült tiltani.", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteViewing = async (v: ViewingRequest) => {
+    if (!window.confirm("Biztosan törlöd ezt a régi/lezárt érdeklődést a listából?")) return;
+    setViewingBusyId(v.id);
+    try {
+      await realEstateApi.deleteViewing(v.id);
+      refreshAll();
+      toast({ title: "Érdeklődés törölve a listából" });
+    } catch (err: any) {
+      toast({ title: err?.message || "Nem sikerült törölni.", variant: "destructive" });
+    } finally {
+      setViewingBusyId(null);
+    }
+  };
+
+  const handleBulkDeleteOldViewings = async () => {
+    if (deletableViewings.length === 0) return;
+    if (!window.confirm(`Biztosan törlöd mind a(z) ${deletableViewings.length} régi/lemondott érdeklődést?`)) return;
+    setViewingBusyId("bulk");
+    try {
+      for (const v of deletableViewings) {
+        await realEstateApi.deleteViewing(v.id);
+      }
+      refreshAll();
+      toast({ title: `${deletableViewings.length} régi / lemondott érdeklődés törölve` });
+    } catch (err: any) {
+      toast({ title: err?.message || "Nem sikerült minden tételt törölni.", variant: "destructive" });
+    } finally {
+      setViewingBusyId(null);
     }
   };
 
@@ -1126,21 +1161,40 @@ export default function RealEstateAdmin() {
                             A pontos cím csak akkor válik láthatóvá az érdeklődőnek, ha elfogadod a kérelmét.
                           </p>
                         </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={viewingBusyId === "test"}
-                          onClick={handleCreateTestViewing}
-                          className="rounded-xl border-emerald-300 bg-emerald-50 text-xs font-bold text-emerald-800 hover:bg-emerald-100"
-                        >
-                          {viewingBusyId === "test" ? (
-                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Plus className="mr-1.5 h-3.5 w-3.5" />
+                        <div className="flex flex-wrap items-center gap-2">
+                          {deletableViewings.length > 0 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={viewingBusyId === "bulk"}
+                              onClick={handleBulkDeleteOldViewings}
+                              className="rounded-xl border-rose-200 bg-white text-xs font-bold text-rose-700 hover:bg-rose-50"
+                            >
+                              {viewingBusyId === "bulk" ? (
+                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                              )}
+                              Régi / lemondottak törlése ({deletableViewings.length})
+                            </Button>
                           )}
-                          Teszt érdeklődői kérelem szimulálása
-                        </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={viewingBusyId === "test"}
+                            onClick={handleCreateTestViewing}
+                            className="rounded-xl border-emerald-300 bg-emerald-50 text-xs font-bold text-emerald-800 hover:bg-emerald-100"
+                          >
+                            {viewingBusyId === "test" ? (
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Plus className="mr-1.5 h-3.5 w-3.5" />
+                            )}
+                            Teszt érdeklődői kérelem szimulálása
+                          </Button>
+                        </div>
                       </div>
 
                       {ownerViewings.length === 0 ? (
@@ -1176,14 +1230,27 @@ export default function RealEstateAdmin() {
                                     )}
                                   </div>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleBlockUser(v.requesterId)}
-                                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-500 hover:border-rose-200 hover:text-rose-600"
-                                  >
-                                    <Ban className="h-3.5 w-3.5" />
-                                    Tiltás
-                                  </button>
+                                  <div className="flex items-center gap-1.5">
+                                    {isDeletableViewing(v) && (
+                                      <button
+                                        type="button"
+                                        disabled={viewingBusyId === v.id}
+                                        onClick={() => handleDeleteViewing(v)}
+                                        className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50/60 px-2.5 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                        Törlés
+                                      </button>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => handleBlockUser(v.requesterId)}
+                                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-500 hover:border-rose-200 hover:text-rose-600"
+                                    >
+                                      <Ban className="h-3.5 w-3.5" />
+                                      Tiltás
+                                    </button>
+                                  </div>
                                 </div>
 
                                 {/* Owner actions */}
