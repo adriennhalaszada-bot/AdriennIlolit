@@ -2,11 +2,13 @@ import { customFetch } from "@workspace/api-client-react";
 import type {
   ApprovedViewingDetails,
   AuditLogEntry,
+  ModerationLogOverview,
   PhoneVerificationStatus,
   PropertyMessage,
   PropertyStatus,
   RealEstateNotification,
   RealEstateProperty,
+  ViewingPurpose,
   ViewingRequest,
   ViewingSlot,
 } from "./types";
@@ -153,6 +155,12 @@ export const realEstateApi = {
     propertyId: string;
     slotId: string;
     requesterName: string;
+    requesterEmailVerified?: boolean;
+    requesterProfileComplete?: boolean;
+    requesterAccountCreatedAt?: string;
+    viewingPurpose: ViewingPurpose;
+    declarationAccepted: boolean;
+    declarationVersion: string;
     message?: string;
     reminder24hEnabled?: boolean;
     reminder2hEnabled?: boolean;
@@ -252,9 +260,33 @@ export const realEstateApi = {
     });
   },
 
-  reportAbuse(payload: { propertyId?: string; viewingId?: string; targetUserId?: string; reason: string; details?: string }) {
-    return customFetch<{ reported: boolean; id: string }>("/api/real-estate/reports", {
+  reportAbuse(payload: {
+    propertyId?: string;
+    viewingId?: string;
+    targetUserId?: string;
+    reasonCode?: string;
+    reason: string;
+    details?: string;
+  }) {
+    return customFetch<{ reported: boolean; id: string; moderationStatus: string }>("/api/real-estate/reports", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getModerationLog(propertyId?: string) {
+    const qs = propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : "";
+    return customFetch<ModerationLogOverview>(`/api/real-estate/moderation/log${qs}`);
+  },
+
+  applyModerationDecision(payload: {
+    reportId: string;
+    decision: "DISMISSED" | "WARNING_ISSUED" | "TEMP_RESTRICTED" | "EXTENDED_RESTRICTED" | "SUSPENDED";
+    note?: string;
+  }) {
+    return customFetch<{ ok: boolean; restrictionLevel: string }>("/api/real-estate/moderation/decisions", {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });

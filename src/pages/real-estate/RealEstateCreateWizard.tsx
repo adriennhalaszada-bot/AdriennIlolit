@@ -27,6 +27,7 @@ import {
   getSubtypeLabel,
 } from "@/lib/realEstate/config";
 import type {
+  AgentInquiryPolicy,
   ExactAddress,
   PropertyCategory,
   PropertyCondition,
@@ -81,6 +82,9 @@ export default function RealEstateCreateWizard() {
   const [subtype, setSubtype] = useState<string>("tegla");
   const [title, setTitle] = useState("");
   const [price, setPrice] = useState<string>("");
+  const [agentInquiryPolicy, setAgentInquiryPolicy] = useState<AgentInquiryPolicy>("no_agents");
+  const [verifiedBuyersOnly, setVerifiedBuyersOnly] = useState(false);
+  const [sellerAccountType, setSellerAccountType] = useState<"private" | "agency_partner">("private");
 
   // Step 2
   const [ownerPhoneShareMode, setOwnerPhoneShareMode] = useState<"none" | "approved_only">("none");
@@ -149,6 +153,9 @@ export default function RealEstateCreateWizard() {
     if (existingProp.exactAddress) setExactAddress(existingProp.exactAddress);
     setOwnerPhoneShareMode(existingProp.ownerPhoneShareMode || "none");
     setOwnerPhone(existingProp.ownerPhone || "");
+    setAgentInquiryPolicy(existingProp.agentInquiryPolicy || "no_agents");
+    setVerifiedBuyersOnly(Boolean(existingProp.verifiedBuyersOnly));
+    setSellerAccountType(existingProp.sellerAccountType || "private");
     if (existingProp.specs) setSpecs(existingProp.specs);
     if (existingProp.rentalTerms) setRentalTerms(existingProp.rentalTerms);
     if (existingProp.sustainability) setSustainability(existingProp.sustainability);
@@ -220,6 +227,9 @@ export default function RealEstateCreateWizard() {
     ownerName: user?.fullName || user?.username || "ILOLIT hirdető",
     ownerPhoneShareMode,
     ownerPhone: ownerPhoneShareMode === "approved_only" ? ownerPhone.trim() : "",
+    agentInquiryPolicy,
+    verifiedBuyersOnly,
+    sellerAccountType,
     transactionType,
     category,
     subtype,
@@ -477,6 +487,107 @@ export default function RealEstateCreateWizard() {
                       required
                     />
                   </label>
+                </div>
+
+                {/* Mandatory Agent Inquiry Policy Setting (#1, #17, #18, #22) */}
+                <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
+                  <div>
+                    <span className="flex items-center gap-1.5 text-sm font-bold text-slate-950">
+                      <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                      Ingatlanközvetítői megkeresések *
+                    </span>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Te döntöd el, fogadsz-e ingatlanközvetítői megkeresést. Ezt a beállítást később bármikor
+                      módosíthatod.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setAgentInquiryPolicy("no_agents")}
+                      className={`rounded-2xl border-2 p-4 text-left transition ${
+                        agentInquiryPolicy === "no_agents"
+                          ? "border-emerald-600 bg-white ring-1 ring-emerald-600/20"
+                          : "border-slate-200 bg-white hover:border-slate-300"
+                      }`}
+                    >
+                      <p className="text-xs font-bold text-slate-950">
+                        Nem kérek ingatlanközvetítői megkeresést
+                      </p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                        Magánhirdetőknek ajánlott alapbeállítás. Kizárólag valódi vevői vagy bérlői érdeklődést fogadsz.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAgentInquiryPolicy("allow_agents")}
+                      className={`rounded-2xl border-2 p-4 text-left transition ${
+                        agentInquiryPolicy === "allow_agents"
+                          ? "border-emerald-600 bg-white ring-1 ring-emerald-600/20"
+                          : "border-slate-200 bg-white hover:border-slate-300"
+                      }`}
+                    >
+                      <p className="text-xs font-bold text-slate-950">
+                        Fogadok ingatlanközvetítői megkeresést
+                      </p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                        Engedélyezed, hogy ingatlanközvetítők is jelentkezzenek megtekintésre vagy együttműködésre.
+                      </p>
+                    </button>
+                  </div>
+
+                  {agentInquiryPolicy === "no_agents" && (
+                    <p className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 py-2.5 text-xs font-medium text-emerald-950">
+                      A megtekintési rendszerben csak valódi vevői vagy bérlői érdeklődést fogadunk, a kéretlen
+                      üzletszerzés pedig jelenthető.
+                    </p>
+                  )}
+
+                  {/* Optional stricter verification filter (#18) */}
+                  <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 bg-white p-3.5 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={verifiedBuyersOnly}
+                      onChange={(e) => setVerifiedBuyersOnly(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-emerald-600"
+                    />
+                    <span>
+                      <strong className="block text-slate-900">
+                        Csak ellenőrzött érdeklődők kérhetnek megtekintést (opcionális)
+                      </strong>
+                      <span className="mt-0.5 block text-slate-500">
+                        Bekapcsolás esetén az SMS-ellenőrzött telefonszám mellett ellenőrzött e-mail-cím és teljes
+                        profil is szükséges a megtekintési kérelemhez.
+                      </span>
+                    </span>
+                  </label>
+
+                  {/* Account type indicator for official agency partner path (#17) */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3 text-xs">
+                    <span className="font-semibold text-slate-600">Hirdetői státusz:</span>
+                    <div className="inline-flex rounded-xl border border-slate-200 bg-white p-0.5 font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setSellerAccountType("private")}
+                        className={`rounded-lg px-3 py-1 text-[11px] transition ${
+                          sellerAccountType === "private" ? "bg-emerald-600 text-white" : "text-slate-600"
+                        }`}
+                      >
+                        Magánhirdető
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSellerAccountType("agency_partner")}
+                        className={`rounded-lg px-3 py-1 text-[11px] transition ${
+                          sellerAccountType === "agency_partner" ? "bg-emerald-600 text-white" : "text-slate-600"
+                        }`}
+                      >
+                        Ingatlanközvetítői üzleti fiók
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Transparent automatic ILOLIT listing fee box */}
@@ -1199,6 +1310,19 @@ export default function RealEstateCreateWizard() {
                       {transactionType === "rent" ? "Kiadó" : "Eladó"} · {getCategoryLabel(category)}
                       {subtype ? ` (${getSubtypeLabel(category, subtype)})` : ""}
                     </p>
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-slate-500">Ingatlanközvetítői megkeresések</span>
+                    <p className="mt-0.5 font-bold text-slate-950">
+                      {agentInquiryPolicy === "allow_agents"
+                        ? "Fogadok ingatlanközvetítői megkeresést"
+                        : "Nem kérek ingatlanközvetítői megkeresést"}
+                    </p>
+                    {verifiedBuyersOnly && (
+                      <p className="mt-0.5 text-xs font-semibold text-emerald-700">
+                        Csak ellenőrzött érdeklődők kérhetnek megtekintést
+                      </p>
+                    )}
                   </div>
                   <div>
                     <span className="text-xs font-bold text-slate-500">Publikus helyszín</span>

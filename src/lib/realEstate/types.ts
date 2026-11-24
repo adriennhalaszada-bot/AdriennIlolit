@@ -40,6 +40,80 @@ export type ViewingStatus =
   | "REVOKED_BY_OWNER"
   | "CANCELLED_BY_REQUESTER";
 
+export type AgentInquiryPolicy = "no_agents" | "allow_agents";
+
+export type ViewingPurpose =
+  | "own_purchase"
+  | "own_rent"
+  | "family_friend"
+  | "buyer_representative"
+  | "real_estate_agent";
+
+export type ModerationRestrictionLevel =
+  | "none"
+  | "warning"
+  | "temp_restricted"
+  | "extended_restricted"
+  | "suspended";
+
+export interface RequesterTrustProfile {
+  displayName: string;
+  phoneVerified: boolean;
+  emailVerified: boolean;
+  profileComplete: boolean;
+  accountCreatedAt: string;
+  totalViewings: number;
+  completedViewings: number;
+  cancelledViewings: number;
+  previousReportsCount: number;
+  restrictionLevel: ModerationRestrictionLevel;
+  restrictedUntil?: string | null;
+}
+
+export interface ViewingDeclarationLog {
+  version: string;
+  acceptedAt: string;
+  purpose: ViewingPurpose;
+}
+
+export interface AbuseReportRecord {
+  id: string;
+  reporterId: string;
+  propertyId?: string;
+  viewingId?: string;
+  targetUserId?: string;
+  reasonCode: string;
+  reason: string;
+  details?: string;
+  moderationStatus: "PENDING_MODERATION" | "WARNING_ISSUED" | "TEMP_RESTRICTED" | "EXTENDED_RESTRICTED" | "SUSPENDED" | "DISMISSED";
+  moderatorDecision?: string;
+  moderatorNote?: string;
+  decidedAt?: string;
+  createdAt: string;
+}
+
+export interface ModerationLogOverview {
+  reports: AbuseReportRecord[];
+  spamSignals: Array<{
+    id: string;
+    userId: string;
+    propertyId?: string;
+    signalType: string;
+    details: string;
+    score: number;
+    createdAt: string;
+  }>;
+  userRecords: Array<{
+    userId: string;
+    restrictionLevel: ModerationRestrictionLevel;
+    warningsCount: number;
+    reportsCount: number;
+    restrictedUntil?: string | null;
+    phoneRiskFlag?: boolean;
+    updatedAt: string;
+  }>;
+}
+
 export interface ExactAddress {
   country: string;
   postalCode: string;
@@ -170,6 +244,12 @@ export interface RealEstateProperty {
   /** Optional owner phone: ONLY visible to owner in edit/admin, and to APPROVED verified viewers if ownerPhoneShareMode === "approved_only". Never public. */
   ownerPhone?: string;
   ownerPhoneShareMode?: "none" | "approved_only";
+  /** Controls whether real estate agents may contact/book viewings. Defaults to "no_agents" for private sellers. */
+  agentInquiryPolicy?: AgentInquiryPolicy;
+  /** Optional stricter filter: requires verified phone + verified email + complete profile. */
+  verifiedBuyersOnly?: boolean;
+  /** Distinguishes private sellers from future official agency partner accounts. */
+  sellerAccountType?: "private" | "agency_partner";
   transactionType: TransactionType;
   category: PropertyCategory;
   subtype: string;
@@ -214,6 +294,9 @@ export interface ViewingRequest {
   requesterId: string;
   requesterName: string;
   requesterPhoneVerified: boolean;
+  viewingPurpose?: ViewingPurpose;
+  declarationLog?: ViewingDeclarationLog;
+  requesterTrustProfile?: RequesterTrustProfile;
   slotId: string;
   date: string;
   startTime: string;

@@ -86,6 +86,48 @@ export function Ilolit() {
           ))}
         </div>
       </section>
+
+      {/* ILOLIT Ingatlan – ÁSZF & Közösségi szabályzat (#12, #11, #17, #24, #25) */}
+      <section id="ingatlan-szabalyzat" className="border-t border-slate-200 bg-slate-50 py-16 px-4">
+        <div className="container mx-auto max-w-4xl space-y-6">
+          <div className="space-y-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              ILOLIT Ingatlan · ÁSZF és Közösségi Szabályzat
+            </span>
+            <h2 className="text-2xl font-black text-slate-950">Te döntöd el, kit fogadsz.</h2>
+            <p className="text-sm text-slate-600">
+              A magánhirdető szabályozhatja, fogad-e ingatlanközvetítői megkeresést. A személyes megtekintés
+              ellenőrzött telefonszámhoz és hirdetői jóváhagyáshoz kötött. Ellenőrzött elérhetőség, hirdetői
+              jóváhagyás és visszaélés elleni védelem.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4 text-sm text-slate-700">
+            <h3 className="text-base font-bold text-slate-950">
+              Kéretlen üzletszerzés és közvetítői megkeresések tilalma
+            </h3>
+            <p className="font-semibold text-slate-900 leading-relaxed">
+              Az ingatlanmegtekintési rendszer nem használható kéretlen ingatlanközvetítői megbízásszerzésre,
+              szolgáltatásértékesítésre, tömeges üzletszerzésre vagy más, a hirdető által nem kért kereskedelmi
+              megkeresésre.
+            </p>
+            <p className="text-xs leading-relaxed text-slate-600">
+              A szabály megsértése a foglalási jogosultság korlátozását vagy a fiók felfüggesztését eredményezheti.
+              Minden bejelentést moderálunk; egyetlen tulajdonosi bejelentés önmagában nem vezet automatikus végleges
+              tiltáshoz. Ismétlődő vagy igazolt visszaélés esetén fokozatos szankciórendszert alkalmazunk:
+              (1) Figyelmeztetés, (2) Ideiglenes foglalási korlátozás, (3) Hosszabb idejű korlátozás,
+              (4) Fiók felfüggesztése / tiltása.
+            </p>
+            <p className="text-xs leading-relaxed text-slate-600 border-t border-slate-100 pt-3">
+              <strong>Ingatlanközvetítői üzleti fiók:</strong> Az ingatlanközvetítők számára a platform szabályos
+              üzleti fiókos útvonalat biztosít, amelyen keresztül saját hirdetéseket kezelhetnek, ügyfeleiket
+              képviselhetik, és kizárólag olyan hirdetőket kereshetnek meg, akik engedélyezték a közvetítői
+              kapcsolatfelvételt.
+            </p>
+          </div>
+        </div>
+      </section>
     </Layout>
   );
 }

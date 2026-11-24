@@ -506,16 +506,18 @@ export default function RealEstate() {
               <div className="max-w-3xl space-y-3">
                 <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">
                   <ShieldCheck className="h-4 w-4" />
-                  ILOLIT Ingatlan · Ellenőrzött megtekintési időpontfoglalás
+                  Ellenőrzött elérhetőség, hirdetői jóváhagyás és visszaélés elleni védelem
                 </div>
                 <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
                   Eladó és kiadó ingatlanok
                 </h1>
-                <p className="text-sm leading-relaxed text-slate-600 sm:text-base">
-                  Részletes ingatlanadatlapok, védett lakcímkezelés és online megtekintési időpontfoglalás. Az
-                  ILOLIT ellenőrzött telefonszámhoz és a hirdető jóváhagyásához köti a pontos cím megismerését és a
-                  személyes megtekintést.
-                </p>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 text-xs sm:text-sm">
+                  <p className="font-bold text-slate-950">Te döntöd el, kit fogadsz.</p>
+                  <p className="mt-1 leading-relaxed text-slate-600">
+                    A magánhirdető szabályozhatja, fogad-e ingatlanközvetítői megkeresést. A személyes megtekintés
+                    ellenőrzött telefonszámhoz és hirdetői jóváhagyáshoz kötött.
+                  </p>
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5">
@@ -524,9 +526,9 @@ export default function RealEstate() {
                   variant="outline"
                   className="h-11 rounded-xl border-slate-300 bg-white px-4 text-xs font-bold text-slate-800 hover:bg-slate-50"
                 >
-                  <Link href="/real-estate/viewings">
+                  <Link href="/dashboard/bookings/properties">
                     <Calendar className="mr-2 h-4 w-4 text-emerald-600" />
-                    Megtekintéseim
+                    Ingatlan megtekintéseim
                     {buyerTotalViewingsCount > 0 && (
                       <span className="ml-2 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-black text-white">
                         {buyerTotalViewingsCount}
@@ -731,6 +733,12 @@ export default function RealEstate() {
                             <MapPin className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
                             <span className="truncate">{formatPublicLocation(property.publicLocation)}</span>
                           </p>
+                          {(property.agentInquiryPolicy || "no_agents") === "no_agents" && (
+                            <span className="mt-2 inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                              <ShieldCheck className="h-3 w-3 text-emerald-600" />
+                              Közvetítői megkeresést nem kér
+                            </span>
+                          )}
                         </div>
 
                         <div className="mt-4 space-y-3 border-t border-slate-100 pt-3">

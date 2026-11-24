@@ -7,15 +7,24 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { realEstateApi } from "@/lib/realEstate/api";
 import {
+  ABUSE_REPORT_REASONS,
   REAL_ESTATE_CONFIG,
+  RESTRICTION_LEVEL_LABELS,
   STATUS_LABELS,
   VIEWING_DURATION_OPTIONS,
+  VIEWING_PURPOSE_LABELS,
   VIEWING_STATUS_LABELS,
   formatHuf,
   formatPublicLocation,
   getCategoryLabel,
 } from "@/lib/realEstate/config";
-import type { PropertyPhoto, PropertyStatus, RealEstateProperty, ViewingRequest } from "@/lib/realEstate/types";
+import type {
+  AgentInquiryPolicy,
+  PropertyPhoto,
+  PropertyStatus,
+  RealEstateProperty,
+  ViewingRequest,
+} from "@/lib/realEstate/types";
 import { RealEstateMediaUploader } from "@/components/realestate/RealEstateMediaUploader";
 import {
   Activity,
@@ -30,6 +39,7 @@ import {
   Edit3,
   ExternalLink,
   Eye,
+  Flag,
   Heart,
   History,
   Home,
@@ -115,7 +125,15 @@ export default function RealEstateAdmin() {
   const [editInstructions, setEditInstructions] = useState("");
   const [editOwnerPhoneMode, setEditOwnerPhoneMode] = useState<"none" | "approved_only">("none");
   const [editOwnerPhone, setEditOwnerPhone] = useState("");
+  const [editAgentPolicy, setEditAgentPolicy] = useState<AgentInquiryPolicy>("no_agents");
+  const [editVerifiedOnly, setEditVerifiedOnly] = useState(false);
   const [editPhotos, setEditPhotos] = useState<PropertyPhoto[]>([]);
+
+  // One-click abuse report modal state (#10)
+  const [reportTargetViewing, setReportTargetViewing] = useState<ViewingRequest | null>(null);
+  const [reportReasonCode, setReportReasonCode] = useState<string>("unsolicited_agent");
+  const [reportDetails, setReportDetails] = useState("");
+  const [sendingAbuseReport, setSendingAbuseReport] = useState(false);
   const [editFloorPlans, setEditFloorPlans] = useState<PropertyPhoto[]>([]);
   const [editVideoUrl, setEditVideoUrl] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
@@ -187,6 +205,8 @@ export default function RealEstateAdmin() {
     setEditInstructions(activeProperty.exactAddress?.viewingInstructions || "");
     setEditOwnerPhoneMode(activeProperty.ownerPhoneShareMode || "none");
     setEditOwnerPhone(activeProperty.ownerPhone || "");
+    setEditAgentPolicy(activeProperty.agentInquiryPolicy || "no_agents");
+    setEditVerifiedOnly(Boolean(activeProperty.verifiedBuyersOnly));
     setEditPhotos(activeProperty.photos || []);
     setEditFloorPlans(activeProperty.floorPlans || []);
     setEditVideoUrl(activeProperty.videoUrl || "");
@@ -210,6 +230,12 @@ export default function RealEstateAdmin() {
     enabled: Boolean(isSignedIn && activeProperty?.id),
   });
 
+  const { data: moderationData, refetch: refetchModeration } = useQuery({
+    queryKey: ["real-estate-admin-moderation", activeProperty?.id],
+    queryFn: () => realEstateApi.getModerationLog(activeProperty!.id),
+    enabled: Boolean(isSignedIn && activeProperty?.id),
+  });
+
   const ownerViewings = (viewingsData?.items || []).filter((v) => v.role === "owner");
   const pendingViewings = ownerViewings.filter((v) => v.status === "PENDING");
   const approvedViewings = ownerViewings.filter((v) => v.status === "APPROVED");
@@ -227,6 +253,38 @@ export default function RealEstateAdmin() {
     refetchViewings();
     refetchAudit();
     refetchMessages();
+    refetchModeration();
+  };
+
+  const handleSubmitAbuseReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeProperty || !reportTargetViewing) return;
+    const chosen =
+      ABUSE_REPORT_REASONS.find((r) => r.code === reportReasonCode) || ABUSE_REPORT_REASONS[0];
+    setSendingAbuseReport(true);
+    try {
+      await realEstateApi.reportAbuse({
+        propertyId: activeProperty.id,
+        viewingId: reportTargetViewing.id,
+        targetUserId: reportTargetViewing.requesterId,
+        reasonCode: chosen.code,
+        reason: chosen.label,
+        details: reportDetails.trim() || undefined,
+      });
+      setReportTargetViewing(null);
+      setReportDetails("");
+      setReportReasonCode("unsolicited_agent");
+      refreshAll();
+      toast({
+        title: "Bejelentés rögzítve moderációra",
+        description:
+          "A jelentés bekerült a moderációs naplóba. Ismétlődő vagy igazolt visszaélés esetén fokozatos korlátozás alkalmazható.",
+      });
+    } catch (err: any) {
+      toast({ title: err?.message || "Nem sikerült elküldeni a jelentést.", variant: "destructive" });
+    } finally {
+      setSendingAbuseReport(false);
+    }
   };
 
   const handleAddSlots = async (e: React.FormEvent) => {
@@ -384,6 +442,8 @@ export default function RealEstateAdmin() {
         description: editDesc.trim(),
         ownerPhoneShareMode: editOwnerPhoneMode,
         ownerPhone: editOwnerPhoneMode === "approved_only" ? editOwnerPhone.trim() : "",
+        agentInquiryPolicy: editAgentPolicy,
+        verifiedBuyersOnly: editVerifiedOnly,
         exactAddress: activeProperty.exactAddress
           ? { ...activeProperty.exactAddress, viewingInstructions: editInstructions.trim() || undefined }
           : undefined,
@@ -837,6 +897,47 @@ export default function RealEstateAdmin() {
                         />
                       </label>
 
+                      {/* Agent Inquiry Policy & Verified Buyers Only (always editable, #1, #18) */}
+                      <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                          <div className="text-xs">
+                            <p className="font-bold text-slate-900">Ingatlanközvetítői megkeresések</p>
+                            <p className="text-slate-500">
+                              Te döntöd el, fogadsz-e ingatlanközvetítői megkeresést.
+                            </p>
+                          </div>
+                          <div className="inline-flex shrink-0 rounded-xl border border-slate-200 bg-white p-1 text-xs font-bold">
+                            <button
+                              type="button"
+                              onClick={() => setEditAgentPolicy("no_agents")}
+                              className={`rounded-lg px-3 py-1.5 transition ${
+                                editAgentPolicy === "no_agents" ? "bg-emerald-600 text-white" : "text-slate-600"
+                              }`}
+                            >
+                              Nem kérek közvetítőt
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditAgentPolicy("allow_agents")}
+                              className={`rounded-lg px-3 py-1.5 transition ${
+                                editAgentPolicy === "allow_agents" ? "bg-emerald-600 text-white" : "text-slate-600"
+                              }`}
+                            >
+                              Fogadok közvetítőt
+                            </button>
+                          </div>
+                        </div>
+                        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={editVerifiedOnly}
+                            onChange={(e) => setEditVerifiedOnly(e.target.checked)}
+                            className="h-4 w-4 accent-emerald-600"
+                          />
+                          Csak ellenőrzött érdeklődők kérhetnek megtekintést (ellenőrzött telefon + e-mail + teljes profil)
+                        </label>
+                      </div>
+
                       {/* Optional seller phone visibility */}
                       <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
@@ -1223,6 +1324,85 @@ export default function RealEstateAdmin() {
                                       <Calendar className="h-3.5 w-3.5 text-emerald-600" />
                                       Kért időpont: {v.date} · {v.startTime} – {v.endTime} ({v.durationMinutes} perc)
                                     </p>
+
+                                    {/* Declared Viewing Purpose & Declaration Confirmation (#3, #4, #5) */}
+                                    {(v.viewingPurpose || v.declarationLog) && (
+                                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                                        {v.viewingPurpose && (
+                                          <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 font-semibold text-slate-700">
+                                            Cél: {VIEWING_PURPOSE_LABELS[v.viewingPurpose] || v.viewingPurpose}
+                                          </span>
+                                        )}
+                                        {v.declarationLog && (
+                                          <span className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-2.5 py-1 font-semibold text-emerald-800">
+                                            Nyilatkozat elfogadva ({v.declarationLog.version})
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* Factual Requester Trust Profile (#8, #9 — NO AI risk scores or stigmatizing labels) */}
+                                    {v.requesterTrustProfile && (
+                                      <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-[11px] sm:grid-cols-4">
+                                        <div>
+                                          <span className="block text-slate-400">Telefonszám</span>
+                                          <span className="font-bold text-slate-900">
+                                            {v.requesterTrustProfile.phoneVerified ? "Ellenőrizve" : "Nincs ellenőrizve"}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="block text-slate-400">E-mail</span>
+                                          <span className="font-bold text-slate-900">
+                                            {v.requesterTrustProfile.emailVerified ? "Ellenőrizve" : "Nincs ellenőrizve"}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="block text-slate-400">Fiók létrehozva</span>
+                                          <span className="font-bold text-slate-900">
+                                            {v.requesterTrustProfile.accountCreatedAt
+                                              ? new Date(v.requesterTrustProfile.accountCreatedAt).toLocaleDateString("hu-HU")
+                                              : "—"}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="block text-slate-400">Státusz</span>
+                                          <span
+                                            className={`inline-block rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                                              RESTRICTION_LEVEL_LABELS[v.requesterTrustProfile.restrictionLevel]?.className ||
+                                              "border-slate-200 bg-white text-slate-700"
+                                            }`}
+                                          >
+                                            {RESTRICTION_LEVEL_LABELS[v.requesterTrustProfile.restrictionLevel]?.label ||
+                                              "Nincs korlátozás"}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="block text-slate-400">Korábbi megtekintések</span>
+                                          <span className="font-bold text-slate-900">
+                                            {v.requesterTrustProfile.totalViewings} db
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="block text-slate-400">Teljesített</span>
+                                          <span className="font-bold text-slate-900">
+                                            {v.requesterTrustProfile.completedViewings} db
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="block text-slate-400">Lemondások</span>
+                                          <span className="font-bold text-slate-900">
+                                            {v.requesterTrustProfile.cancelledViewings} db
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="block text-slate-400">Korábbi jelentések</span>
+                                          <span className="font-bold text-slate-900">
+                                            {v.requesterTrustProfile.previousReportsCount} db
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
+
                                     {v.message && (
                                       <p className="mt-2 rounded-xl bg-slate-50 p-2.5 text-xs text-slate-700">
                                         {v.message}
@@ -1230,7 +1410,19 @@ export default function RealEstateAdmin() {
                                     )}
                                   </div>
 
-                                  <div className="flex items-center gap-1.5">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setReportTargetViewing(v);
+                                        setReportReasonCode("unsolicited_agent");
+                                        setReportDetails("");
+                                      }}
+                                      className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-1 text-[11px] font-bold text-amber-800 hover:bg-amber-100"
+                                    >
+                                      <Flag className="h-3.5 w-3.5" />
+                                      Probléma jelentése
+                                    </button>
                                     {isDeletableViewing(v) && (
                                       <button
                                         type="button"
@@ -1248,7 +1440,7 @@ export default function RealEstateAdmin() {
                                       className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-500 hover:border-rose-200 hover:text-rose-600"
                                     >
                                       <Ban className="h-3.5 w-3.5" />
-                                      Tiltás
+                                      Blokkolás
                                     </button>
                                   </div>
                                 </div>
@@ -1347,6 +1539,62 @@ export default function RealEstateAdmin() {
                               </div>
                             );
                           })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Moderation & Abuse Log (#11, #21) */}
+                    <div className="rounded-2xl border border-slate-200 bg-white p-6">
+                      <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
+                        <Flag className="h-4 w-4 text-emerald-600" />
+                        Visszaélési és moderációs napló ({(moderationData?.reports?.length || 0) + (moderationData?.spamSignals?.length || 0)})
+                      </h3>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        A jelentéseket moderáljuk. Egyetlen bejelentés önmagában nem eredményez automatikus végleges
+                        tiltást; fokozatos rendszer működik (1. Figyelmeztetés, 2. Ideiglenes korlátozás, 3. Hosszabb
+                        idejű korlátozás, 4. Fiók felfüggesztése).
+                      </p>
+
+                      {(!moderationData?.reports?.length && !moderationData?.spamSignals?.length) ? (
+                        <p className="mt-3 text-xs text-slate-500">Nincs rögzített bejelentés vagy spam jelzés.</p>
+                      ) : (
+                        <div className="mt-4 space-y-2.5 text-xs">
+                          {(moderationData?.reports || []).map((r) => (
+                            <div key={r.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="font-bold text-slate-900">{r.reason}</span>
+                                <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold text-slate-700">
+                                  {r.moderationStatus === "PENDING_MODERATION"
+                                    ? "Moderációra vár"
+                                    : r.moderationStatus === "WARNING_ISSUED"
+                                      ? "1. Figyelmeztetés"
+                                      : r.moderationStatus === "TEMP_RESTRICTED"
+                                        ? "2. Ideiglenes korlátozás"
+                                        : r.moderationStatus === "EXTENDED_RESTRICTED"
+                                          ? "3. Hosszabb korlátozás"
+                                          : r.moderationStatus === "SUSPENDED"
+                                            ? "4. Fiók felfüggesztve"
+                                            : "Lezárva"}
+                                </span>
+                              </div>
+                              {r.details && <p className="mt-1 text-slate-600">{r.details}</p>}
+                              <p className="mt-1 text-[11px] text-slate-400">
+                                {new Date(r.createdAt).toLocaleString("hu-HU")}
+                              </p>
+                            </div>
+                          ))}
+
+                          {(moderationData?.spamSignals || []).map((s) => (
+                            <div key={s.id} className="rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="font-bold text-amber-950">Spam / üzletszerzési jelzés ({s.signalType})</span>
+                                <span className="text-[11px] text-slate-500">
+                                  {new Date(s.createdAt).toLocaleString("hu-HU")}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-slate-700">{s.details}</p>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -1593,6 +1841,82 @@ export default function RealEstateAdmin() {
             </div>
           )}
         </div>
+
+        {/* One-click Owner Abuse Report Modal (#10, #11) */}
+        {reportTargetViewing && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
+              <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
+                <Flag className="h-4 w-4 text-emerald-600" />
+                Probléma jelentése
+              </h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Érdeklődő: <strong>{reportTargetViewing.requesterName}</strong> ({reportTargetViewing.date}{" "}
+                {reportTargetViewing.startTime})
+              </p>
+
+              <form onSubmit={handleSubmitAbuseReport} className="mt-4 space-y-4">
+                <div className="space-y-1.5">
+                  <span className="block text-xs font-bold text-slate-700">Jelentés oka *</span>
+                  {ABUSE_REPORT_REASONS.map((r) => (
+                    <label
+                      key={r.code}
+                      className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${
+                        reportReasonCode === r.code
+                          ? "border-emerald-600 bg-emerald-50/50 font-bold text-slate-950"
+                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="abuseReasonCode"
+                        value={r.code}
+                        checked={reportReasonCode === r.code}
+                        onChange={() => setReportReasonCode(r.code)}
+                        className="accent-emerald-600"
+                      />
+                      <span>{r.label}</span>
+                    </label>
+                  ))}
+                </div>
+
+                <label className="block text-xs font-bold text-slate-700">
+                  Rövid leírás (opcionális)
+                  <textarea
+                    rows={3}
+                    value={reportDetails}
+                    onChange={(e) => setReportDetails(e.target.value)}
+                    placeholder="Pl. A megtekintésen közvetítői megbízási szerződést ajánlott valódi vételi szándék helyett."
+                    className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 text-xs outline-none focus:border-emerald-600"
+                  />
+                </label>
+
+                <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600">
+                  A jelentést moderáljuk. Egyetlen bejelentés önmagában nem eredményez automatikus végleges tiltást;
+                  ismétlődő vagy igazolt visszaélés esetén fokozatos korlátozást alkalmazunk.
+                </p>
+
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setReportTargetViewing(null)}
+                    className="rounded-xl text-xs font-bold"
+                  >
+                    Mégse
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={sendingAbuseReport}
+                    className="rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700"
+                  >
+                    {sendingAbuseReport ? "Küldés..." : "Jelentés beküldése"}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
     </Layout>
   );

@@ -7,14 +7,18 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { realEstateApi } from "@/lib/realEstate/api";
 import {
+  ABUSE_REPORT_REASONS,
   STATUS_LABELS,
+  VIEWING_DECLARATION_TEXT,
+  VIEWING_DECLARATION_VERSION,
+  VIEWING_PURPOSE_OPTIONS,
   formatHuf,
   formatPublicLocation,
   getCategoryLabel,
   getConditionLabel,
   getSubtypeLabel,
 } from "@/lib/realEstate/config";
-import type { ApprovedViewingDetails } from "@/lib/realEstate/types";
+import type { ApprovedViewingDetails, ViewingPurpose } from "@/lib/realEstate/types";
 import { PhoneVerificationModal } from "@/components/realestate/PhoneVerificationModal";
 import { ApproximateLocationMap } from "@/components/realestate/ApproximateLocationMap";
 import {
@@ -59,6 +63,8 @@ export default function RealEstateDetail() {
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [selectedSlotId, setSelectedSlotId] = useState<string>("");
   const [requesterName, setRequesterName] = useState("");
+  const [viewingPurpose, setViewingPurpose] = useState<ViewingPurpose | "">("");
+  const [declarationAccepted, setDeclarationAccepted] = useState(false);
   const [viewingMessage, setViewingMessage] = useState("");
   const [reminder24h, setReminder24h] = useState(true);
   const [reminder2h, setReminder2h] = useState(true);
@@ -190,24 +196,63 @@ export default function RealEstateDetail() {
   const handleSubmitViewing = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!property || !selectedSlotId) return;
+    if (!viewingPurpose) {
+      toast({
+        title: "Válaszd ki a megtekintés célját",
+        description: "A megtekintési kérelem előtt kötelező megjelölni a megtekintés célját.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const noAgents = (property.agentInquiryPolicy || "no_agents") === "no_agents";
+    if (noAgents && viewingPurpose === "real_estate_agent") {
+      toast({
+        title: "A hirdető ehhez az ingatlanhoz nem fogad ingatlanközvetítői megkeresést.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!declarationAccepted) {
+      toast({
+        title: "A nyilatkozat elfogadása kötelező",
+        description: "A folytatáshoz pipáld be a valódi érdeklődésről szóló nyilatkozatot.",
+        variant: "destructive",
+      });
+      return;
+    }
     if (!phoneStatus?.phoneVerified) {
       setPhoneModalOpen(true);
       return;
     }
 
     const nameToSend = requesterName.trim() || user?.fullName || user?.username || "ILOLIT érdeklődő";
+    const emailVerified = Boolean(
+      user?.primaryEmailAddress?.verification?.status === "verified" ||
+        user?.emailAddresses?.some((em) => em.verification?.status === "verified"),
+    );
+    const profileComplete = Boolean((user?.fullName || nameToSend).trim().length >= 3);
+    const accountCreatedAt = user?.createdAt ? new Date(user.createdAt).toISOString() : undefined;
+
     setSubmittingViewing(true);
     try {
       await realEstateApi.createViewingRequest({
         propertyId: property.id,
         slotId: selectedSlotId,
         requesterName: nameToSend,
+        requesterEmailVerified: emailVerified,
+        requesterProfileComplete: profileComplete,
+        requesterAccountCreatedAt: accountCreatedAt,
+        viewingPurpose,
+        declarationAccepted: true,
+        declarationVersion: VIEWING_DECLARATION_VERSION,
         message: viewingMessage.trim() || undefined,
         reminder24hEnabled: reminder24h,
         reminder2hEnabled: reminder2h,
       });
       setViewingSubmitted(true);
       setSelectedSlotId("");
+      setViewingPurpose("");
+      setDeclarationAccepted(false);
       setViewingMessage("");
       queryClient.invalidateQueries({ queryKey: ["real-estate-property", id] });
       queryClient.invalidateQueries({ queryKey: ["real-estate-my-property-viewings", id] });
@@ -541,6 +586,19 @@ export default function RealEstateDetail() {
                 </div>
               </div>
 
+              {/* Public Agent Inquiry Policy Badge (#2) */}
+              {(property.agentInquiryPolicy || "no_agents") === "no_agents" && (
+                <div className="mt-5 flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs">
+                  <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
+                  <div>
+                    <p className="font-bold text-slate-900">Közvetítői megkeresést nem kér</p>
+                    <p className="mt-0.5 text-slate-600">
+                      A hirdető kizárólag valódi vevői vagy bérlői érdeklődést fogad.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Key metrics strip */}
               <div className="mt-6 grid grid-cols-2 gap-3 border-t border-slate-100 pt-5 sm:grid-cols-4">
                 <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
@@ -758,15 +816,23 @@ export default function RealEstateDetail() {
                 </p>
               </div>
 
-              {/* Mandatory privacy / legal statement */}
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 text-xs leading-relaxed text-emerald-950">
+              {/* Mandatory privacy & anti-solicitation notice (#23, #24) */}
+              <div className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 text-xs leading-relaxed text-emerald-950">
                 <p className="flex items-start gap-2">
                   <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
                   <span>
-                    Az ILOLIT ellenőrzött telefonszámhoz és a hirdető jóváhagyásához köti a pontos cím megismerését
-                    és a személyes megtekintést.
+                    A megtekintési funkció kizárólag valódi vásárlási vagy bérlési érdeklődésre használható. Kéretlen
+                    üzletszerzés vagy közvetítői megbízásszerzés nem megengedett, ha azt a hirdető nem engedélyezte.
                   </span>
                 </p>
+                <p className="pl-6 text-[11px] font-semibold text-emerald-900/80">
+                  Ellenőrzött elérhetőség, hirdetői jóváhagyás és visszaélés elleni védelem.
+                </p>
+                {property.verifiedBuyersOnly && (
+                  <p className="pl-6 text-[11px] font-bold text-slate-800">
+                    A hirdető ennél az ingatlannál ellenőrzött e-mailt, ellenőrzött telefont és teljes profilt kér.
+                  </p>
+                )}
               </div>
 
               {/* Instant Live Buyer Confirmation Card for this property */}
@@ -1104,9 +1170,70 @@ export default function RealEstateDetail() {
                     </label>
                   </div>
 
+                  {/* Mandatory Viewing Purpose Selection (#3) */}
+                  <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3.5">
+                    <span className="block text-xs font-bold text-slate-900">
+                      Milyen célból szeretnéd megtekinteni az ingatlant? *
+                    </span>
+                    <div className="space-y-1.5">
+                      {VIEWING_PURPOSE_OPTIONS.map((opt) => (
+                        <label
+                          key={opt.value}
+                          className={`flex cursor-pointer items-start gap-2 rounded-xl border bg-white p-2.5 text-xs transition ${
+                            viewingPurpose === opt.value
+                              ? "border-emerald-600 ring-1 ring-emerald-600/20"
+                              : "border-slate-200 hover:border-slate-300"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="viewingPurpose"
+                            value={opt.value}
+                            checked={viewingPurpose === opt.value}
+                            onChange={() => setViewingPurpose(opt.value)}
+                            className="mt-0.5 accent-emerald-600"
+                          />
+                          <span>
+                            <span className="block font-bold text-slate-900">{opt.label}</span>
+                            <span className="block text-[11px] text-slate-500">{opt.description}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+
+                    {(property.agentInquiryPolicy || "no_agents") === "no_agents" &&
+                      viewingPurpose === "real_estate_agent" && (
+                        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-bold text-rose-800">
+                          A hirdető ehhez az ingatlanhoz nem fogad ingatlanközvetítői megkeresést.
+                        </div>
+                      )}
+                  </div>
+
+                  {/* Mandatory Unchecked Declaration Checkbox (#4) */}
+                  <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+                    <span className="block text-xs font-bold text-slate-900">Nyilatkozat *</span>
+                    <label className="mt-2 flex cursor-pointer items-start gap-2.5 text-xs leading-relaxed text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={declarationAccepted}
+                        onChange={(e) => setDeclarationAccepted(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-600"
+                        required
+                      />
+                      <span>{VIEWING_DECLARATION_TEXT}</span>
+                    </label>
+                  </div>
+
                   <Button
                     type="submit"
-                    disabled={!selectedSlotId || submittingViewing}
+                    disabled={
+                      !selectedSlotId ||
+                      !viewingPurpose ||
+                      !declarationAccepted ||
+                      ((property.agentInquiryPolicy || "no_agents") === "no_agents" &&
+                        viewingPurpose === "real_estate_agent") ||
+                      submittingViewing
+                    }
                     className="h-11 w-full rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
                   >
                     {submittingViewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Calendar className="mr-2 h-4 w-4" />}
@@ -1216,9 +1343,11 @@ export default function RealEstateDetail() {
                     className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-2 text-xs"
                   >
                     <option value="Valótlan vagy félrevezető adatok">Valótlan vagy félrevezető adatok</option>
-                    <option value="Gyanús vagy visszaélésre utaló hirdetés">Gyanús vagy visszaélésre utaló hirdetés</option>
-                    <option value="Duplikált vagy nem létező ingatlan">Duplikált vagy nem létező ingatlan</option>
-                    <option value="Egyéb probléma">Egyéb probléma</option>
+                    {ABUSE_REPORT_REASONS.map((r) => (
+                      <option key={r.code} value={r.label}>
+                        {r.label}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className="block text-xs font-bold text-slate-700">

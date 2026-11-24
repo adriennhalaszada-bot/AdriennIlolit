@@ -23,6 +23,116 @@ const BLOCK_PREFIX = "data/real-estate/blocks/";
 const REPORT_PREFIX = "data/real-estate/reports/";
 const NOTIFICATION_PREFIX = "data/real-estate/notifications/";
 const FAVORITE_PREFIX = "data/real-estate/favorites/";
+const DECLARATION_PREFIX = "data/real-estate/declarations/";
+const MODERATION_USER_PREFIX = "data/real-estate/moderation-users/";
+const SPAM_SIGNAL_PREFIX = "data/real-estate/spam-signals/";
+const MSG_ACTIVITY_PREFIX = "data/real-estate/msg-activity/";
+
+const ALLOWED_VIEWING_PURPOSES = new Set([
+  "own_purchase",
+  "own_rent",
+  "family_friend",
+  "buyer_representative",
+  "real_estate_agent",
+]);
+
+const SOLICITATION_SIGNAL_PHRASES = [
+  "segítek eladni",
+  "segitek eladni",
+  "van vevőm",
+  "van vevom",
+  "szerződjünk",
+  "szerzodjunk",
+  "megbízási szerződés",
+  "jutalék",
+  "jutalek",
+  "ingatlaniroda",
+  "portfóliónkba",
+];
+
+async function recordSpamSignal(
+  env: Env,
+  entry: {
+    userId: string;
+    propertyId?: string;
+    signalType: string;
+    details: string;
+    score: number;
+  },
+) {
+  const id = crypto.randomUUID();
+  await writeJson(env, `${SPAM_SIGNAL_PREFIX}${id}.json`, {
+    id,
+    ...entry,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+async function getUserModerationRecord(env: Env, targetUserId: string) {
+  const rec = (await readJson<any>(env, `${MODERATION_USER_PREFIX}${targetUserId}.json`)) || {
+    userId: targetUserId,
+    restrictionLevel: "none",
+    warningsCount: 0,
+    reportsCount: 0,
+    restrictedUntil: null,
+    phoneRiskFlag: false,
+    updatedAt: new Date().toISOString(),
+  };
+  // Automatically expire temporary/extended restrictions once restrictedUntil passes
+  if (
+    (rec.restrictionLevel === "temp_restricted" || rec.restrictionLevel === "extended_restricted") &&
+    rec.restrictedUntil &&
+    new Date(rec.restrictedUntil).getTime() <= Date.now()
+  ) {
+    rec.restrictionLevel = rec.warningsCount > 0 ? "warning" : "none";
+    rec.restrictedUntil = null;
+  }
+  return rec;
+}
+
+async function buildRequesterTrustProfile(
+  env: Env,
+  requesterId: string,
+  viewing: any,
+  allViewings: any[],
+) {
+  const [phoneRec, modRec] = await Promise.all([
+    readJson<any>(env, `${PHONE_PREFIX}${requesterId}.json`),
+    getUserModerationRecord(env, requesterId),
+  ]);
+  const userViewings = allViewings.filter((v) => v.requesterId === requesterId);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const completedViewings = userViewings.filter(
+    (v) => v.status === "APPROVED" && v.date && v.date < todayIso,
+  ).length;
+  const cancelledViewings = userViewings.filter(
+    (v) => v.status === "CANCELLED_BY_REQUESTER",
+  ).length;
+  const earliestViewing = userViewings
+    .map((v) => v.createdAt)
+    .filter(Boolean)
+    .sort()[0];
+  const accountCreatedAt =
+    viewing.requesterAccountCreatedAt ||
+    phoneRec?.verifiedAt ||
+    earliestViewing ||
+    viewing.createdAt;
+
+  // Strictly factual trust profile — NEVER AI "risk score" or stigmatizing labels
+  return {
+    displayName: viewing.requesterName || "Érdeklődő",
+    phoneVerified: Boolean(phoneRec?.phoneVerified || viewing.requesterPhoneVerified),
+    emailVerified: viewing.requesterEmailVerified !== false,
+    profileComplete: viewing.requesterProfileComplete !== false && Boolean(viewing.requesterName?.trim().length >= 3),
+    accountCreatedAt,
+    totalViewings: userViewings.length,
+    completedViewings,
+    cancelledViewings,
+    previousReportsCount: Number(modRec.reportsCount || 0),
+    restrictionLevel: modRec.restrictionLevel || "none",
+    restrictedUntil: modRec.restrictedUntil || null,
+  };
+}
 
 const DEFAULT_RENTAL_LISTING_FEE = 499;
 const LISTING_PERIOD_DAYS = 30;
@@ -285,6 +395,9 @@ function sanitizePropertyForViewer(
     id: prop.id,
     ownerId: prop.ownerId,
     ownerName: prop.ownerName || "ILOLIT hirdető",
+    agentInquiryPolicy: prop.agentInquiryPolicy === "allow_agents" ? "allow_agents" : "no_agents",
+    verifiedBuyersOnly: Boolean(prop.verifiedBuyersOnly),
+    sellerAccountType: prop.sellerAccountType === "agency_partner" ? "agency_partner" : "private",
     transactionType: prop.transactionType,
     category: prop.category,
     subtype: prop.subtype || "",
@@ -671,6 +784,11 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         body.ownerPhoneShareMode === "approved_only" ? "approved_only" : "none";
       const ownerPhone =
         ownerPhoneShareMode === "approved_only" ? safeText(body.ownerPhone, 30) : "";
+      const agentInquiryPolicy =
+        body.agentInquiryPolicy === "allow_agents" ? "allow_agents" : "no_agents";
+      const verifiedBuyersOnly = body.verifiedBuyersOnly === true;
+      const sellerAccountType =
+        body.sellerAccountType === "agency_partner" ? "agency_partner" : "private";
 
       const property = {
         id,
@@ -678,6 +796,9 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         ownerName: safeText(body.ownerName, 120) || "ILOLIT hirdető",
         ownerPhone,
         ownerPhoneShareMode,
+        agentInquiryPolicy,
+        verifiedBuyersOnly,
+        sellerAccountType,
         transactionType,
         category,
         subtype: safeText(body.subtype, 60),
@@ -775,6 +896,22 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         ...existing,
         ownerPhoneShareMode: nextShareMode,
         ownerPhone: nextOwnerPhone,
+        agentInquiryPolicy:
+          body.agentInquiryPolicy !== undefined
+            ? body.agentInquiryPolicy === "allow_agents"
+              ? "allow_agents"
+              : "no_agents"
+            : existing.agentInquiryPolicy || "no_agents",
+        verifiedBuyersOnly:
+          body.verifiedBuyersOnly !== undefined
+            ? body.verifiedBuyersOnly === true
+            : Boolean(existing.verifiedBuyersOnly),
+        sellerAccountType:
+          body.sellerAccountType !== undefined
+            ? body.sellerAccountType === "agency_partner"
+              ? "agency_partner"
+              : "private"
+            : existing.sellerAccountType || "private",
         transactionType,
         category: body.category ? safeText(body.category, 40) : existing.category,
         subtype: body.subtype !== undefined ? safeText(body.subtype, 60) : existing.subtype,
@@ -1216,12 +1353,85 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         const text = safeText(body.body, 2000);
         if (!text) return json({ error: "Az üzenet nem lehet üres." }, 400);
 
-        // Block check for non-owner senders
+        // Block check + spam & solicitation protection for non-owner senders
         if (prop.ownerId !== userId) {
-          const blocks = (await readJson<string[]>(env, `${BLOCK_PREFIX}${prop.ownerId}.json`)) || [];
-          if (blocks.includes(userId)) {
+          const [blocks, modRec] = await Promise.all([
+            readJson<string[]>(env, `${BLOCK_PREFIX}${prop.ownerId}.json`),
+            getUserModerationRecord(env, userId),
+          ]);
+          if (Array.isArray(blocks) && blocks.includes(userId)) {
             return json({ error: "Ehhez a hirdetéshez jelenleg nem küldhetsz üzenetet." }, 403);
           }
+          if (modRec.restrictionLevel === "suspended" || modRec.restrictionLevel === "extended_restricted") {
+            return json({ error: "A fiókod jelenleg korlátozás alatt áll, ezért nem küldhetsz új megkeresést." }, 403);
+          }
+
+          // Rate limit + daily cap for new accounts + copy-paste spam detection
+          const nowMs = Date.now();
+          const actKey = `${MSG_ACTIVITY_PREFIX}${userId}.json`;
+          const act = (await readJson<any>(env, actKey)) || { recent: [] };
+          const last24h = (Array.isArray(act.recent) ? act.recent : []).filter(
+            (e: any) => nowMs - Number(e.ts || 0) < 86_400_000,
+          );
+          const last10m = last24h.filter((e: any) => nowMs - Number(e.ts || 0) < 600_000);
+          if (last10m.length >= 5) {
+            await recordSpamSignal(env, {
+              userId,
+              propertyId,
+              signalType: "MESSAGE_RATE_LIMIT",
+              details: "Több mint 5 ingatlanos üzenet 10 percen belül.",
+              score: 2,
+            });
+            return json({ error: "Rövid időn belül túl sok üzenetet küldtél. Kérjük, várj pár percet." }, 429);
+          }
+          if (last24h.length >= 15) {
+            await recordSpamSignal(env, {
+              userId,
+              propertyId,
+              signalType: "DAILY_MESSAGE_LIMIT",
+              details: "Napi üzenetlimit (15) elérve.",
+              score: 3,
+            });
+            return json({ error: "Elérted a napi ingatlanos üzenetlimitet." }, 429);
+          }
+
+          // Copy-paste identical text detection across different listings
+          const normText = text.toLocaleLowerCase("hu").replace(/\s+/g, " ").trim();
+          const textHash = await sha256Hex(normText);
+          const duplicateProperties = new Set(
+            last24h
+              .filter((e: any) => e.textHash === textHash && e.propertyId !== propertyId)
+              .map((e: any) => e.propertyId),
+          );
+          if (duplicateProperties.size >= 2) {
+            await recordSpamSignal(env, {
+              userId,
+              propertyId,
+              signalType: "COPY_PASTE_BULK",
+              details: `Azonos üzenetszöveg elküldése ${duplicateProperties.size + 1} különböző ingatlanra 24 órán belül.`,
+              score: 4,
+            });
+            return json(
+              { error: "Tömeges, azonos szövegű megkeresések küldése nem engedélyezett. Írj az ingatlanra vonatkozó, egyedi üzenetet." },
+              429,
+            );
+          }
+
+          // Typical solicitation phrases: NEVER auto-ban! Only spam score + moderation queue signal.
+          const matchedPhrases = SOLICITATION_SIGNAL_PHRASES.filter((p) => normText.includes(p));
+          if (matchedPhrases.length > 0 && (prop.agentInquiryPolicy || "no_agents") === "no_agents") {
+            await recordSpamSignal(env, {
+              userId,
+              propertyId,
+              signalType: "SOLICITATION_KEYWORD_SIGNAL",
+              details: `Közvetítői megkeresést nem kérő hirdetésnél moderációs jelzés (kulcsszavak: ${matchedPhrases.slice(0, 3).join(", ")}). Automatikus tiltás nem történt.`,
+              score: Math.min(5, matchedPhrases.length + 1),
+            });
+          }
+
+          await writeJson(env, actKey, {
+            recent: [...last24h, { ts: nowMs, propertyId, textHash }].slice(-50),
+          });
         }
 
         const recipientId = prop.ownerId === userId ? safeText(body.recipientId, 120) : prop.ownerId;
@@ -1429,7 +1639,8 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     if (method === "GET" && route[1] === "me") {
       const url = new URL(context.request.url);
       const propertyFilter = url.searchParams.get("propertyId");
-      const items = (await listAllViewings(env))
+      const allViewings = await listAllViewings(env);
+      const filtered = allViewings
         .filter((v) => {
           const isOwnerVisible = v.ownerId === userId && !v.hiddenByOwner;
           const isRequesterVisible = v.requesterId === userId && !v.hiddenByRequester;
@@ -1437,15 +1648,23 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           if (propertyFilter && v.propertyId !== propertyFilter) return false;
           return true;
         })
-        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-        .map((v) => {
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+
+      const items = await Promise.all(
+        filtered.map(async (v) => {
           // Privacy: never expose buyer's phone number or phone hash to anyone
           const { requesterPhoneMasked: _omit, requesterPhoneHash: _omitHash, ...safeViewing } = v;
+          const isOwner = v.ownerId === userId;
+          const trustProfile = isOwner
+            ? await buildRequesterTrustProfile(env, v.requesterId, v, allViewings)
+            : undefined;
           return enrichViewingReminders({
             ...safeViewing,
-            role: v.ownerId === userId ? "owner" : "requester",
+            role: isOwner ? "owner" : "requester",
+            requesterTrustProfile: trustProfile,
           });
-        });
+        }),
+      );
       return json({ items, total: items.length });
     }
 
@@ -1462,9 +1681,45 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       const slotId = safeText(body.slotId, 120);
       const requesterName = safeText(body.requesterName, 120);
       const message = safeText(body.message, 1000);
+      const viewingPurpose = safeText(body.viewingPurpose, 40);
+      const declarationAccepted = body.declarationAccepted === true;
+      const declarationVersion = safeText(body.declarationVersion, 30) || "2026-11-v1";
+      const requesterEmailVerified = body.requesterEmailVerified !== false;
+      const requesterProfileComplete =
+        body.requesterProfileComplete !== undefined
+          ? body.requesterProfileComplete === true
+          : requesterName.trim().length >= 3;
+      const requesterAccountCreatedAt = safeText(body.requesterAccountCreatedAt, 40) || undefined;
 
       if (!propertyId || !slotId || !requesterName) {
         return json({ error: "Az ingatlan, az időpont és a neved megadása kötelező." }, 400);
+      }
+      if (!ALLOWED_VIEWING_PURPOSES.has(viewingPurpose)) {
+        return json({ error: "Kérjük, jelöld meg, milyen célból szeretnéd megtekinteni az ingatlant." }, 400);
+      }
+      if (!declarationAccepted) {
+        return json(
+          { error: "A megtekintési kérelem elküldéséhez el kell fogadnod a valódi érdeklődésről szóló nyilatkozatot." },
+          400,
+        );
+      }
+
+      // Check gradual moderation status (NEVER triggered automatically by a single report)
+      const modRec = await getUserModerationRecord(env, userId);
+      if (
+        modRec.restrictionLevel === "temp_restricted" ||
+        modRec.restrictionLevel === "extended_restricted" ||
+        modRec.restrictionLevel === "suspended"
+      ) {
+        return json(
+          {
+            error:
+              modRec.restrictionLevel === "suspended"
+                ? "A fiókod felfüggesztés alatt áll, ezért nem küldhetsz új megtekintési kérelmet."
+                : "A fiókod ideiglenes foglalási korlátozás alatt áll.",
+          },
+          403,
+        );
       }
 
       // Mandatory server-side check: SMS-verified phone required
@@ -1489,6 +1744,28 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           { error: "Erre az ingatlanra jelenleg nem kérhető megtekintés (inaktív, eladva vagy kiadva)." },
           409,
         );
+      }
+
+      // Enforce seller's agent inquiry policy
+      const agentPolicy = prop.agentInquiryPolicy === "allow_agents" ? "allow_agents" : "no_agents";
+      if (agentPolicy === "no_agents" && viewingPurpose === "real_estate_agent") {
+        return json(
+          { error: "A hirdető ehhez az ingatlanhoz nem fogad ingatlanközvetítői megkeresést." },
+          403,
+        );
+      }
+
+      // Optional "Csak ellenőrzött érdeklődők" gate
+      if (prop.verifiedBuyersOnly === true) {
+        if (!requesterEmailVerified || !requesterProfileComplete) {
+          return json(
+            {
+              error:
+                "A hirdető ennél az ingatlannál csak ellenőrzött érdeklődők (ellenőrzött telefon, ellenőrzött e-mail és teljes profil) számára engedélyezi a megtekintést.",
+            },
+            403,
+          );
+        }
       }
 
       // Block check
@@ -1554,7 +1831,55 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         return json({ error: "Ezt az időpontot időközben lefoglalták. Kérjük, válassz másikat." }, 409);
       }
 
+      // Mild new-account abuse protection (does not hinder normal buyers)
+      const isFreshAccount =
+        requesterAccountCreatedAt &&
+        Date.now() - new Date(requesterAccountCreatedAt).getTime() < 7 * 86_400_000;
+      const activePendingByUser = allViewings.filter(
+        (v) => v.requesterId === userId && v.status === "PENDING",
+      );
+      if (isFreshAccount && activePendingByUser.length >= 4) {
+        await recordSpamSignal(env, {
+          userId,
+          propertyId,
+          signalType: "FRESH_ACCOUNT_CONCURRENT_VIEWINGS",
+          details: `Új fiók egyszerre ${activePendingByUser.length} függőben lévő megtekintési kérelemmel rendelkezik.`,
+          score: 2,
+        });
+        return json(
+          { error: "Új fiókkal egyszerre legfeljebb 4 függőben lévő megtekintési kérelmed lehet." },
+          429,
+        );
+      }
+
+      // Phone-hash risk flagging (NEVER auto-ban on a single technical signal)
+      if (phoneRec.phoneHash) {
+        const linkedUsers = (await readJson<string[]>(env, `${PHONE_INDEX_PREFIX}${phoneRec.phoneHash}.json`)) || [];
+        if (linkedUsers.length > 1) {
+          const linkedModRecords = await Promise.all(linkedUsers.map((uid) => getUserModerationRecord(env, uid)));
+          const hasRestrictedSibling = linkedModRecords.some(
+            (r) => r.userId !== userId && r.restrictionLevel !== "none",
+          );
+          if (hasRestrictedSibling) {
+            modRec.phoneRiskFlag = true;
+            modRec.updatedAt = new Date().toISOString();
+            await writeJson(env, `${MODERATION_USER_PREFIX}${userId}.json`, modRec);
+            await recordSpamSignal(env, {
+              userId,
+              propertyId,
+              signalType: "PHONE_LINKED_TO_RESTRICTED_ACCOUNT",
+              details: "A telefonszám korábban korlátozott fiókhoz is kapcsolódott (csak moderációs jelzés, nincs automatikus tiltás).",
+              score: 3,
+            });
+          }
+        }
+      }
+
       const now = new Date().toISOString();
+      const rawIp = context.request.headers.get("CF-Connecting-IP") || "";
+      const ipHash = rawIp ? await sha256Hex(`ilolit-decl:${rawIp}`) : undefined;
+      const uaShort = safeText(context.request.headers.get("User-Agent"), 120) || undefined;
+
       const viewing = {
         id: crypto.randomUUID(),
         propertyId,
@@ -1568,7 +1893,16 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         requesterId: userId,
         requesterName,
         requesterPhoneVerified: true,
+        requesterEmailVerified,
+        requesterProfileComplete,
+        requesterAccountCreatedAt,
         requesterPhoneHash: phoneRec.phoneHash || undefined,
+        viewingPurpose,
+        declarationLog: {
+          version: declarationVersion,
+          acceptedAt: now,
+          purpose: viewingPurpose,
+        },
         slotId: slot.id,
         date: slot.date,
         startTime: slot.startTime,
@@ -1586,6 +1920,19 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         propertyId,
         ownerId: prop.ownerId,
         requesterId: userId,
+      });
+
+      // Persist immutable declaration log record for dispute/abuse verification
+      await writeJson(env, `${DECLARATION_PREFIX}${viewing.id}.json`, {
+        id: viewing.id,
+        userId,
+        listingId: propertyId,
+        viewingId: viewing.id,
+        acceptedAt: now,
+        viewingPurpose,
+        declarationVersion,
+        ipHash,
+        sessionMeta: uaShort,
       });
 
       await Promise.all([
@@ -2040,29 +2387,143 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     if (!userId) return json({ error: "A bejelentéshez jelentkezz be." }, 401);
     const body = await context.request.json<any>().catch(() => ({}));
     const reason = safeText(body.reason, 200);
+    const reasonCode = safeText(body.reasonCode, 60) || "other";
     if (!reason) return json({ error: "Add meg a bejelentés okát." }, 400);
     const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const targetUserId = safeText(body.targetUserId, 120) || undefined;
     const report = {
       id,
       reporterId: userId,
       propertyId: safeText(body.propertyId, 120) || undefined,
       viewingId: safeText(body.viewingId, 120) || undefined,
-      targetUserId: safeText(body.targetUserId, 120) || undefined,
+      targetUserId,
+      reasonCode,
       reason,
       details: safeText(body.details, 2000) || undefined,
-      createdAt: new Date().toISOString(),
+      // Single owner report NEVER causes automatic permanent ban — goes to moderation review
+      moderationStatus: "PENDING_MODERATION",
+      createdAt: now,
     };
     await writeJson(env, `${REPORT_PREFIX}${id}.json`, report);
+
+    if (targetUserId) {
+      const modRec = await getUserModerationRecord(env, targetUserId);
+      modRec.reportsCount = Number(modRec.reportsCount || 0) + 1;
+      modRec.updatedAt = now;
+      await writeJson(env, `${MODERATION_USER_PREFIX}${targetUserId}.json`, modRec);
+    }
+
     if (report.propertyId) {
       await appendAudit(env, report.propertyId, {
         action: "ABUSE_REPORTED",
         actorId: userId,
         targetUserId: report.targetUserId,
         viewingId: report.viewingId,
-        details: `Bejelentés rögzítve: ${reason}`,
+        details: `Bejelentés rögzítve moderációra (${reasonCode}): ${reason}`,
       });
     }
-    return json({ reported: true, id }, 201);
+    return json({ reported: true, id, moderationStatus: "PENDING_MODERATION" }, 201);
+  }
+
+  // =========================================================================
+  // 5. MODERATION LOG & GRADUAL ENFORCEMENT (NO AUTO-BAN ON SINGLE REPORT)
+  // =========================================================================
+  if (route[0] === "moderation") {
+    if (!userId) return json({ error: "Bejelentkezés szükséges." }, 401);
+
+    if (method === "GET" && route[1] === "log") {
+      const url = new URL(context.request.url);
+      const propertyFilter = url.searchParams.get("propertyId");
+      const [reportsListed, spamListed, usersListed, myProps] = await Promise.all([
+        env.MEDIA_BUCKET.list({ prefix: REPORT_PREFIX, limit: 500 }),
+        env.MEDIA_BUCKET.list({ prefix: SPAM_SIGNAL_PREFIX, limit: 500 }),
+        env.MEDIA_BUCKET.list({ prefix: MODERATION_USER_PREFIX, limit: 500 }),
+        listAllProperties(env),
+      ]);
+      const ownedIds = new Set(myProps.filter((p) => p.ownerId === userId).map((p) => p.id));
+
+      const allReports = (await Promise.all(reportsListed.objects.map((o) => readJson<any>(env, o.key)))).filter(Boolean);
+      const visibleReports = allReports
+        .filter((r) => {
+          if (propertyFilter && r.propertyId !== propertyFilter) return false;
+          return r.reporterId === userId || (r.propertyId && ownedIds.has(r.propertyId));
+        })
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+
+      const allSpam = (await Promise.all(spamListed.objects.map((o) => readJson<any>(env, o.key)))).filter(Boolean);
+      const visibleSpam = allSpam
+        .filter((s) => {
+          if (propertyFilter && s.propertyId !== propertyFilter) return false;
+          return s.propertyId && ownedIds.has(s.propertyId);
+        })
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+        .slice(0, 100);
+
+      const relevantUserIds = new Set<string>([
+        ...visibleReports.map((r) => r.targetUserId).filter(Boolean),
+        ...visibleSpam.map((s) => s.userId).filter(Boolean),
+      ]);
+      const allUsers = (await Promise.all(usersListed.objects.map((o) => readJson<any>(env, o.key)))).filter(Boolean);
+      const visibleUsers = allUsers.filter((u) => relevantUserIds.has(u.userId));
+
+      return json({
+        reports: visibleReports,
+        spamSignals: visibleSpam,
+        userRecords: visibleUsers,
+      });
+    }
+
+    if (method === "PATCH" && route[1] === "decisions") {
+      const body = await context.request.json<any>().catch(() => ({}));
+      const reportId = safeText(body.reportId, 120);
+      const decision = safeText(body.decision, 40);
+      const note = safeText(body.note, 600);
+      const allowedDecisions = new Set([
+        "DISMISSED",
+        "WARNING_ISSUED",
+        "TEMP_RESTRICTED",
+        "EXTENDED_RESTRICTED",
+        "SUSPENDED",
+      ]);
+      if (!reportId || !allowedDecisions.has(decision)) {
+        return json({ error: "Érvénytelen moderátori döntés." }, 400);
+      }
+
+      const report = await readJson<any>(env, `${REPORT_PREFIX}${reportId}.json`);
+      if (!report) return json({ error: "A jelentés nem található." }, 404);
+
+      const now = new Date().toISOString();
+      report.moderationStatus = decision;
+      report.moderatorDecision = decision;
+      report.moderatorNote = note || undefined;
+      report.decidedBy = userId;
+      report.decidedAt = now;
+      await writeJson(env, `${REPORT_PREFIX}${reportId}.json`, report);
+
+      let nextLevel = "none";
+      if (report.targetUserId && decision !== "DISMISSED") {
+        const modRec = await getUserModerationRecord(env, report.targetUserId);
+        if (decision === "WARNING_ISSUED") {
+          modRec.warningsCount = Number(modRec.warningsCount || 0) + 1;
+          modRec.restrictionLevel = modRec.restrictionLevel === "none" ? "warning" : modRec.restrictionLevel;
+        } else if (decision === "TEMP_RESTRICTED") {
+          modRec.restrictionLevel = "temp_restricted";
+          modRec.restrictedUntil = new Date(Date.now() + 7 * 86_400_000).toISOString();
+        } else if (decision === "EXTENDED_RESTRICTED") {
+          modRec.restrictionLevel = "extended_restricted";
+          modRec.restrictedUntil = new Date(Date.now() + 30 * 86_400_000).toISOString();
+        } else if (decision === "SUSPENDED") {
+          modRec.restrictionLevel = "suspended";
+          modRec.restrictedUntil = null;
+        }
+        modRec.updatedAt = now;
+        nextLevel = modRec.restrictionLevel;
+        await writeJson(env, `${MODERATION_USER_PREFIX}${report.targetUserId}.json`, modRec);
+      }
+
+      return json({ ok: true, restrictionLevel: nextLevel });
+    }
   }
 
   if (route[0] === "notifications") {

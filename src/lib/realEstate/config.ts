@@ -1,11 +1,82 @@
 import type {
+  ModerationRestrictionLevel,
   PropertyCategory,
   PropertyCondition,
   PropertyStatus,
   PublicLocation,
   TransactionType,
+  ViewingPurpose,
   ViewingStatus,
 } from "./types";
+
+export const VIEWING_DECLARATION_VERSION = "2026-11-v1";
+
+export const VIEWING_DECLARATION_TEXT =
+  "Kijelentem, hogy a megtekintést valódi vevői vagy bérlői érdeklődés céljából kérem, és nem ingatlanközvetítői megbízás megszerzése, szolgáltatás értékesítése vagy más üzletszerzési célból.";
+
+export const REAL_ESTATE_COMMUNITY_RULE_TEXT =
+  "Az ingatlanmegtekintési rendszer nem használható kéretlen ingatlanközvetítői megbízásszerzésre, szolgáltatásértékesítésre, tömeges üzletszerzésre vagy más, a hirdető által nem kért kereskedelmi megkeresésre.";
+
+export const VIEWING_PURPOSE_OPTIONS: Array<{
+  value: ViewingPurpose;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "own_purchase",
+    label: "Saját célra szeretném megvásárolni",
+    description: "Magánvásárlóként saját vagy családi használatra érdeklődöm.",
+  },
+  {
+    value: "own_rent",
+    label: "Saját célra szeretném kibérelni",
+    description: "Bérlőként saját lakhatási vagy használati célra érdeklődöm.",
+  },
+  {
+    value: "family_friend",
+    label: "Családtag / ismerős részére keresek",
+    description: "Közvetlen hozzátartozó vagy ismerős megbízásából nézem meg.",
+  },
+  {
+    value: "buyer_representative",
+    label: "Megbízott vevő/bérlő képviseletében járok el",
+    description: "Konkrét, azonosított vevő vagy bérlő képviseletében érkezem.",
+  },
+  {
+    value: "real_estate_agent",
+    label: "Ingatlanközvetítőként járok el",
+    description: "Ingatlanközvetítői vagy üzletszerzési céllal jelentkezem.",
+  },
+];
+
+export const VIEWING_PURPOSE_LABELS: Record<ViewingPurpose, string> = {
+  own_purchase: "Saját célra történő vásárlás",
+  own_rent: "Saját célra történő bérlés",
+  family_friend: "Családtag / ismerős részére",
+  buyer_representative: "Megbízott vevő/bérlő képviselete",
+  real_estate_agent: "Ingatlanközvetítői megkeresés",
+};
+
+export const ABUSE_REPORT_REASONS: Array<{ code: string; label: string }> = [
+  { code: "unsolicited_agent", label: "Kéretlen ingatlanközvetítői / üzletszerzési megkeresés" },
+  { code: "no_show", label: "Nem jelent meg" },
+  { code: "misleading_profile", label: "Megtévesztő profil" },
+  { code: "harassment", label: "Zaklató viselkedés" },
+  { code: "fake_data", label: "Hamis adat" },
+  { code: "spam", label: "Spam" },
+  { code: "other", label: "Egyéb" },
+];
+
+export const RESTRICTION_LEVEL_LABELS: Record<
+  ModerationRestrictionLevel,
+  { label: string; className: string }
+> = {
+  none: { label: "Nincs korlátozás", className: "border-emerald-200 bg-emerald-50 text-emerald-800" },
+  warning: { label: "Figyelmeztetés rögzítve", className: "border-amber-200 bg-amber-50 text-amber-800" },
+  temp_restricted: { label: "Ideiglenes foglalási korlátozás", className: "border-amber-300 bg-amber-50 text-amber-900" },
+  extended_restricted: { label: "Hosszabb idejű korlátozás", className: "border-rose-200 bg-rose-50 text-rose-700" },
+  suspended: { label: "Felfüggesztett fiók", className: "border-rose-300 bg-rose-100 text-rose-800" },
+};
 
 /**
  * Separate, configurable fee configuration for rental properties.
