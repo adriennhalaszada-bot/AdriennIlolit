@@ -19,6 +19,7 @@ import {
   Loader2,
   Lock,
   MapPin,
+  Phone,
   ShieldCheck,
   XCircle,
 } from "lucide-react";
@@ -37,9 +38,14 @@ export default function RealEstateMyViewings() {
     queryKey: ["real-estate-my-viewings"],
     queryFn: () => realEstateApi.getMyViewings(),
     enabled: Boolean(isSignedIn),
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
   });
 
   const requesterViewings = (data?.items || []).filter((v) => v.role === "requester");
+  const respondedViewings = requesterViewings.filter((v) =>
+    ["APPROVED", "PROPOSED_NEW_TIME", "REJECTED", "REVOKED_BY_OWNER"].includes(v.status),
+  );
 
   const handleLoadExactDetails = async (viewingId: string) => {
     if (openDetailsId === viewingId) {
@@ -125,6 +131,19 @@ export default function RealEstateMyViewings() {
         </div>
 
         <div className="mx-auto max-w-5xl space-y-5 px-4 py-8 sm:px-6 lg:px-8">
+          {respondedViewings.length > 0 && (
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-xs text-emerald-950">
+              <p className="flex items-center gap-2 font-bold text-emerald-900">
+                <Bell className="h-4 w-4 text-emerald-700" />
+                Az eladók visszajelzései ({respondedViewings.length} megválaszolt kérelem)
+              </p>
+              <p className="mt-1 text-emerald-900/80">
+                Az állapotok automatikusan frissülnek. Jóváhagyott megtekintésnél nyisd meg lent a „Megtekintés
+                részletei” gombot a pontos címhez és térképhez.
+              </p>
+            </div>
+          )}
+
           {!isSignedIn ? (
             <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center">
               <p className="text-sm font-bold text-slate-700">A megtekintések megtekintéséhez jelentkezz be.</p>
@@ -305,9 +324,18 @@ export default function RealEstateMyViewings() {
                           <CheckCircle2 className="h-5 w-5 text-emerald-700" />
                           Megtekintés részletei
                         </h3>
-                        <span className="text-xs font-semibold text-emerald-800">
-                          Hirdető: {details.ownerName}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-emerald-800">
+                          <span>Hirdető: {details.ownerName}</span>
+                          {details.ownerPhone && (
+                            <a
+                              href={`tel:${details.ownerPhone}`}
+                              className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-2.5 py-1 font-bold text-emerald-800 hover:bg-emerald-50"
+                            >
+                              <Phone className="h-3.5 w-3.5" />
+                              {details.ownerPhone}
+                            </a>
+                          )}
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 gap-4 rounded-xl border border-emerald-200 bg-white p-4 text-sm sm:grid-cols-2">

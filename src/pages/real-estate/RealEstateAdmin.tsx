@@ -113,6 +113,8 @@ export default function RealEstateAdmin() {
   const [editPrice, setEditPrice] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [editInstructions, setEditInstructions] = useState("");
+  const [editOwnerPhoneMode, setEditOwnerPhoneMode] = useState<"none" | "approved_only">("none");
+  const [editOwnerPhone, setEditOwnerPhone] = useState("");
   const [editPhotos, setEditPhotos] = useState<PropertyPhoto[]>([]);
   const [editFloorPlans, setEditFloorPlans] = useState<PropertyPhoto[]>([]);
   const [editVideoUrl, setEditVideoUrl] = useState("");
@@ -183,6 +185,8 @@ export default function RealEstateAdmin() {
     setEditPrice(String(activeProperty.price || ""));
     setEditDesc(activeProperty.description || "");
     setEditInstructions(activeProperty.exactAddress?.viewingInstructions || "");
+    setEditOwnerPhoneMode(activeProperty.ownerPhoneShareMode || "none");
+    setEditOwnerPhone(activeProperty.ownerPhone || "");
     setEditPhotos(activeProperty.photos || []);
     setEditFloorPlans(activeProperty.floorPlans || []);
     setEditVideoUrl(activeProperty.videoUrl || "");
@@ -343,6 +347,8 @@ export default function RealEstateAdmin() {
         title: editTitle.trim(),
         price: Math.max(1000, Math.round(Number(editPrice) || activeProperty.price)),
         description: editDesc.trim(),
+        ownerPhoneShareMode: editOwnerPhoneMode,
+        ownerPhone: editOwnerPhoneMode === "approved_only" ? editOwnerPhone.trim() : "",
         exactAddress: activeProperty.exactAddress
           ? { ...activeProperty.exactAddress, viewingInstructions: editInstructions.trim() || undefined }
           : undefined,
@@ -795,6 +801,47 @@ export default function RealEstateAdmin() {
                           className="mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm outline-none focus:border-emerald-600"
                         />
                       </label>
+
+                      {/* Optional seller phone visibility */}
+                      <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                          <div className="text-xs">
+                            <p className="font-bold text-slate-900">Saját telefonszám (opcionális)</p>
+                            <p className="text-slate-500">
+                              Sosem nyilvános – opcionálisan csak jóváhagyott érdeklődőknek mutatható meg.
+                            </p>
+                          </div>
+                          <div className="inline-flex shrink-0 rounded-xl border border-slate-200 bg-white p-1 text-xs font-bold">
+                            <button
+                              type="button"
+                              onClick={() => setEditOwnerPhoneMode("none")}
+                              className={`rounded-lg px-3 py-1.5 transition ${
+                                editOwnerPhoneMode === "none" ? "bg-emerald-600 text-white" : "text-slate-600"
+                              }`}
+                            >
+                              Nem adom meg
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditOwnerPhoneMode("approved_only")}
+                              className={`rounded-lg px-3 py-1.5 transition ${
+                                editOwnerPhoneMode === "approved_only" ? "bg-emerald-600 text-white" : "text-slate-600"
+                              }`}
+                            >
+                              Jóváhagyás után
+                            </button>
+                          </div>
+                        </div>
+                        {editOwnerPhoneMode === "approved_only" && (
+                          <input
+                            type="tel"
+                            value={editOwnerPhone}
+                            onChange={(e) => setEditOwnerPhone(e.target.value)}
+                            placeholder="+36 30 123 4567"
+                            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm outline-none focus:border-emerald-600"
+                          />
+                        )}
+                      </div>
                       <Button
                         type="submit"
                         disabled={savingEdit}
@@ -1111,7 +1158,7 @@ export default function RealEstateAdmin() {
                                       {v.requesterPhoneVerified && (
                                         <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
                                           <ShieldCheck className="h-3 w-3" />
-                                          Ellenőrzött telefonszám ({v.requesterPhoneMasked})
+                                          Ellenőrzött telefonszám
                                         </span>
                                       )}
                                       <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${badge.className}`}>

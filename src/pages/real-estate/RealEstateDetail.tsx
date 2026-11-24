@@ -14,6 +14,7 @@ import {
   getConditionLabel,
   getSubtypeLabel,
 } from "@/lib/realEstate/config";
+import type { ApprovedViewingDetails } from "@/lib/realEstate/types";
 import { PhoneVerificationModal } from "@/components/realestate/PhoneVerificationModal";
 import { ApproximateLocationMap } from "@/components/realestate/ApproximateLocationMap";
 import {
@@ -64,6 +65,9 @@ export default function RealEstateDetail() {
   const [submittingViewing, setSubmittingViewing] = useState(false);
   const [viewingSubmitted, setViewingSubmitted] = useState(false);
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
+  const [inlineDetails, setInlineDetails] = useState<ApprovedViewingDetails | null>(null);
+  const [loadingInlineDetails, setLoadingInlineDetails] = useState(false);
+  const [respondingBuyerAction, setRespondingBuyerAction] = useState(false);
 
   // Inquiry message state
   const [messageText, setMessageText] = useState("");
@@ -86,6 +90,65 @@ export default function RealEstateDetail() {
     queryFn: () => realEstateApi.getPhoneStatus(),
     enabled: Boolean(isSignedIn),
   });
+
+  // Live buyer viewing status for THIS property (auto-refreshes every 10s & on tab focus)
+  const { data: myPropertyViewingsData, refetch: refetchMyViewing } = useQuery({
+    queryKey: ["real-estate-my-property-viewings", id],
+    queryFn: () => realEstateApi.getMyViewings(id),
+    enabled: Boolean(isSignedIn && id),
+    refetchInterval: 10000,
+    refetchOnWindowFocus: true,
+  });
+
+  const latestBuyerViewing = useMemo(() => {
+    const items = (myPropertyViewingsData?.items || []).filter((v) => v.role === "requester");
+    return items[0] || null;
+  }, [myPropertyViewingsData]);
+
+  const handleLoadInlineApprovedDetails = async (viewingId: string) => {
+    setLoadingInlineDetails(true);
+    try {
+      const details = await realEstateApi.getApprovedViewingDetails(viewingId);
+      setInlineDetails(details);
+    } catch (err: any) {
+      toast({
+        title: "A pontos cím nem nyitható meg",
+        description: err?.message || "Próbáld újra néhány másodperc múlva.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingInlineDetails(false);
+    }
+  };
+
+  const handleBuyerAcceptProposal = async (viewingId: string) => {
+    setRespondingBuyerAction(true);
+    try {
+      await realEstateApi.acceptProposedTime(viewingId);
+      await refetchMyViewing();
+      toast({ title: "Javasolt időpont elfogadva – a pontos cím megnyílt" });
+    } catch (err: any) {
+      toast({ title: err?.message || "Nem sikerült elfogadni.", variant: "destructive" });
+    } finally {
+      setRespondingBuyerAction(false);
+    }
+  };
+
+  const handleBuyerCancelViewing = async (viewingId: string) => {
+    if (!window.confirm("Biztosan lemondod a megtekintést? Az időpont felszabadul.")) return;
+    setRespondingBuyerAction(true);
+    try {
+      await realEstateApi.cancelViewing(viewingId);
+      setInlineDetails(null);
+      await refetchMyViewing();
+      refetch();
+      toast({ title: "Megtekintés lemondva" });
+    } catch (err: any) {
+      toast({ title: err?.message || "Nem sikerült lemondani.", variant: "destructive" });
+    } finally {
+      setRespondingBuyerAction(false);
+    }
+  };
 
   const groupedSlots = useMemo(() => {
     const slots = property?.viewingSlots || [];
@@ -147,6 +210,8 @@ export default function RealEstateDetail() {
       setSelectedSlotId("");
       setViewingMessage("");
       queryClient.invalidateQueries({ queryKey: ["real-estate-property", id] });
+      queryClient.invalidateQueries({ queryKey: ["real-estate-my-property-viewings", id] });
+      queryClient.invalidateQueries({ queryKey: ["real-estate-my-viewings"] });
       toast({ title: "Megtekintési kérelem elküldve" });
     } catch (err: any) {
       toast({
@@ -703,6 +768,173 @@ export default function RealEstateDetail() {
                   </span>
                 </p>
               </div>
+
+              {/* Instant Live Buyer Confirmation Card for this property */}
+              {!property.isOwner && latestBuyerViewing && (
+                <div
+                  className={`space-y-3 rounded-2xl border p-4 text-xs ${
+                    latestBuyerViewing.status === "APPROVED"
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-950"
+                      : latestBuyerViewing.status === "PROPOSED_NEW_TIME"
+                      ? "border-blue-300 bg-blue-50 text-blue-950"
+                      : latestBuyerViewing.status === "PENDING"
+                      ? "border-amber-300 bg-amber-50 text-amber-950"
+                      : "border-rose-300 bg-rose-50 text-rose-950"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-bold">
+                      {latestBuyerViewing.status === "APPROVED" && (
+                        <span className="flex items-center gap-1.5 text-emerald-800">
+                          <CheckCircle2 className="h-4 w-4 shrink-0" />
+                          Az eladó elfogadta a megtekintési időpontodat
+                        </span>
+                      )}
+                      {latestBuyerViewing.status === "PROPOSED_NEW_TIME" && (
+                        <span className="flex items-center gap-1.5 text-blue-800">
+                          <Clock className="h-4 w-4 shrink-0" />
+                          Az eladó másik időpontot javasolt
+                        </span>
+                      )}
+                      {latestBuyerViewing.status === "PENDING" && (
+                        <span className="flex items-center gap-1.5 text-amber-800">
+                          <Clock className="h-4 w-4 shrink-0" />
+                          Megtekintési kérelmed az eladó válaszára vár
+                        </span>
+                      )}
+                      {(latestBuyerViewing.status === "REJECTED" ||
+                        latestBuyerViewing.status === "REVOKED_BY_OWNER") && (
+                        <span className="flex items-center gap-1.5 text-rose-800">
+                          <AlertTriangle className="h-4 w-4 shrink-0" />
+                          {latestBuyerViewing.status === "REJECTED"
+                            ? "Az eladó elutasította a kért időpontot"
+                            : "Az eladó visszavonta a megtekintést"}
+                        </span>
+                      )}
+                      {latestBuyerViewing.status === "CANCELLED_BY_REQUESTER" && (
+                        <span className="text-slate-700">A korábbi megtekintési kérelmedet lemondtad</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="font-semibold">
+                    Időpont: {latestBuyerViewing.date} · {latestBuyerViewing.startTime} – {latestBuyerViewing.endTime}
+                  </p>
+
+                  {latestBuyerViewing.status === "PROPOSED_NEW_TIME" && latestBuyerViewing.proposedDate && (
+                    <div className="space-y-2 rounded-xl border border-blue-200 bg-white p-3">
+                      <p className="font-bold text-slate-950">
+                        Javasolt új időpont: {latestBuyerViewing.proposedDate} ·{" "}
+                        {latestBuyerViewing.proposedStartTime} – {latestBuyerViewing.proposedEndTime}
+                      </p>
+                      {latestBuyerViewing.proposedNote && (
+                        <p className="text-slate-600">{latestBuyerViewing.proposedNote}</p>
+                      )}
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={respondingBuyerAction}
+                          onClick={() => handleBuyerAcceptProposal(latestBuyerViewing.id)}
+                          className="rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700"
+                        >
+                          <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                          Elfogadom
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={respondingBuyerAction}
+                          onClick={() => handleBuyerCancelViewing(latestBuyerViewing.id)}
+                          className="rounded-xl border-rose-200 text-xs font-bold text-rose-700"
+                        >
+                          Lemondás
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {latestBuyerViewing.ownerResponseNote && latestBuyerViewing.status !== "PROPOSED_NEW_TIME" && (
+                    <p className="rounded-xl bg-white/80 p-2.5 text-slate-700">
+                      <strong>Eladó üzenete:</strong> {latestBuyerViewing.ownerResponseNote}
+                    </p>
+                  )}
+
+                  {latestBuyerViewing.status === "APPROVED" && (
+                    <div className="space-y-2.5">
+                      {!inlineDetails ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={loadingInlineDetails}
+                          onClick={() => handleLoadInlineApprovedDetails(latestBuyerViewing.id)}
+                          className="w-full rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700"
+                        >
+                          {loadingInlineDetails ? (
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <MapPin className="mr-1.5 h-3.5 w-3.5" />
+                          )}
+                          Pontos cím és részletek megnyitása
+                        </Button>
+                      ) : (
+                        <div className="space-y-2 rounded-xl border border-emerald-200 bg-white p-3 text-slate-800">
+                          <p className="text-[11px] font-bold uppercase text-emerald-700">Jóváhagyott pontos cím</p>
+                          <p className="font-black text-slate-950">
+                            {inlineDetails.exactAddress.postalCode} {inlineDetails.exactAddress.city}
+                            {inlineDetails.exactAddress.district ? `, ${inlineDetails.exactAddress.district}` : ""}
+                          </p>
+                          <p className="font-bold">
+                            {inlineDetails.exactAddress.streetName} {inlineDetails.exactAddress.streetType}{" "}
+                            {inlineDetails.exactAddress.houseNumber}
+                            {inlineDetails.exactAddress.floorDoor ? `, ${inlineDetails.exactAddress.floorDoor}` : ""}
+                          </p>
+                          {inlineDetails.ownerPhone && (
+                            <p className="flex items-center gap-1.5 font-semibold text-emerald-800">
+                              <Phone className="h-3.5 w-3.5" />
+                              Eladó telefonszáma: {inlineDetails.ownerPhone}
+                            </p>
+                          )}
+                          {inlineDetails.exactAddress.viewingInstructions && (
+                            <p className="text-slate-600">{inlineDetails.exactAddress.viewingInstructions}</p>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between gap-2">
+                        <Link
+                          href="/real-estate/viewings"
+                          className="font-bold text-emerald-800 underline hover:text-emerald-950"
+                        >
+                          Megtekintés részletei és térkép
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleBuyerCancelViewing(latestBuyerViewing.id)}
+                          className="font-bold text-rose-700 hover:underline"
+                        >
+                          Lemondás
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {latestBuyerViewing.status === "PENDING" && (
+                    <div className="flex items-center justify-between gap-2">
+                      <Link href="/real-estate/viewings" className="font-bold text-amber-900 underline">
+                        Megtekintéseim megnyitása
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => handleBuyerCancelViewing(latestBuyerViewing.id)}
+                        className="font-bold text-rose-700 hover:underline"
+                      >
+                        Kérelem visszavonása
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {isClosed ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs font-semibold text-slate-600">

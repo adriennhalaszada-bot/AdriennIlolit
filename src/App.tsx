@@ -453,7 +453,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v8.8_20261124_real_estate_30day_billing";
+    const CURRENT_VER = "v8.9_20261124_buyer_confirm_phone_privacy";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);

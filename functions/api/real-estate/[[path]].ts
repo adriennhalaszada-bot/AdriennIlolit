@@ -315,6 +315,8 @@ function sanitizePropertyForViewer(
   if (isOwner) {
     sanitized.exactAddress = prop.exactAddress;
     sanitized.billing = Array.isArray(prop.billing) ? prop.billing : [];
+    sanitized.ownerPhone = prop.ownerPhone || "";
+    sanitized.ownerPhoneShareMode = prop.ownerPhoneShareMode || "none";
   }
 
   return sanitized;
@@ -613,10 +615,17 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           order: idx,
         }));
 
+      const ownerPhoneShareMode =
+        body.ownerPhoneShareMode === "approved_only" ? "approved_only" : "none";
+      const ownerPhone =
+        ownerPhoneShareMode === "approved_only" ? safeText(body.ownerPhone, 30) : "";
+
       const property = {
         id,
         ownerId: userId,
         ownerName: safeText(body.ownerName, 120) || "ILOLIT hirdető",
+        ownerPhone,
+        ownerPhoneShareMode,
         transactionType,
         category,
         subtype: safeText(body.subtype, 60),
@@ -697,8 +706,23 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           }
         : existing.exactAddress;
 
+      const nextShareMode =
+        body.ownerPhoneShareMode !== undefined
+          ? body.ownerPhoneShareMode === "approved_only"
+            ? "approved_only"
+            : "none"
+          : existing.ownerPhoneShareMode || "none";
+      const nextOwnerPhone =
+        nextShareMode === "approved_only"
+          ? body.ownerPhone !== undefined
+            ? safeText(body.ownerPhone, 30)
+            : existing.ownerPhone || ""
+          : "";
+
       const updated = {
         ...existing,
+        ownerPhoneShareMode: nextShareMode,
+        ownerPhone: nextOwnerPhone,
         transactionType,
         category: body.category ? safeText(body.category, 40) : existing.category,
         subtype: body.subtype !== undefined ? safeText(body.subtype, 60) : existing.subtype,
@@ -883,7 +907,6 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         requesterId: testRequesterId,
         requesterName: "Teszt Érdeklődő (Kovács Anna)",
         requesterPhoneVerified: true,
-        requesterPhoneMasked: "+363 *** **67",
         slotId: chosenSlot.id,
         date: chosenSlot.date,
         startTime: chosenSlot.startTime,
@@ -1362,12 +1385,14 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           return true;
         })
         .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-        .map((v) =>
-          enrichViewingReminders({
-            ...v,
+        .map((v) => {
+          // Privacy: never expose buyer's phone number (not even masked) to the seller
+          const { requesterPhoneMasked: _omit, ...safeViewing } = v;
+          return enrichViewingReminders({
+            ...safeViewing,
             role: v.ownerId === userId ? "owner" : "requester",
-          }),
-        );
+          });
+        });
       return json({ items, total: items.length });
     }
 
@@ -1484,7 +1509,6 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         requesterId: userId,
         requesterName,
         requesterPhoneVerified: true,
-        requesterPhoneMasked: maskPhone(phoneRec.phone),
         slotId: slot.id,
         date: slot.date,
         startTime: slot.startTime,
@@ -1580,6 +1604,10 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         durationMinutes: viewing.durationMinutes,
         exactAddress: prop.exactAddress,
         ownerName: prop.ownerName || "ILOLIT hirdető",
+        ownerPhone:
+          prop.ownerPhoneShareMode === "approved_only" && prop.ownerPhone
+            ? prop.ownerPhone
+            : null,
         approvedAt: viewing.approvedAt,
         addressUnlockedAt: viewing.addressUnlockedAt,
       });

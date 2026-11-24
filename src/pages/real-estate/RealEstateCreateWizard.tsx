@@ -83,6 +83,8 @@ export default function RealEstateCreateWizard() {
   const [price, setPrice] = useState<string>("");
 
   // Step 2
+  const [ownerPhoneShareMode, setOwnerPhoneShareMode] = useState<"none" | "approved_only">("none");
+  const [ownerPhone, setOwnerPhone] = useState("");
   const [exactAddress, setExactAddress] = useState<ExactAddress>({
     country: "Magyarország",
     postalCode: "",
@@ -145,6 +147,8 @@ export default function RealEstateCreateWizard() {
     setTitle(existingProp.title || "");
     setPrice(String(existingProp.price || ""));
     if (existingProp.exactAddress) setExactAddress(existingProp.exactAddress);
+    setOwnerPhoneShareMode(existingProp.ownerPhoneShareMode || "none");
+    setOwnerPhone(existingProp.ownerPhone || "");
     if (existingProp.specs) setSpecs(existingProp.specs);
     if (existingProp.rentalTerms) setRentalTerms(existingProp.rentalTerms);
     if (existingProp.sustainability) setSustainability(existingProp.sustainability);
@@ -214,6 +218,8 @@ export default function RealEstateCreateWizard() {
 
   const buildPayload = (submitForPayment: boolean) => ({
     ownerName: user?.fullName || user?.username || "ILOLIT hirdető",
+    ownerPhoneShareMode,
+    ownerPhone: ownerPhoneShareMode === "approved_only" ? ownerPhone.trim() : "",
     transactionType,
     category,
     subtype,
@@ -520,6 +526,58 @@ export default function RealEstateCreateWizard() {
                   onChange={setExactAddress}
                   showParcelNumber={true}
                 />
+
+                {/* Optional Owner Phone (anti-spam / agent protection) */}
+                <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                  <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                    <div className="text-xs">
+                      <p className="font-bold text-slate-900">
+                        Saját telefonszámod megadása (opcionális – védelem kéretlen hívások ellen)
+                      </p>
+                      <p className="mt-0.5 text-slate-500">
+                        A telefonszámod sosem jelenik meg nyilvánosan a hirdetésben. Ha megadod, kizárólag az általam
+                        jóváhagyott érdeklődő láthatja a megtekintés visszaigazolásában.
+                      </p>
+                    </div>
+                    <div className="inline-flex shrink-0 rounded-xl border border-slate-200 bg-white p-1 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setOwnerPhoneShareMode("none")}
+                        className={`rounded-lg px-3 py-1.5 transition ${
+                          ownerPhoneShareMode === "none"
+                            ? "bg-emerald-600 text-white"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        Nem adom meg
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOwnerPhoneShareMode("approved_only")}
+                        className={`rounded-lg px-3 py-1.5 transition ${
+                          ownerPhoneShareMode === "approved_only"
+                            ? "bg-emerald-600 text-white"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        Csak jóváhagyás után
+                      </button>
+                    </div>
+                  </div>
+
+                  {ownerPhoneShareMode === "approved_only" && (
+                    <label className="block text-xs font-bold text-slate-700">
+                      Telefonszámod (csak jóváhagyott megtekintéshez látható)
+                      <input
+                        type="tel"
+                        value={ownerPhone}
+                        onChange={(e) => setOwnerPhone(e.target.value)}
+                        placeholder="+36 30 123 4567"
+                        className={inputCls}
+                      />
+                    </label>
+                  )}
+                </div>
               </div>
             )}
 

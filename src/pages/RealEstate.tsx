@@ -25,9 +25,11 @@ import {
 import type { PropertyCategory, RealEstateProperty } from "@/lib/realEstate/types";
 import {
   BedDouble,
+  Bell,
   Building2,
   Calendar,
   Car,
+  CheckCircle2,
   ChevronRight,
   Filter,
   Heart,
@@ -87,6 +89,29 @@ export default function RealEstate() {
     queryKey: ["real-estate-properties"],
     queryFn: () => realEstateApi.listProperties(),
   });
+
+  // Live buyer viewing status notifications (auto-refreshes every 15s)
+  const { data: myViewingsData } = useQuery({
+    queryKey: ["real-estate-my-viewings-banner"],
+    queryFn: () => realEstateApi.getMyViewings(),
+    enabled: Boolean(isSignedIn),
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
+  });
+
+  const buyerRespondedViewings = useMemo(
+    () =>
+      (myViewingsData?.items || []).filter(
+        (v) =>
+          v.role === "requester" &&
+          ["APPROVED", "PROPOSED_NEW_TIME", "REJECTED", "REVOKED_BY_OWNER"].includes(v.status),
+      ),
+    [myViewingsData],
+  );
+  const buyerTotalViewingsCount = useMemo(
+    () => (myViewingsData?.items || []).filter((v) => v.role === "requester").length,
+    [myViewingsData],
+  );
 
   const resetFilters = () => {
     setTransactionType("all");
@@ -502,6 +527,11 @@ export default function RealEstate() {
                   <Link href="/real-estate/viewings">
                     <Calendar className="mr-2 h-4 w-4 text-emerald-600" />
                     Megtekintéseim
+                    {buyerTotalViewingsCount > 0 && (
+                      <span className="ml-2 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-black text-white">
+                        {buyerTotalViewingsCount}
+                      </span>
+                    )}
                   </Link>
                 </Button>
                 <Button
@@ -527,6 +557,37 @@ export default function RealEstate() {
             </div>
           </div>
         </section>
+
+        {/* Live Buyer Viewing Confirmation Banner */}
+        {buyerRespondedViewings.length > 0 && (
+          <section className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <div className="flex items-start gap-3 text-xs text-emerald-950">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
+                <div>
+                  <p className="font-bold">
+                    {buyerRespondedViewings[0].status === "APPROVED"
+                      ? `Visszaigazolás: az eladó elfogadta a megtekintésedet (${buyerRespondedViewings[0].propertyTitle} – ${buyerRespondedViewings[0].date} ${buyerRespondedViewings[0].startTime})`
+                      : buyerRespondedViewings[0].status === "PROPOSED_NEW_TIME"
+                      ? `Az eladó új időpontot javasolt: ${buyerRespondedViewings[0].propertyTitle} (${buyerRespondedViewings[0].proposedDate} ${buyerRespondedViewings[0].proposedStartTime})`
+                      : `Az eladó válaszolt a megtekintési kérelmedre (${buyerRespondedViewings[0].propertyTitle})`}
+                  </p>
+                  <p className="mt-0.5 text-emerald-900/80">
+                    {buyerRespondedViewings.length > 1
+                      ? `Összesen ${buyerRespondedViewings.length} megválaszolt megtekintési kérelmed van.`
+                      : "Nyisd meg a Megtekintéseim oldalt a pontos címhez, térképhez vagy az új időpont elfogadásához."}
+                  </p>
+                </div>
+              </div>
+              <Button asChild size="sm" className="rounded-xl bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700">
+                <Link href="/real-estate/viewings">
+                  <Bell className="mr-1.5 h-3.5 w-3.5" />
+                  Visszaigazolás megtekintése
+                </Link>
+              </Button>
+            </div>
+          </section>
+        )}
 
         {/* Main Content Grid */}
         <section className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 py-8 sm:px-6 lg:grid-cols-4 lg:px-8">

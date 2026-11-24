@@ -167,6 +167,9 @@ export interface RealEstateProperty {
   id: string;
   ownerId: string;
   ownerName: string;
+  /** Optional owner phone: ONLY visible to owner in edit/admin, and to APPROVED verified viewers if ownerPhoneShareMode === "approved_only". Never public. */
+  ownerPhone?: string;
+  ownerPhoneShareMode?: "none" | "approved_only";
   transactionType: TransactionType;
   category: PropertyCategory;
   subtype: string;
@@ -211,7 +214,6 @@ export interface ViewingRequest {
   requesterId: string;
   requesterName: string;
   requesterPhoneVerified: boolean;
-  requesterPhoneMasked: string;
   slotId: string;
   date: string;
   startTime: string;
@@ -245,6 +247,8 @@ export interface ApprovedViewingDetails {
   durationMinutes: number;
   exactAddress: ExactAddress;
   ownerName: string;
+  /** Present ONLY if the owner explicitly enabled ownerPhoneShareMode === "approved_only". */
+  ownerPhone?: string | null;
   approvedAt: string;
   addressUnlockedAt: string;
 }
