@@ -25,7 +25,7 @@ export const VIEWING_PURPOSE_OPTIONS: Array<{
 }> = [
   {
     value: "own_purchase",
-    label: "Saját célra szeretném megvásárolni",
+    label: "Saját célra/családtag részére szeretném megvásárolni",
     description: "Magánvásárlóként saját vagy családi használatra érdeklődöm.",
     onlyFor: "sale",
   },
@@ -34,11 +34,6 @@ export const VIEWING_PURPOSE_OPTIONS: Array<{
     label: "Saját célra szeretném kibérelni",
     description: "Bérlőként saját lakhatási vagy használati célra érdeklődöm.",
     onlyFor: "rent",
-  },
-  {
-    value: "family_friend",
-    label: "Családtag / ismerős részére keresek",
-    description: "Közvetlen hozzátartozó vagy ismerős megbízásából nézem meg.",
   },
   {
     value: "real_estate_agent",
@@ -54,9 +49,8 @@ export function getViewingPurposeOptions(transactionType: TransactionType) {
 }
 
 export const VIEWING_PURPOSE_LABELS: Record<string, string> = {
-  own_purchase: "Saját célra történő vásárlás",
+  own_purchase: "Saját célra/családtag részére történő vásárlás",
   own_rent: "Saját célra történő bérlés",
-  family_friend: "Családtag / ismerős részére",
   real_estate_agent: "Ingatlanközvetítői megkeresés",
 };
 

@@ -44,7 +44,6 @@ const MSG_ACTIVITY_PREFIX = "data/real-estate/msg-activity/";
 const ALLOWED_VIEWING_PURPOSES = new Set([
   "own_purchase",
   "own_rent",
-  "family_friend",
   "real_estate_agent",
 ]);
 

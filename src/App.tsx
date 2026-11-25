@@ -465,7 +465,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v9.8_20261125_remove_buyer_representative";
+    const CURRENT_VER = "v9.9_20261125_viewing_purposes_cleanup";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);
