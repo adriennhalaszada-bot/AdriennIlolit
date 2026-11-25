@@ -8,7 +8,8 @@ export type UnifiedAppointmentStatus =
   | "PROPOSED_NEW_TIME"
   | "REJECTED"
   | "CANCELLED"
-  | "COMPLETED";
+  | "COMPLETED"
+  | "NO_SHOW";
 
 export type UnifiedNotificationCategory =
   | "INGATLAN"
@@ -50,7 +51,9 @@ export interface UnifiedAppointment {
   reminder_24h_due: boolean;
   reminder_2h_due: boolean;
   role: "buyer" | "seller";
-  source: "native" | "real_estate" | "service_booking";
+  source: "native" | "real_estate" | "service_booking" | "vehicle_module";
+  booking_kind?: "VIEWING" | "TEST_DRIVE";
+  license_category_confirmed?: string;
   title: string;
   service_name?: string;
   cover_image: string;
@@ -211,6 +214,11 @@ export const APPOINTMENT_STATUS_META: Record<
     label: "Teljesítve",
     shortLabel: "Teljesítve",
     className: "border-emerald-200 bg-white text-emerald-700",
+  },
+  NO_SHOW: {
+    label: "Nem jelent meg",
+    shortLabel: "Nem jelent meg",
+    className: "border-rose-200 bg-rose-50 text-rose-700",
   },
 };
 

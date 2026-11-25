@@ -50,6 +50,9 @@ import RealEstateDetail from "./pages/real-estate/RealEstateDetail";
 import RealEstateAdmin from "./pages/real-estate/RealEstateAdmin";
 import RealEstateMyViewings from "./pages/real-estate/RealEstateMyViewings";
 import Vehicles from "./pages/Vehicles";
+import VehicleCreateWizard from "./pages/vehicles/VehicleCreateWizard";
+import VehicleDetail from "./pages/vehicles/VehicleDetail";
+import VehicleAdmin from "./pages/vehicles/VehicleAdmin";
 import NotFound from "./pages/not-found";
 import { UniversalSearch } from "./pages/UniversalSearch";
 import { FavoritesProvider } from "./context/FavoritesContext";
@@ -303,11 +306,33 @@ function AppRouterInner() {
       <Route path="/ingatlan" component={RealEstate} />
       <Route path="/ingatlanok" component={RealEstate} />
 
+      <Route path="/vehicles/new" component={VehicleCreateWizard} />
+      <Route path="/vehicles/admin/:id" component={VehicleAdmin} />
+      <Route path="/vehicles/admin" component={VehicleAdmin} />
+      <Route path="/vehicles/dashboard" component={VehicleAdmin} />
+      <Route path="/vehicles/:id/edit" component={VehicleCreateWizard} />
+      <Route path="/vehicles/:id" component={VehicleDetail} />
       <Route path="/vehicles" component={Vehicles} />
+      {/* Hungarian SEO routes for ILOLIT Járművek */}
+      <Route path="/jarmuvek/elektromos-autok">{() => <Vehicles initialCategory="passenger_car" initialCollection="electric" />}</Route>
+      <Route path="/jarmuvek/hibrid-autok">{() => <Vehicles initialCategory="passenger_car" initialCollection="hybrid" />}</Route>
+      <Route path="/jarmuvek/szemelyautok/:brandSlug/:modelSlug">{() => <Vehicles initialCategory="passenger_car" />}</Route>
+      <Route path="/jarmuvek/szemelyautok/:brandSlug">{() => <Vehicles initialCategory="passenger_car" />}</Route>
+      <Route path="/jarmuvek/szemelyautok">{() => <Vehicles initialCategory="passenger_car" />}</Route>
+      <Route path="/jarmuvek/motorkerekparok">{() => <Vehicles initialCategory="motorcycle_quad" />}</Route>
+      <Route path="/jarmuvek/kishaszonjarmuvek">{() => <Vehicles initialCategory="light_commercial" />}</Route>
+      <Route path="/jarmuvek/haszonjarmuvek">{() => <Vehicles initialCategory="heavy_commercial" />}</Route>
+      <Route path="/jarmuvek/munkagepek">{() => <Vehicles initialCategory="machinery" />}</Route>
+      <Route path="/jarmuvek/mezogazdasagi-gepek">{() => <Vehicles initialCategory="agricultural" />}</Route>
+      <Route path="/jarmuvek/lakoautok">{() => <Vehicles initialCategory="camper_caravan" />}</Route>
+      <Route path="/jarmuvek/utanfutok">{() => <Vehicles initialCategory="trailer" />}</Route>
+      <Route path="/jarmuvek/vizi-jarmuvek">{() => <Vehicles initialCategory="watercraft" />}</Route>
+      <Route path="/jarmuvek/:categorySlug/:brandSlug/:modelSlug" component={Vehicles} />
+      <Route path="/jarmuvek/:categorySlug/:brandSlug" component={Vehicles} />
+      <Route path="/jarmuvek/:categorySlug" component={Vehicles} />
       <Route path="/jarmuvek" component={Vehicles} />
       <Route path="/jarmu" component={Vehicles} />
       <Route path="/autok" component={Vehicles} />
-      <Route path="/vehicles/dashboard"><Redirect to="/dashboard/listings" /></Route>
 
       <Route path="/education" component={EducationPage} />
       <Route path="/oktatas" component={EducationPage} />
@@ -320,6 +345,7 @@ function AppRouterInner() {
       <Route path="/dashboard/bookings/services" component={Dashboard} />
       <Route path="/dashboard/bookings/properties" component={Dashboard} />
       <Route path="/dashboard/bookings/vehicles" component={Dashboard} />
+      <Route path="/dashboard/bookings/test-drives" component={Dashboard} />
       <Route path="/dashboard/calendar" component={Dashboard} />
       <Route path="/dashboard/notifications" component={Dashboard} />
       <Route path="/dashboard/listings" component={DashboardListings} />
@@ -465,7 +491,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v9.9_20261125_viewing_purposes_cleanup";
+    const CURRENT_VER = "v10.0_20261125_vehicles_module";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);

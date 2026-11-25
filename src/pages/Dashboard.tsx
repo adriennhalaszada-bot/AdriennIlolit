@@ -49,6 +49,7 @@ export type DashboardTabId =
   | "bookings_services"
   | "bookings_properties"
   | "bookings_vehicles"
+  | "bookings_test_drives"
   | "calendar"
   | "favorites"
   | "courses"
@@ -65,6 +66,9 @@ function resolveInitialTab(location: string, forcedTab?: DashboardTabId): Dashbo
   if (forcedTab) return forcedTab;
   if (location.startsWith("/dashboard/bookings/properties") || location.startsWith("/appointments/property")) {
     return "bookings_properties";
+  }
+  if (location.startsWith("/dashboard/bookings/test-drives")) {
+    return "bookings_test_drives";
   }
   if (location.startsWith("/dashboard/bookings/vehicles") || location.startsWith("/appointments/vehicle")) {
     return "bookings_vehicles";
@@ -87,6 +91,7 @@ function resolveInitialTab(location: string, forcedTab?: DashboardTabId): Dashbo
     tab === "bookings_services" ||
     tab === "bookings_properties" ||
     tab === "bookings_vehicles" ||
+    tab === "bookings_test_drives" ||
     tab === "calendar" ||
     tab === "favorites" ||
     tab === "courses" ||
@@ -157,6 +162,7 @@ export function Dashboard({ forcedTab, highlightAppointmentId }: DashboardProps 
     setActiveTab(tab);
     if (tab === "bookings_properties") setLocation("/dashboard/bookings/properties");
     else if (tab === "bookings_vehicles") setLocation("/dashboard/bookings/vehicles");
+    else if (tab === "bookings_test_drives") setLocation("/dashboard/bookings/test-drives");
     else if (tab === "bookings_services") setLocation("/dashboard/bookings/services");
     else if (tab === "calendar") setLocation("/dashboard/calendar");
     else if (tab === "notifications") setLocation("/dashboard/notifications");
@@ -171,6 +177,7 @@ export function Dashboard({ forcedTab, highlightAppointmentId }: DashboardProps 
     activeTab === "bookings_services" ||
     activeTab === "bookings_properties" ||
     activeTab === "bookings_vehicles" ||
+    activeTab === "bookings_test_drives" ||
     activeTab === "calendar";
 
   return (
@@ -255,6 +262,12 @@ export function Dashboard({ forcedTab, highlightAppointmentId }: DashboardProps 
                       count={counts.vehicle + counts.sellerVehiclePending}
                       emphasize={counts.vehicle > 0 || counts.sellerVehiclePending > 0}
                       onClick={() => navigateTab("bookings_vehicles")}
+                    />
+                    <SubMenuItem
+                      active={activeTab === "bookings_test_drives"}
+                      icon={Clock}
+                      label="Tesztvezetéseim"
+                      onClick={() => navigateTab("bookings_test_drives")}
                     />
                     <SubMenuItem
                       active={activeTab === "calendar"}
@@ -486,7 +499,13 @@ export function Dashboard({ forcedTab, highlightAppointmentId }: DashboardProps 
 
               {activeTab === "bookings_vehicles" && (
                 <Card className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
-                  <VehicleViewingsSection highlightAppointmentId={highlightAppointmentId} />
+                  <VehicleViewingsSection bookingKindFilter="VIEWING" highlightAppointmentId={highlightAppointmentId} />
+                </Card>
+              )}
+
+              {activeTab === "bookings_test_drives" && (
+                <Card className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs sm:p-6">
+                  <VehicleViewingsSection bookingKindFilter="TEST_DRIVE" highlightAppointmentId={highlightAppointmentId} />
                 </Card>
               )}
 
@@ -752,18 +771,18 @@ export function Dashboard({ forcedTab, highlightAppointmentId }: DashboardProps 
                         </Link>
 
                         <Link
-                          href="/dashboard/bookings/vehicles"
+                          href="/vehicles/admin"
                           className="group block space-y-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-emerald-500 hover:bg-emerald-50/40"
                         >
                           <div className="flex items-center justify-between">
                             <span className="flex items-center gap-2 text-xs font-bold text-slate-900">
                               <Car className="h-4 w-4 text-emerald-600" />
-                              Jármű megtekintések
+                              Saját Járműadmin
                             </span>
                             <ChevronRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-emerald-600" />
                           </div>
                           <p className="text-xs text-slate-600">
-                            Beérkezett járműmegtekintési kérelmek és időpont-visszaigazolások.
+                            Járműhirdetések, megtekintési és tesztvezetési idősávok, kereskedői profil.
                           </p>
                         </Link>
 

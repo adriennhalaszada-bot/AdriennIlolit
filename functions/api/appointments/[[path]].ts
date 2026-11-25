@@ -22,6 +22,8 @@ interface Env {
 type Context = EventContext<Env, string, Record<string, unknown>>;
 
 const APPOINTMENT_PREFIX = "data/appointments/";
+const VEHICLE_BOOKING_PREFIX = "data/vehicles/viewings/";
+const VEHICLE_LISTING_PREFIX = "data/vehicles/listings/";
 const REAL_ESTATE_VIEWING_PREFIX = "data/real-estate/viewings/";
 const REAL_ESTATE_PROPERTY_PREFIX = "data/real-estate/properties/";
 const REAL_ESTATE_AUDIT_PREFIX = "data/real-estate/audit/";
@@ -38,7 +40,8 @@ export type UnifiedAppointmentStatus =
   | "PROPOSED_NEW_TIME"
   | "REJECTED"
   | "CANCELLED"
-  | "COMPLETED";
+  | "COMPLETED"
+  | "NO_SHOW";
 
 function json(data: unknown, status = 200): Response {
   return Response.json(data, {
@@ -127,6 +130,7 @@ function extractTimeRange(timeStr: string, durationMinutes = 60): { start: strin
 }
 
 function mapPropertyStatus(raw: string, dateStr: string, startTime: string): UnifiedAppointmentStatus {
+  if (raw === "NO_SHOW") return "NO_SHOW";
   if (raw === "APPROVED") {
     const ms = new Date(`${dateStr}T${startTime || "23:59"}:00`).getTime();
     if (Number.isFinite(ms) && ms + 3_600_000 < Date.now()) return "COMPLETED";
@@ -323,9 +327,65 @@ function normalizeNativeAppointment(a: any, userId: string) {
   };
 }
 
+function normalizeVehicleModuleBooking(b: any, userId: string) {
+  const status = mapPropertyStatus(b.status, b.date, b.startTime);
+  const r24 = b.reminder24hEnabled !== false;
+  const r2 = b.reminder2hEnabled !== false;
+  const reminders = computeReminderFlags(status, b.date, b.startTime, r24, r2);
+  const isTd = b.bookingKind === "TEST_DRIVE";
+  const { deepLink } = buildAppointmentLinks("VEHICLE_VIEWING", b.id);
+
+  return {
+    appointment_id: b.id,
+    user_id: b.requesterId,
+    listing_id: b.vehicleId,
+    appointment_type: "VEHICLE_VIEWING" as UnifiedAppointmentType,
+    booking_kind: isTd ? ("TEST_DRIVE" as const) : ("VIEWING" as const),
+    requested_datetime: b.date && b.startTime ? `${b.date}T${b.startTime}:00` : b.createdAt,
+    confirmed_datetime: status === "CONFIRMED" || status === "COMPLETED" ? `${b.date}T${b.startTime}:00` : null,
+    date: b.date,
+    start_time: b.startTime,
+    end_time: b.endTime || addMinutes(b.startTime || "10:00", b.durationMinutes || 30),
+    duration_minutes: Number(b.durationMinutes || 30),
+    status,
+    seller_id: b.ownerId,
+    seller_name: b.ownerName || "Hirdető",
+    requester_name: b.requesterName || "Érdeklődő",
+    phone_verified: Boolean(b.requesterPhoneVerified),
+    location_released: (status === "CONFIRMED" || status === "COMPLETED") && Boolean(b.requesterPhoneVerified),
+    created_at: b.createdAt,
+    updated_at: b.updatedAt || b.createdAt,
+    cancellation_reason: b.status === "REVOKED_BY_OWNER" ? b.ownerResponseNote || "A hirdető lemondta." : null,
+    seller_message: b.ownerResponseNote || b.proposedNote || null,
+    buyer_message: b.message || null,
+    proposed_datetime: b.proposedDate && b.proposedStartTime ? `${b.proposedDate}T${b.proposedStartTime}:00` : null,
+    proposed_date: b.proposedDate || null,
+    proposed_start_time: b.proposedStartTime || null,
+    proposed_end_time: b.proposedEndTime || null,
+    proposed_note: b.proposedNote || null,
+    reminder_24h_enabled: r24,
+    reminder_2h_enabled: r2,
+    ...reminders,
+    role: b.ownerId === userId ? ("seller" as const) : ("buyer" as const),
+    source: "vehicle_module" as const,
+    title: b.vehicleTitle || "Jármű megtekintés",
+    cover_image: b.vehicleCoverImage || "",
+    city: b.vehiclePublicCity || "Magyarország",
+    approx_location: b.vehiclePublicCity || "Magyarország",
+    price: Number(b.vehiclePriceHuf || 0),
+    vehicle_brand: b.vehicleBrand || "",
+    vehicle_model: b.vehicleModel || "",
+    vehicle_year: b.vehicleYear ? String(b.vehicleYear) : "",
+    license_category_confirmed: b.licenseCategoryConfirmed || undefined,
+    deep_link: deepLink,
+    web_url: isTd ? `/dashboard/bookings/test-drives?id=${b.id}` : `/dashboard/bookings/vehicles?id=${b.id}`,
+  };
+}
+
 async function getAllUnifiedForUser(env: Env, userId: string) {
-  const [nativeList, reViewings, serviceBookings] = await Promise.all([
+  const [nativeList, vehModuleBookings, reViewings, serviceBookings] = await Promise.all([
     listJsonPrefix<any>(env, APPOINTMENT_PREFIX),
+    listJsonPrefix<any>(env, VEHICLE_BOOKING_PREFIX),
     listJsonPrefix<any>(env, REAL_ESTATE_VIEWING_PREFIX),
     listJsonPrefix<any>(env, BOOKING_PREFIX),
   ]);
@@ -337,6 +397,13 @@ async function getAllUnifiedForUser(env: Env, userId: string) {
     const isSeller = a.seller_id === userId && !a.hidden_by_seller;
     if (!isBuyer && !isSeller) continue;
     items.push(normalizeNativeAppointment(a, userId));
+  }
+
+  for (const vb of vehModuleBookings) {
+    const isBuyer = vb.requesterId === userId && !vb.hiddenByRequester;
+    const isSeller = vb.ownerId === userId && !vb.hiddenByOwner;
+    if (!isBuyer && !isSeller) continue;
+    items.push(normalizeVehicleModuleBooking(vb, userId));
   }
 
   for (const v of reViewings) {
@@ -931,12 +998,13 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
   const action = route[1];
   if (!appointmentId) return json({ error: "Ismeretlen végpont." }, 404);
 
-  // Locate record across unified stores (native -> real estate viewing -> service booking)
+  // Locate record across unified stores (native -> vehicle module -> real estate viewing -> service booking)
   const nativeRec = await readJson<any>(env, `${APPOINTMENT_PREFIX}${appointmentId}.json`);
-  const reRec = nativeRec ? null : await readJson<any>(env, `${REAL_ESTATE_VIEWING_PREFIX}${appointmentId}.json`);
-  const srvRec = nativeRec || reRec ? null : await readJson<any>(env, `${BOOKING_PREFIX}${appointmentId}.json`);
+  const vehRec = nativeRec ? null : await readJson<any>(env, `${VEHICLE_BOOKING_PREFIX}${appointmentId}.json`);
+  const reRec = nativeRec || vehRec ? null : await readJson<any>(env, `${REAL_ESTATE_VIEWING_PREFIX}${appointmentId}.json`);
+  const srvRec = nativeRec || vehRec || reRec ? null : await readJson<any>(env, `${BOOKING_PREFIX}${appointmentId}.json`);
 
-  if (!nativeRec && !reRec && !srvRec) {
+  if (!nativeRec && !vehRec && !reRec && !srvRec) {
     return json({ error: "A megtekintési vagy foglalási rekord nem található." }, 404);
   }
 
@@ -945,6 +1013,10 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     if (nativeRec) {
       if (nativeRec.user_id !== userId && nativeRec.seller_id !== userId) return json({ error: "Nincs jogosultságod." }, 403);
       return json(normalizeNativeAppointment(nativeRec, userId));
+    }
+    if (vehRec) {
+      if (vehRec.requesterId !== userId && vehRec.ownerId !== userId) return json({ error: "Nincs jogosultságod." }, 403);
+      return json(normalizeVehicleModuleBooking(vehRec, userId));
     }
     if (reRec) {
       if (reRec.requesterId !== userId && reRec.ownerId !== userId) return json({ error: "Nincs jogosultságod." }, 403);
@@ -958,6 +1030,50 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
 
   // GET /api/appointments/:id/details — STRICT SERVER-SIDE EXACT LOCATION GATE
   if (method === "GET" && action === "details") {
+    if (vehRec) {
+      const isOwner = vehRec.ownerId === userId;
+      const isBuyer = vehRec.requesterId === userId;
+      if (!isOwner && !isBuyer) return json({ error: "Nincs jogosultságod." }, 403);
+      if (vehRec.status !== "APPROVED" && vehRec.status !== "COMPLETED") {
+        return json({ error: "A pontos találkozási hely csak visszaigazolt foglalásnál érhető el." }, 403);
+      }
+      if (isBuyer) {
+        const phoneRec = await readJson<any>(env, `${PHONE_PREFIX}${userId}.json`);
+        if (!phoneRec?.phoneVerified) return json({ error: "Ellenőrzött telefonszám szükséges." }, 403);
+      }
+      const vehicle = await readJson<any>(env, `${VEHICLE_LISTING_PREFIX}${vehRec.vehicleId}.json`);
+      const exactText =
+        vehRec.approvedExactAddress ||
+        vehicle?.protectedLocation?.exactAddress ||
+        vehicle?.publicLocation?.publicDealershipAddress ||
+        vehRec.vehiclePublicCity ||
+        "Magyarország";
+      const navTarget = vehRec.approvedMeetingPlace ? `${vehRec.approvedMeetingPlace}, ${exactText}` : exactText;
+      return json({
+        appointment_id: vehRec.id,
+        appointment_type: "VEHICLE_VIEWING",
+        listing_id: vehRec.vehicleId,
+        title: vehRec.vehicleTitle,
+        date: vehRec.date,
+        start_time: vehRec.startTime,
+        end_time: vehRec.endTime,
+        duration_minutes: vehRec.durationMinutes || 30,
+        exact_address_text: vehRec.approvedMeetingPlace ? `${vehRec.approvedMeetingPlace} – ${exactText}` : exactText,
+        navigation_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(navTarget)}`,
+        seller_name: vehRec.ownerName || "Hirdető",
+        seller_phone: vehRec.approvedOwnerPhone || (vehicle?.ownerPhoneShareMode !== "none" ? vehicle?.ownerPhone : null) || null,
+        seller_message: vehRec.ownerResponseNote || null,
+        instructions: vehRec.ownerResponseNote || vehicle?.protectedLocation?.instructions || null,
+        vehicle_basics: {
+          brand: vehRec.vehicleBrand || "",
+          model: vehRec.vehicleModel || "",
+          year: vehRec.vehicleYear ? String(vehRec.vehicleYear) : "",
+          fuel: vehicle?.fuelType || "",
+          km: vehicle?.mileageKm ? `${Number(vehicle.mileageKm).toLocaleString("hu-HU")} km` : "",
+          price: vehRec.vehiclePriceHuf || 0,
+        },
+      });
+    }
     if (reRec) {
       const isOwner = reRec.ownerId === userId;
       const isBuyer = reRec.requesterId === userId;
@@ -1131,6 +1247,110 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     const note = safeText(body.note || body.seller_message, 800);
     const now = new Date().toISOString();
 
+    if (vehRec) {
+      if (vehRec.ownerId !== userId) return json({ error: "Csak a jármű hirdetője válaszolhat." }, 403);
+      const links = buildAppointmentLinks("VEHICLE_VIEWING", vehRec.id);
+      const kindLabel = vehRec.bookingKind === "TEST_DRIVE" ? "tesztvezetés" : "járműmegtekintés";
+
+      if (sellerAction === "CONFIRM" || sellerAction === "APPROVE") {
+        vehRec.status = "APPROVED";
+        vehRec.approvedAt = now;
+        vehRec.locationUnlockedAt = now;
+        vehRec.approvedExactAddress = safeText(body.exact_location || body.exactAddress, 240) || vehRec.vehiclePublicCity;
+        vehRec.ownerResponseNote = safeText(body.instructions, 800) || note || undefined;
+        vehRec.approvedOwnerPhone = safeText(body.seller_phone || body.ownerPhone, 40) || undefined;
+        vehRec.updatedAt = now;
+        await writeJson(env, `${VEHICLE_BOOKING_PREFIX}${appointmentId}.json`, vehRec);
+        await emitUnifiedNotification(
+          env,
+          vehRec.requesterId,
+          {
+            category: "JARMU",
+            eventType: "APPOINTMENT_CONFIRMED",
+            title: vehRec.bookingKind === "TEST_DRIVE" ? "Tesztvezetés visszaigazolva" : "Járműmegtekintés visszaigazolva",
+            body: `A hirdető elfogadta a ${kindLabel}i időpontodat (${vehRec.date} ${vehRec.startTime}). Koppints a helyszín és a részletek megtekintéséhez.`,
+            appointmentId: vehRec.id,
+            appointmentType: "VEHICLE_VIEWING",
+            listingId: vehRec.vehicleId,
+            listingTitle: vehRec.vehicleTitle,
+            coverImage: vehRec.vehicleCoverImage,
+            date: vehRec.date,
+            startTime: vehRec.startTime,
+            shortLocation: vehRec.vehiclePublicCity,
+            deepLink: links.deepLink,
+            webUrl: links.webUrl,
+            popupRequired: true,
+          },
+          { sendPush: true },
+        );
+        return json(normalizeVehicleModuleBooking(vehRec, userId));
+      }
+
+      if (sellerAction === "PROPOSE_NEW_TIME") {
+        const proposedDate = safeText(body.proposed_date || body.proposedDate, 10);
+        const proposedStart = safeText(body.proposed_start_time || body.proposedStartTime, 5);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(proposedDate) || !/^\d{2}:\d{2}$/.test(proposedStart)) {
+          return json({ error: "Adj meg érvényes javasolt dátumot és időpontot." }, 400);
+        }
+        vehRec.status = "PROPOSED_NEW_TIME";
+        vehRec.proposedDate = proposedDate;
+        vehRec.proposedStartTime = proposedStart;
+        vehRec.proposedEndTime = addMinutes(proposedStart, vehRec.durationMinutes || 30);
+        vehRec.proposedNote = note || undefined;
+        vehRec.updatedAt = now;
+        await writeJson(env, `${VEHICLE_BOOKING_PREFIX}${appointmentId}.json`, vehRec);
+        await emitUnifiedNotification(env, vehRec.requesterId, {
+          category: "JARMU",
+          eventType: "APPOINTMENT_PROPOSED_NEW_TIME",
+          title: "Új időpont elfogadásra vár",
+          body: `A hirdető új időpontot javasolt (${proposedDate} ${proposedStart}) – ${vehRec.vehicleTitle}.`,
+          appointmentId: vehRec.id,
+          appointmentType: "VEHICLE_VIEWING",
+          listingId: vehRec.vehicleId,
+          listingTitle: vehRec.vehicleTitle,
+          coverImage: vehRec.vehicleCoverImage,
+          date: proposedDate,
+          startTime: proposedStart,
+          shortLocation: vehRec.vehiclePublicCity,
+          deepLink: links.deepLink,
+          webUrl: links.webUrl,
+          popupRequired: true,
+        });
+        return json(normalizeVehicleModuleBooking(vehRec, userId));
+      }
+
+      if (sellerAction === "REJECT" || sellerAction === "CANCEL" || sellerAction === "REVOKE") {
+        vehRec.status = sellerAction === "REJECT" ? "REJECTED" : "REVOKED_BY_OWNER";
+        vehRec.ownerResponseNote = note || vehRec.ownerResponseNote;
+        vehRec.updatedAt = now;
+        await writeJson(env, `${VEHICLE_BOOKING_PREFIX}${appointmentId}.json`, vehRec);
+        await emitUnifiedNotification(env, vehRec.requesterId, {
+          category: "JARMU",
+          eventType: sellerAction === "REJECT" ? "APPOINTMENT_REJECTED" : "APPOINTMENT_CANCELLED",
+          title: sellerAction === "REJECT" ? "Kérelem elutasítva" : "Időpont visszavonva",
+          body: `A hirdető módosította a(z) ${vehRec.date} ${vehRec.startTime} időpontot (${vehRec.vehicleTitle}).`,
+          appointmentId: vehRec.id,
+          appointmentType: "VEHICLE_VIEWING",
+          listingId: vehRec.vehicleId,
+          listingTitle: vehRec.vehicleTitle,
+          date: vehRec.date,
+          startTime: vehRec.startTime,
+          shortLocation: vehRec.vehiclePublicCity,
+          deepLink: links.deepLink,
+          webUrl: links.webUrl,
+          popupRequired: true,
+        });
+        return json(normalizeVehicleModuleBooking(vehRec, userId));
+      }
+
+      if (sellerAction === "COMPLETE" || sellerAction === "NO_SHOW") {
+        vehRec.status = sellerAction === "NO_SHOW" ? "NO_SHOW" : "COMPLETED";
+        vehRec.updatedAt = now;
+        await writeJson(env, `${VEHICLE_BOOKING_PREFIX}${appointmentId}.json`, vehRec);
+        return json(normalizeVehicleModuleBooking(vehRec, userId));
+      }
+    }
+
     if (nativeRec) {
       if (nativeRec.seller_id !== userId) return json({ error: "Csak a hirdető válaszolhat erre a kérelemre." }, 403);
       const links = buildAppointmentLinks("VEHICLE_VIEWING", nativeRec.appointment_id);
@@ -1258,6 +1478,37 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
   // PATCH /api/appointments/:id/accept-proposal (Buyer accepts proposed new time)
   if (method === "PATCH" && action === "accept-proposal") {
     const now = new Date().toISOString();
+    if (vehRec) {
+      if (vehRec.requesterId !== userId) return json({ error: "Nincs jogosultságod." }, 403);
+      if (vehRec.status !== "PROPOSED_NEW_TIME" || !vehRec.proposedDate || !vehRec.proposedStartTime) {
+        return json({ error: "Nincs elfogadható javaslat." }, 409);
+      }
+      vehRec.date = vehRec.proposedDate;
+      vehRec.startTime = vehRec.proposedStartTime;
+      vehRec.endTime = vehRec.proposedEndTime || addMinutes(vehRec.proposedStartTime, vehRec.durationMinutes || 30);
+      vehRec.status = "APPROVED";
+      vehRec.approvedAt = now;
+      vehRec.locationUnlockedAt = now;
+      vehRec.updatedAt = now;
+      await writeJson(env, `${VEHICLE_BOOKING_PREFIX}${appointmentId}.json`, vehRec);
+      await emitUnifiedNotification(env, vehRec.ownerId, {
+        category: "JARMU",
+        eventType: "APPOINTMENT_CONFIRMED",
+        title: "Javasolt időpont elfogadva",
+        body: `${vehRec.requesterName} elfogadta a javasolt időpontot (${vehRec.date} ${vehRec.startTime}) – ${vehRec.vehicleTitle}.`,
+        appointmentId: vehRec.id,
+        appointmentType: "VEHICLE_VIEWING",
+        listingId: vehRec.vehicleId,
+        listingTitle: vehRec.vehicleTitle,
+        date: vehRec.date,
+        startTime: vehRec.startTime,
+        shortLocation: vehRec.vehiclePublicCity,
+        webUrl: `/vehicles/admin/${vehRec.vehicleId}`,
+        popupRequired: true,
+      });
+      return json(normalizeVehicleModuleBooking(vehRec, userId));
+    }
+
     if (reRec) {
       if (reRec.requesterId !== userId) return json({ error: "Nincs jogosultságod." }, 403);
       if (reRec.status !== "PROPOSED_NEW_TIME" || !reRec.proposedDate || !reRec.proposedStartTime) {
@@ -1357,6 +1608,36 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     }
     const now = new Date().toISOString();
 
+    if (vehRec) {
+      if (vehRec.requesterId !== userId) return json({ error: "Nincs jogosultságod." }, 403);
+      vehRec.date = reqDate;
+      vehRec.startTime = reqStart;
+      vehRec.endTime = addMinutes(reqStart, vehRec.durationMinutes || 30);
+      vehRec.status = "PENDING";
+      vehRec.proposedDate = undefined;
+      vehRec.proposedStartTime = undefined;
+      vehRec.proposedEndTime = undefined;
+      vehRec.message = note || `Érdeklődő új időpont-kérése: ${reqDate} ${reqStart}`;
+      vehRec.updatedAt = now;
+      await writeJson(env, `${VEHICLE_BOOKING_PREFIX}${appointmentId}.json`, vehRec);
+      await emitUnifiedNotification(env, vehRec.ownerId, {
+        category: "JARMU",
+        eventType: "APPOINTMENT_REQUESTED",
+        title: "Érdeklődő másik időpontot kért",
+        body: `${vehRec.requesterName} új időpontot kért (${reqDate} ${reqStart}) – ${vehRec.vehicleTitle}.`,
+        appointmentId: vehRec.id,
+        appointmentType: "VEHICLE_VIEWING",
+        listingId: vehRec.vehicleId,
+        listingTitle: vehRec.vehicleTitle,
+        date: reqDate,
+        startTime: reqStart,
+        shortLocation: vehRec.vehiclePublicCity,
+        webUrl: `/vehicles/admin/${vehRec.vehicleId}`,
+        popupRequired: true,
+      });
+      return json(normalizeVehicleModuleBooking(vehRec, userId));
+    }
+
     if (reRec) {
       if (reRec.requesterId !== userId) return json({ error: "Nincs jogosultságod." }, 403);
       reRec.date = reqDate;
@@ -1428,6 +1709,35 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     const body = await context.request.json<any>().catch(() => ({}));
     const reason = safeText(body.reason, 400);
     const now = new Date().toISOString();
+
+    if (vehRec) {
+      const isBuyer = vehRec.requesterId === userId;
+      const isOwner = vehRec.ownerId === userId;
+      if (!isBuyer && !isOwner) return json({ error: "Nincs jogosultságod." }, 403);
+      vehRec.status = isOwner ? "REVOKED_BY_OWNER" : "CANCELLED_BY_REQUESTER";
+      vehRec.ownerResponseNote = reason || vehRec.ownerResponseNote;
+      vehRec.updatedAt = now;
+      await writeJson(env, `${VEHICLE_BOOKING_PREFIX}${appointmentId}.json`, vehRec);
+      const targetUser = isOwner ? vehRec.requesterId : vehRec.ownerId;
+      await emitUnifiedNotification(env, targetUser, {
+        category: "JARMU",
+        eventType: "APPOINTMENT_CANCELLED",
+        title: vehRec.bookingKind === "TEST_DRIVE" ? "Tesztvezetés lemondva" : "Járműmegtekintés lemondva",
+        body: isOwner
+          ? `A hirdető lemondta a(z) ${vehRec.date} ${vehRec.startTime} időpontot (${vehRec.vehicleTitle}).`
+          : `${vehRec.requesterName} lemondta a(z) ${vehRec.date} ${vehRec.startTime} időpontot (${vehRec.vehicleTitle}).`,
+        appointmentId: vehRec.id,
+        appointmentType: "VEHICLE_VIEWING",
+        listingId: vehRec.vehicleId,
+        listingTitle: vehRec.vehicleTitle,
+        date: vehRec.date,
+        startTime: vehRec.startTime,
+        shortLocation: vehRec.vehiclePublicCity,
+        webUrl: isOwner ? `/dashboard/bookings/vehicles` : `/vehicles/admin/${vehRec.vehicleId}`,
+        popupRequired: true,
+      });
+      return json(normalizeVehicleModuleBooking(vehRec, userId));
+    }
 
     if (reRec) {
       const isBuyer = reRec.requesterId === userId;
@@ -1543,6 +1853,15 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     const r2 = Boolean(body.reminder_2h_enabled);
     const now = new Date().toISOString();
 
+    if (vehRec) {
+      if (vehRec.requesterId !== userId && vehRec.ownerId !== userId) return json({ error: "Nincs jogosultságod." }, 403);
+      vehRec.reminder24hEnabled = r24;
+      vehRec.reminder2hEnabled = r2;
+      vehRec.updatedAt = now;
+      await writeJson(env, `${VEHICLE_BOOKING_PREFIX}${appointmentId}.json`, vehRec);
+      return json(normalizeVehicleModuleBooking(vehRec, userId));
+    }
+
     if (reRec) {
       if (reRec.requesterId !== userId && reRec.ownerId !== userId) return json({ error: "Nincs jogosultságod." }, 403);
       reRec.reminder24hEnabled = r24;
@@ -1565,6 +1884,18 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
   // DELETE /api/appointments/:id (Manual cleanup of old or closed appointments)
   if (method === "DELETE" && !action) {
     const todayIso = new Date().toISOString().slice(0, 10);
+
+    if (vehRec) {
+      if (vehRec.ownerId !== userId && vehRec.requesterId !== userId) return json({ error: "Nincs jogosultságod." }, 403);
+      const isClosed = ["REJECTED", "REVOKED_BY_OWNER", "CANCELLED_BY_REQUESTER", "COMPLETED", "NO_SHOW"].includes(vehRec.status);
+      const isPast = Boolean(vehRec.date && vehRec.date < todayIso);
+      if (!isClosed && !isPast) return json({ error: "Aktív, jövőbeli foglalás nem törölhető közvetlenül." }, 409);
+      if (vehRec.ownerId === userId) vehRec.hiddenByOwner = true;
+      if (vehRec.requesterId === userId) vehRec.hiddenByRequester = true;
+      vehRec.updatedAt = new Date().toISOString();
+      await writeJson(env, `${VEHICLE_BOOKING_PREFIX}${appointmentId}.json`, vehRec);
+      return json({ deleted: true, id: appointmentId });
+    }
 
     if (reRec) {
       if (reRec.ownerId !== userId && reRec.requesterId !== userId) return json({ error: "Nincs jogosultságod." }, 403);

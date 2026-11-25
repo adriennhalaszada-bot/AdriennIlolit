@@ -104,7 +104,7 @@ export const CAR_BRANDS_DATA: Record<string, BrandData> = {
   },
   "CITROEN": {
     name: "CITROEN",
-    fuels: ["Elektromos", "Elektro-benzin", "Aardgas", "Dízel", "Benzin"],
+    fuels: ["Elektromos", "Elektro-benzin", "CNG", "Dízel", "Benzin"],
     models: ["C5 X", "C5 Aircross", "C4 SpaceTourer", "C3 Aircross", "C4 Cactus", "C4 Aircross", "Jumper", "Jumpy", "DS4", "DS5", "DS3", "C-Zero", "C3 Picasso", "Nemo", "C-Crosser", "C4 Picasso", "C6", "C1", "C4", "C2", "C3", "C8", "C5", "Xsara Picasso", "Berlingo", "Xsara", "Saxo", "Evasion", "Xantia", "ZX", "XM", "AX", "Axel", "BX", "GSA", "Visa", "LNA", "CX", "2CV", "Dyane"]
   },
   "DONGFENG": {
@@ -119,7 +119,7 @@ export const CAR_BRANDS_DATA: Record<string, BrandData> = {
   },
   "FIAT": {
     name: "FIAT",
-    fuels: ["Elektromos", "Aardgas", "Dízel", "Benzin"],
+    fuels: ["Elektromos", "CNG", "Dízel", "Benzin"],
     models: ["Grande Panda", "124", "Fullback", "500X", "500L", "Ducato", "Scudo", "Strada", "Fiorino", "Qubo", "500", "Sedici", "600", "Idea", "Doblò", "Stilo", "Multipla", "Seicento", "Palio", "Marea", "Barchetta", "Brava", "Bravo", "Coupé", "Punto", "Ulysse", "Cinquecento", "Tempra", "Tipo", "Croma", "Regata", "Uno", "Argenta", "Panda", "Ritmo", "X 1/9", "131", "127", "132", "126"]
   },
   "FIREFLY": {
@@ -134,7 +134,7 @@ export const CAR_BRANDS_DATA: Record<string, BrandData> = {
   },
   "FORD": {
     name: "FORD",
-    fuels: ["Elektromos", "Elektro-benzin", "Aardgas", "Etanol", "LPG", "Dízel", "Benzin"],
+    fuels: ["Elektromos", "Elektro-benzin", "CNG", "Etanol", "LPG", "Dízel", "Benzin"],
     models: ["Bronco", "Explorer EV", "Mustang Mach-E", "Edge", "Ka+", "EcoSport", "Tourneo Connect", "Tourneo Courier", "Transit Courier", "Tourneo Custom", "B-MAX", "Transit", "Transit Custom", "Ranger", "Kuga", "Transit Connect", "S-MAX", "C-MAX", "Tourneo", "Fusion", "Cougar", "Expedition", "Focus", "Ka", "Puma", "Taurus", "Explorer", "Galaxy", "Mustang", "Windstar", "Probe", "Thunderbird", "Maverick", "Mondeo", "Scorpio", "Orion", "Sierra", "Escort", "Taunus", "Capri", "Granada", "Fiesta"]
   },
   "FSO": {
@@ -189,7 +189,7 @@ export const CAR_BRANDS_DATA: Record<string, BrandData> = {
   },
   "IVECO": {
     name: "IVECO",
-    fuels: ["Aardgas", "Dízel", "Benzin"],
+    fuels: ["CNG", "Dízel", "Benzin"],
     models: ["Daily"]
   },
   "JAC": {
@@ -319,7 +319,7 @@ export const CAR_BRANDS_DATA: Record<string, BrandData> = {
   },
   "MERCEDES-BENZ": {
     name: "MERCEDES-BENZ",
-    fuels: ["Elektromos", "Elektro-benzin", "Elektro-diesel", "Aardgas", "Dízel", "Benzin"],
+    fuels: ["Elektromos", "Elektro-benzin", "Elektro-diesel", "CNG", "Dízel", "Benzin"],
     models: ["EQE SUV", "EQT", "EQE", "EQS SUV", "EQA", "EQB", "EQS", "EQV", "EQC", "T-osztály", "CLE", "GLB", "AMG GT 4-Door", "X-osztály", "SLC", "GLC", "GLE", "GLS", "AMG GT", "GLA", "CLA", "Citan", "Sprinter", "SLS AMG", "Vito", "CLC", "GLK", "GL", "R-osztály", "B-osztály", "CLS", "SLR McLaren", "Viano", "Vaneo", "M-osztály", "A-osztály", "CLK", "CL", "SLK", "V-osztály", "C-osztály", "E-osztály", "190-as sorozat", "G-osztály", "SL", "S-osztály", "200-as sorozat"]
   },
   "MERCURY": {
@@ -384,7 +384,7 @@ export const CAR_BRANDS_DATA: Record<string, BrandData> = {
   },
   "PEUGEOT": {
     name: "PEUGEOT",
-    fuels: ["Elektromos", "Elektro-benzin", "Etanol", "Aardgas", "Dízel", "Benzin"],
+    fuels: ["Elektromos", "Elektro-benzin", "Etanol", "CNG", "Dízel", "Benzin"],
     models: ["Ion", "108", "208", "2008", "308", "508", "3008", "Partner", "408", "Rifter", "Boxer", "Expert", "RCZ", "5008", "Bipper", "4007", "207", "1007", "107", "407", "807", "307", "607", "206", "406", "806", "306", "106", "605", "405", "309", "205", "104", "505", "305", "504", "604"]
   },
   "PGO": {
@@ -444,7 +444,7 @@ export const CAR_BRANDS_DATA: Record<string, BrandData> = {
   },
   "SKODA": {
     name: "SKODA",
-    fuels: ["Elektromos", "Elektro-benzin", "Aardgas", "Dízel", "Benzin"],
+    fuels: ["Elektromos", "Elektro-benzin", "CNG", "Dízel", "Benzin"],
     models: ["Epiq", "Peaq", "Elroq", "Enyaq", "Superb", "Octavia", "Kamiq", "Scala", "Karoq", "Kodiaq", "Rapid", "Citigo", "Yeti", "Roomster", "Fabia", "Felicia", "Forman", "Favorit", "100-as sorozat"]
   },
   "SMART": {

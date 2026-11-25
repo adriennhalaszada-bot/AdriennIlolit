@@ -34,9 +34,42 @@ import {
 
 interface VehicleViewingsSectionProps {
   highlightAppointmentId?: string;
+  bookingKindFilter?: "VIEWING" | "TEST_DRIVE";
 }
 
-export function VehicleViewingsSection({ highlightAppointmentId }: VehicleViewingsSectionProps) {
+function downloadIcsFile(a: UnifiedAppointment, exactLocation?: string) {
+  const startClean = `${a.date.replace(/-/g, "")}T${a.start_time.replace(":", "")}00`;
+  const endClean = `${a.date.replace(/-/g, "")}T${(a.end_time || a.start_time).replace(":", "")}00`;
+  const kindLabel = a.booking_kind === "TEST_DRIVE" ? "Tesztvezetés" : "Járműmegtekintés";
+  const ics = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//ILOLIT//Jarmuvek//HU",
+    "BEGIN:VEVENT",
+    `UID:${a.appointment_id}@ilolit.com`,
+    `DTSTART:${startClean}`,
+    `DTEND:${endClean}`,
+    `SUMMARY:${kindLabel}: ${a.title.replace(/[\r\n,;]/g, " ")}`,
+    `LOCATION:${(exactLocation || a.city || "Magyarország").replace(/[\r\n,;]/g, " ")}`,
+    `DESCRIPTION:ILOLIT ${kindLabel} – Hirdető: ${a.seller_name}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `ilolit-${a.booking_kind === "TEST_DRIVE" ? "tesztvezetes" : "jarmumegtekintes"}-${a.date}.ics`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+export function VehicleViewingsSection({
+  highlightAppointmentId,
+  bookingKindFilter,
+}: VehicleViewingsSectionProps) {
   const { appointments, loading, refreshAll } = useUnifiedAppointments();
   const { toast } = useToast();
 
@@ -63,11 +96,17 @@ export function VehicleViewingsSection({ highlightAppointmentId }: VehicleViewin
   const [proposeTime, setProposeTime] = useState("16:00");
   const [proposeNote, setProposeNote] = useState("");
 
+  const matchesKind = (a: UnifiedAppointment) => {
+    if (!bookingKindFilter) return true;
+    const kind = a.booking_kind || "VIEWING";
+    return kind === bookingKindFilter;
+  };
+
   const buyerViewings = appointments.filter(
-    (a) => a.appointment_type === "VEHICLE_VIEWING" && a.role === "buyer",
+    (a) => a.appointment_type === "VEHICLE_VIEWING" && a.role === "buyer" && matchesKind(a),
   );
   const sellerViewings = appointments.filter(
-    (a) => a.appointment_type === "VEHICLE_VIEWING" && a.role === "seller",
+    (a) => a.appointment_type === "VEHICLE_VIEWING" && a.role === "seller" && matchesKind(a),
   );
 
   useEffect(() => {
@@ -212,10 +251,10 @@ export function VehicleViewingsSection({ highlightAppointmentId }: VehicleViewin
 
   const todayIso = new Date().toISOString().slice(0, 10);
   const canDelete = (a: UnifiedAppointment) =>
-    ["REJECTED", "CANCELLED", "COMPLETED"].includes(a.status) || (Boolean(a.date) && a.date < todayIso);
+    ["REJECTED", "CANCELLED", "COMPLETED", "NO_SHOW"].includes(a.status) || (Boolean(a.date) && a.date < todayIso);
 
   const handleDelete = async (a: UnifiedAppointment) => {
-    if (!window.confirm("Biztosan törlöd ezt a régi/lezárt járműmegtekintést?")) return;
+    if (!window.confirm("Biztosan törlöd ezt a régi/lezárt foglalást?")) return;
     setBusyId(a.appointment_id);
     try {
       await appointmentsApi.deleteAppointment(a.appointment_id);
@@ -229,6 +268,7 @@ export function VehicleViewingsSection({ highlightAppointmentId }: VehicleViewin
   };
 
   const list = roleView === "buyer" ? buyerViewings : sellerViewings;
+  const isTestDriveView = bookingKindFilter === "TEST_DRIVE";
 
   return (
     <div className="space-y-5">
@@ -236,16 +276,22 @@ export function VehicleViewingsSection({ highlightAppointmentId }: VehicleViewin
         <div>
           <h2 className="flex items-center gap-2 text-xl font-black text-slate-950">
             <Car className="h-5 w-5 text-emerald-600" />
-            Jármű megtekintéseim
+            {isTestDriveView ? "Tesztvezetéseim" : "Jármű megtekintéseim"}
           </h2>
           <p className="mt-1 text-xs text-slate-500">
-            Személyautó és jármű megtekintési kérelmeid. A pontos találkozási hely és navigáció a hirdető
-            visszaigazolása után nyílik meg.
+            {isTestDriveView
+              ? "Előre egyeztetett, jogosítványhoz és jogi nyilatkozathoz kötött tesztvezetési foglalásaid."
+              : "Személyautó és jármű megtekintési kérelmeid. A pontos találkozási hely és navigáció a hirdető visszaigazolása után nyílik meg."}
           </p>
         </div>
-        <Button asChild size="sm" variant="outline" className="rounded-xl border-slate-200 text-xs font-bold">
-          <Link href="/vehicles">Járművek böngészése</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild size="sm" variant="outline" className="rounded-xl border-slate-200 text-xs font-bold">
+            <Link href="/vehicles/admin">Saját Járműadmin</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="rounded-xl border-slate-200 text-xs font-bold">
+            <Link href="/vehicles">Járművek böngészése</Link>
+          </Button>
+        </div>
       </div>
 
       {/* Role switcher (Buyer viewings + Incoming seller viewings if any) */}
@@ -320,7 +366,7 @@ export function VehicleViewingsSection({ highlightAppointmentId }: VehicleViewin
                 <div className="p-4 sm:p-5">
                   <div className="flex flex-col gap-4 sm:flex-row">
                     <Link
-                      href={`/product/${a.listing_id}`}
+                      href={a.source === "vehicle_module" ? `/vehicles/${a.listing_id}` : `/product/${a.listing_id}`}
                       className="flex h-36 w-full shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 sm:h-32 sm:w-44"
                     >
                       {a.cover_image ? (
@@ -332,18 +378,25 @@ export function VehicleViewingsSection({ highlightAppointmentId }: VehicleViewin
 
                     <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${badge.className}`}
-                        >
-                          {a.status === "PROPOSED_NEW_TIME" ? badge.shortLabel : badge.label}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${(badge || APPOINTMENT_STATUS_META.PENDING).className}`}
+                          >
+                            {a.status === "PROPOSED_NEW_TIME" ? badge.shortLabel : (badge || APPOINTMENT_STATUS_META.PENDING).label}
+                          </span>
+                          {a.booking_kind === "TEST_DRIVE" && (
+                            <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
+                              Tesztvezetés
+                            </span>
+                          )}
+                        </div>
                         {a.price > 0 && (
                           <span className="text-sm font-black text-slate-900">{formatPrice(a.price)}</span>
                         )}
                       </div>
 
                       <Link
-                        href={`/product/${a.listing_id}`}
+                        href={a.source === "vehicle_module" ? `/vehicles/${a.listing_id}` : `/product/${a.listing_id}`}
                         className="block text-base font-bold text-slate-950 hover:text-emerald-700"
                       >
                         {a.title}
@@ -654,6 +707,14 @@ export function VehicleViewingsSection({ highlightAppointmentId }: VehicleViewin
                         Visszaigazolt járműmegtekintés részletei
                       </h3>
                       <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => downloadIcsFile(a, details.exact_address_text)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 hover:bg-slate-50"
+                        >
+                          <Calendar className="h-3.5 w-3.5 text-emerald-600" />
+                          Naptárhoz adás (.ics)
+                        </button>
                         {details.navigation_url && (
                           <a
                             href={details.navigation_url}
