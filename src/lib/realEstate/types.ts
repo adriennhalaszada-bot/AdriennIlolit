@@ -46,7 +46,6 @@ export type ViewingPurpose =
   | "own_purchase"
   | "own_rent"
   | "family_friend"
-  | "buyer_representative"
   | "real_estate_agent";
 
 export type ModerationRestrictionLevel =

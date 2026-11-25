@@ -41,11 +41,6 @@ export const VIEWING_PURPOSE_OPTIONS: Array<{
     description: "Közvetlen hozzátartozó vagy ismerős megbízásából nézem meg.",
   },
   {
-    value: "buyer_representative",
-    label: "Megbízott vevő/bérlő képviseletében járok el",
-    description: "Konkrét, azonosított vevő vagy bérlő képviseletében érkezem.",
-  },
-  {
     value: "real_estate_agent",
     label: "Ingatlanközvetítőként járok el",
     description: "Ingatlanközvetítői vagy üzletszerzési céllal jelentkezem.",
@@ -55,25 +50,13 @@ export const VIEWING_PURPOSE_OPTIONS: Array<{
 export function getViewingPurposeOptions(transactionType: TransactionType) {
   return VIEWING_PURPOSE_OPTIONS.filter(
     (opt) => !opt.onlyFor || opt.onlyFor === transactionType,
-  ).map((opt) => {
-    if (opt.value === "buyer_representative") {
-      return {
-        ...opt,
-        label:
-          transactionType === "rent"
-            ? "Megbízott bérlő képviseletében járok el"
-            : "Megbízott vevő képviseletében járok el",
-      };
-    }
-    return opt;
-  });
+  );
 }
 
-export const VIEWING_PURPOSE_LABELS: Record<ViewingPurpose, string> = {
+export const VIEWING_PURPOSE_LABELS: Record<string, string> = {
   own_purchase: "Saját célra történő vásárlás",
   own_rent: "Saját célra történő bérlés",
   family_friend: "Családtag / ismerős részére",
-  buyer_representative: "Megbízott vevő/bérlő képviselete",
   real_estate_agent: "Ingatlanközvetítői megkeresés",
 };
 
