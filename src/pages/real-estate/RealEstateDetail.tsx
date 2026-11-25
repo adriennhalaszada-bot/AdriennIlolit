@@ -855,7 +855,7 @@ export default function RealEstateDetail() {
                     egyéb üzletszerzés céljából az ingatlan személyes megtekintése nem engedélyezett.
                   </p>
                   <p className="border-t border-rose-200 pt-2 text-xs font-semibold leading-relaxed text-rose-900">
-                    A tilalom megsértése az ILOLIT platformról történő kizárást, valamint további jogi
+                    A tilalom megsértése az ILOLIT platformról történő azonnali kizárást, valamint további jogi
                     következményeket vonhat maga után.
                   </p>
                 </div>

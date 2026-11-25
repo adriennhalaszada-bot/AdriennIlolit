@@ -118,7 +118,7 @@ export function AntiSolicitationLegalModal({
             <p className="rounded-xl border border-rose-200 bg-rose-50/80 p-3 font-bold text-rose-950">
               A valótlan nyilatkozattétel, a hirdető kifejezett rendelkezésének megsértése, valamint a megtekintés
               során megszerzett személyes adatok jogosulatlan üzletszerzési célú felhasználása az ILOLIT platformról
-              történő kizárást, továbbá polgári jogi, adatvédelmi, illetve a törvényi feltételek fennállása esetén
+              történő azonnali kizárást, továbbá polgári jogi, adatvédelmi, illetve a törvényi feltételek fennállása esetén
               büntetőjogi következményeket vonhat maga után.
             </p>
           </div>
@@ -202,7 +202,7 @@ export function AntiSolicitationLegalModal({
                 <span className="block font-bold text-slate-900">
                   Tudomásul veszem, hogy a valótlan nyilatkozattétel, a hirdető rendelkezésének megsértése, illetve a
                   megtekintési funkció jogosulatlan üzletszerzési célú használata az ILOLIT platformról történő
-                  kizárást, valamint további jogi következményeket vonhat maga után.
+                  azonnali kizárást, valamint további jogi következményeket vonhat maga után.
                 </span>
               </span>
             </label>
