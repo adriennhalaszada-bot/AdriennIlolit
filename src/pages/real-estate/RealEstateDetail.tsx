@@ -11,7 +11,7 @@ import {
   STATUS_LABELS,
   VIEWING_DECLARATION_TEXT,
   VIEWING_DECLARATION_VERSION,
-  VIEWING_PURPOSE_OPTIONS,
+  getViewingPurposeOptions,
   formatHuf,
   formatPublicLocation,
   getCategoryLabel,
@@ -1176,7 +1176,7 @@ export default function RealEstateDetail() {
                       Milyen célból szeretnéd megtekinteni az ingatlant? *
                     </span>
                     <div className="space-y-1.5">
-                      {VIEWING_PURPOSE_OPTIONS.map((opt) => (
+                      {getViewingPurposeOptions(property.transactionType).map((opt) => (
                         <label
                           key={opt.value}
                           className={`flex cursor-pointer items-start gap-2 rounded-xl border bg-white p-2.5 text-xs transition ${

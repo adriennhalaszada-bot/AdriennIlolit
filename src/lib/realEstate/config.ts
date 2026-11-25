@@ -21,16 +21,19 @@ export const VIEWING_PURPOSE_OPTIONS: Array<{
   value: ViewingPurpose;
   label: string;
   description: string;
+  onlyFor?: TransactionType;
 }> = [
   {
     value: "own_purchase",
     label: "Saját célra szeretném megvásárolni",
     description: "Magánvásárlóként saját vagy családi használatra érdeklődöm.",
+    onlyFor: "sale",
   },
   {
     value: "own_rent",
     label: "Saját célra szeretném kibérelni",
     description: "Bérlőként saját lakhatási vagy használati célra érdeklődöm.",
+    onlyFor: "rent",
   },
   {
     value: "family_friend",
@@ -48,6 +51,23 @@ export const VIEWING_PURPOSE_OPTIONS: Array<{
     description: "Ingatlanközvetítői vagy üzletszerzési céllal jelentkezem.",
   },
 ];
+
+export function getViewingPurposeOptions(transactionType: TransactionType) {
+  return VIEWING_PURPOSE_OPTIONS.filter(
+    (opt) => !opt.onlyFor || opt.onlyFor === transactionType,
+  ).map((opt) => {
+    if (opt.value === "buyer_representative") {
+      return {
+        ...opt,
+        label:
+          transactionType === "rent"
+            ? "Megbízott bérlő képviseletében járok el"
+            : "Megbízott vevő képviseletében járok el",
+      };
+    }
+    return opt;
+  });
+}
 
 export const VIEWING_PURPOSE_LABELS: Record<ViewingPurpose, string> = {
   own_purchase: "Saját célra történő vásárlás",

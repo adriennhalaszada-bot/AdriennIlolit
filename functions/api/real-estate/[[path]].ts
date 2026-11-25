@@ -1746,6 +1746,14 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         );
       }
 
+      // Enforce transaction-type specific viewing purpose consistency
+      if (prop.transactionType === "sale" && viewingPurpose === "own_rent") {
+        return json({ error: "Eladó ingatlannál nem választható bérleti cél." }, 400);
+      }
+      if (prop.transactionType === "rent" && viewingPurpose === "own_purchase") {
+        return json({ error: "Kiadó ingatlannál nem választható vásárlási cél." }, 400);
+      }
+
       // Enforce seller's agent inquiry policy
       const agentPolicy = prop.agentInquiryPolicy === "allow_agents" ? "allow_agents" : "no_agents";
       if (agentPolicy === "no_agents" && viewingPurpose === "real_estate_agent") {
