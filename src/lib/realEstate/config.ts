@@ -77,15 +77,62 @@ export const VIEWING_PURPOSE_LABELS: Record<ViewingPurpose, string> = {
   real_estate_agent: "Ingatlanközvetítői megkeresés",
 };
 
-export const ABUSE_REPORT_REASONS: Array<{ code: string; label: string }> = [
-  { code: "unsolicited_agent", label: "Kéretlen ingatlanközvetítői / üzletszerzési megkeresés" },
-  { code: "no_show", label: "Nem jelent meg" },
-  { code: "misleading_profile", label: "Megtévesztő profil" },
-  { code: "harassment", label: "Zaklató viselkedés" },
-  { code: "fake_data", label: "Hamis adat" },
-  { code: "spam", label: "Spam" },
-  { code: "other", label: "Egyéb" },
+export const PHOTO_ID_DECLARATION_TEXT =
+  "Tudomásul veszem, hogy a hirdető személy- és vagyonbiztonsági okokból az ingatlanba történő belépés feltételéül szabja a személyazonosságom igazolására alkalmas, érvényes fényképes hatósági igazolvány bemutatását. Tudomásul veszem, hogy az előzetesen közölt biztonsági feltételek teljesítésének hiányában a hirdető az ingatlanba történő belépést megtagadhatja.";
+
+export const PHOTO_ID_PRIVACY_NOTE =
+  "Az igazolvány bemutatása kizárólag vizuális ellenőrzés céljából történik, annak másolása, lefényképezése vagy adattartalmának rögzítése nélkül.";
+
+export const ABUSE_REPORT_REASONS: Array<{
+  code: string;
+  label: string;
+  category: "intentional_abuse" | "condition_unmet";
+}> = [
+  { code: "unsolicited_agent", label: "Kéretlen ingatlanközvetítői megkeresés", category: "intentional_abuse" },
+  { code: "false_declaration", label: "Valótlan megtekintési nyilatkozat", category: "intentional_abuse" },
+  { code: "different_person", label: "Eltérő személy jelent meg", category: "intentional_abuse" },
+  { code: "refused_id_check", label: "Személyazonosság igazolásának megtagadása", category: "condition_unmet" },
+  { code: "invalid_code", label: "Érvénytelen megtekintési kód", category: "condition_unmet" },
+  { code: "unannounced_companions", label: "Előzetesen nem jelzett kísérők", category: "condition_unmet" },
+  { code: "harassment", label: "Zaklató vagy fenyegető magatartás", category: "intentional_abuse" },
+  { code: "unauthorized_data_use", label: "Személyes adatok jogosulatlan felhasználása", category: "intentional_abuse" },
+  { code: "other", label: "Egyéb probléma", category: "condition_unmet" },
 ];
+
+export const ID_CHECK_RESULT_OPTIONS: Array<{
+  value: "MATCHED" | "NOT_SHOWN" | "MISMATCH" | "DENIED_SAFETY";
+  label: string;
+}> = [
+  {
+    value: "MATCHED",
+    label: "Az érdeklődő igazolványát bemutatta, a név és az arckép egyezését ellenőriztem.",
+  },
+  {
+    value: "NOT_SHOWN",
+    label: "Az érdeklődő nem mutatott be igazolványt.",
+  },
+  {
+    value: "MISMATCH",
+    label: "A bemutatott igazolvány és a foglalási adatok között eltérést észleltem.",
+  },
+  {
+    value: "DENIED_SAFETY",
+    label: "A megtekintést biztonsági okból nem kezdem meg.",
+  },
+];
+
+export const SAFEVISIT_STAGE_LABELS: Record<string, { label: string; className: string }> = {
+  SCHEDULED: { label: "Ütemezve", className: "border-slate-200 bg-slate-50 text-slate-700" },
+  CODE_VERIFIED: { label: "Kód ellenőrizve", className: "border-emerald-200 bg-emerald-50 text-emerald-800" },
+  ARRIVED_IN_PROGRESS: {
+    label: "Megérkezett – megtekintés folyamatban",
+    className: "border-emerald-300 bg-emerald-100 text-emerald-900",
+  },
+  COMPLETED: { label: "Megtekintés befejezve", className: "border-emerald-200 bg-white text-emerald-800" },
+  NO_SHOW: { label: "Nem jelent meg", className: "border-amber-200 bg-amber-50 text-amber-800" },
+  DENIED_ENTRY: { label: "Megtekintés megtagadva", className: "border-rose-200 bg-rose-50 text-rose-700" },
+  INTERRUPTED: { label: "Megtekintés megszakítva", className: "border-rose-200 bg-rose-50 text-rose-700" },
+};
 
 export const RESTRICTION_LEVEL_LABELS: Record<
   ModerationRestrictionLevel,

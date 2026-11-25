@@ -126,6 +126,44 @@ export function Ilolit() {
               kapcsolatfelvételt.
             </p>
           </div>
+
+          {/* ILOLIT SafeVisit – Adatvédelmi tájékoztató (GDPR Art. 5, 6, 13, 25, 32) */}
+          <div id="safevisit-adatvedelem" className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4 text-sm text-slate-700">
+            <h3 className="text-base font-bold text-slate-950">
+              ILOLIT SafeVisit – Adatvédelmi tájékoztató (GDPR 5., 6., 13., 25. és 32. cikk)
+            </h3>
+            <p className="text-xs leading-relaxed text-slate-700">
+              Az <strong>ILOLIT SafeVisit – Biztonságosabb ingatlanmegtekintés</strong> funkció az ingatlanhirdetés
+              alapdíjának része, külön díjfizetés nélkül. A rendszer a beépített és alapértelmezett adatvédelem
+              (GDPR 25. cikk) és az adatminimalizálás (GDPR 5. cikk) elveit követi.
+            </p>
+            <ul className="list-disc pl-5 space-y-1.5 text-xs leading-relaxed text-slate-600">
+              <li>
+                <strong>Kezelt adatok köre és jogalap (GDPR 6. és 13. cikk):</strong> az érdeklődő neve, SMS-ben
+                ellenőrzött telefonszámának ténye, a kötelező nyilatkozatok elfogadásának időbélyege, a jóváhagyott
+                időpont, valamint az egyszer használatos megtekintési kód státusza és ellenőrzési időbélyege. A
+                kezelés jogalapja a megtekintési szolgáltatás teljesítése (szerződés teljesítése) és a felek személy-
+                és vagyonbiztonságához, valamint a visszaélések megelőzéséhez fűződő jogos érdek.
+              </li>
+              <li>
+                <strong>Adatbiztonság (GDPR 32. cikk):</strong> az egyedi 6 jegyű megtekintési kódok és QR-tokenek
+                AES-256-GCM titkosítással és SHA-256 hash-sel tárolódnak, időablakhoz kötöttek, egyszer használatosak,
+                és lemondás vagy visszavonás esetén automatikusan érvénytelenné válnak. A QR-kód kizárólag véletlenszerű
+                azonosító tokent tartalmaz, személyes adatot nem.
+              </li>
+              <li>
+                <strong>Tiltott okmányadatok:</strong> az ILOLIT soha nem kér és nem tárol fényképes igazolványról
+                készült fotót, másolatot, okmányszámot, születési adatot, anyja nevét, lakcímkártyát vagy biometrikus
+                adatot. A hirdető számára is tilos az igazolvány lefényképezése vagy lemásolása.
+              </li>
+              <li>
+                <strong>Adatkezelői szerepek elhatárolása:</strong> az ILOLIT a foglalási folyamatot, a visszaigazolást,
+                a megtekintési kód kiállítását és a visszaélés-bejelentések kezelését biztosítja. A személyes
+                megtekintés feltételeinek meghatározásáért, a helyszíni szemrevételezéses igazolvány-ellenőrzésért és a
+                belépés engedélyezéséért minden esetben önállóan a magánhirdető (tulajdonos / jogosult) felel.
+              </li>
+            </ul>
+          </div>
         </div>
       </section>
     </Layout>

@@ -9,6 +9,7 @@ import { realEstateApi } from "@/lib/realEstate/api";
 import { VIEWING_STATUS_LABELS, formatHuf } from "@/lib/realEstate/config";
 import type { ApprovedViewingDetails, ViewingRequest } from "@/lib/realEstate/types";
 import { ApproximateLocationMap } from "@/components/realestate/ApproximateLocationMap";
+import { SafeVisitPassCard } from "@/components/realestate/SafeVisitPassCard";
 import {
   ArrowLeft,
   Bell,
@@ -370,6 +371,18 @@ export default function RealEstateMyViewings() {
                           )}
                         </div>
                       </div>
+
+                      {details.safeVisitPass && (
+                        <SafeVisitPassCard
+                          pass={details.safeVisitPass}
+                          propertyTitle={v.propertyTitle}
+                          coverImage={v.propertyCoverImage}
+                          exactAddressText={`${details.exactAddress.postalCode} ${details.exactAddress.city}${details.exactAddress.district ? `, ${details.exactAddress.district}` : ""}, ${details.exactAddress.streetName} ${details.exactAddress.streetType} ${details.exactAddress.houseNumber}${details.exactAddress.floorDoor ? `, ${details.exactAddress.floorDoor}` : ""}`}
+                          date={details.date}
+                          startTime={details.startTime}
+                          endTime={details.endTime}
+                        />
+                      )}
 
                       <div className="grid grid-cols-1 gap-4 rounded-xl border border-emerald-200 bg-white p-4 text-sm sm:grid-cols-2">
                         <div>

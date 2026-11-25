@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useUser } from "@clerk/react";
+import { useAuth, useUser } from "@clerk/react";
 import { Layout } from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -26,6 +26,8 @@ import type {
   ViewingRequest,
 } from "@/lib/realEstate/types";
 import { RealEstateMediaUploader } from "@/components/realestate/RealEstateMediaUploader";
+import { SafeVisitGuideModal } from "@/components/realestate/SafeVisitGuideModal";
+import { SafeVisitOwnerPanel } from "@/components/realestate/SafeVisitOwnerPanel";
 import {
   Activity,
   AlertTriangle,
@@ -60,6 +62,7 @@ import {
 
 type AdminSection =
   | "overview"
+  | "safevisit"
   | "edit"
   | "media"
   | "slots"
@@ -71,6 +74,7 @@ type AdminSection =
 
 const ADMIN_MENU: { id: AdminSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "overview", label: "Áttekintés", icon: LayoutDashboard },
+  { id: "safevisit", label: "Biztonság és megtekintési feltételek", icon: ShieldCheck },
   { id: "edit", label: "Hirdetés szerkesztése", icon: Edit3 },
   { id: "media", label: "Fotók és alaprajz", icon: Camera },
   { id: "slots", label: "Megtekintési időpontok", icon: Calendar },
@@ -95,12 +99,22 @@ export default function RealEstateAdmin() {
   const { id: paramId } = useParams<{ id?: string }>();
   const [, setLocation] = useLocation();
   const { isSignedIn, user } = useUser();
+  const { getToken } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [section, setSection] = useState<AdminSection>("overview");
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>(paramId || "");
   const [paymentMessage, setPaymentMessage] = useState<string>("");
+  const [safeVisitGuideOpen, setSafeVisitGuideOpen] = useState<boolean>(false);
+  const [justActivated, setJustActivated] = useState<boolean>(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return p.get("activated") === "1" || p.get("payment") === "success";
+    } catch {
+      return false;
+    }
+  });
 
   // Slot creation state
   const [slotMode, setSlotMode] = useState<"single" | "recurring">("single");
@@ -211,6 +225,29 @@ export default function RealEstateAdmin() {
     setEditFloorPlans(activeProperty.floorPlans || []);
     setEditVideoUrl(activeProperty.videoUrl || "");
   }, [activeProperty?.id, activeProperty?.updatedAt]);
+
+  // Auto-open ILOLIT SafeVisit Guide popup ONLY after successful activation when seller excluded agents (#2)
+  useEffect(() => {
+    if (!justActivated || !activeProperty) return;
+    if (activeProperty.status !== "ACTIVE") return;
+    const isPrivateNoAgents =
+      (activeProperty.agentInquiryPolicy || "no_agents") === "no_agents" &&
+      (activeProperty.sellerAccountType || "private") === "private";
+    if (!isPrivateNoAgents) {
+      setJustActivated(false);
+      return;
+    }
+    const storageKey = `ilolit_safevisit_guide_shown_${activeProperty.id}`;
+    try {
+      if (!localStorage.getItem(storageKey)) {
+        localStorage.setItem(storageKey, "1");
+        setSafeVisitGuideOpen(true);
+      }
+    } catch {
+      setSafeVisitGuideOpen(true);
+    }
+    setJustActivated(false);
+  }, [justActivated, activeProperty?.id, activeProperty?.status, activeProperty?.agentInquiryPolicy]);
 
   const { data: viewingsData, refetch: refetchViewings } = useQuery({
     queryKey: ["real-estate-admin-viewings", activeProperty?.id],
@@ -494,6 +531,7 @@ export default function RealEstateAdmin() {
     try {
       const res = await realEstateApi.startListingCheckout(activeProperty.id);
       if (res.activated) {
+        setJustActivated(true);
         refreshAll();
         toast({ title: "Hirdetés aktiválva!" });
         return;
@@ -513,6 +551,7 @@ export default function RealEstateAdmin() {
     setCheckoutBusy(true);
     try {
       await realEstateApi.testActivateProperty(activeProperty.id);
+      setJustActivated(true);
       refreshAll();
       toast({
         title: "Teszt aktiválás kész (fizetés nélkül)",
@@ -836,9 +875,29 @@ export default function RealEstateAdmin() {
                           <Users className="mr-1.5 h-4 w-4 text-emerald-600" />
                           Beérkező kérelmek ({pendingViewings.length} függőben)
                         </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setSection("safevisit")}
+                          className="rounded-xl border-emerald-300 bg-emerald-50/70 text-xs font-bold text-emerald-900 hover:bg-emerald-100"
+                        >
+                          <ShieldCheck className="mr-1.5 h-4 w-4 text-emerald-700" />
+                          ILOLIT SafeVisit (kódellenőrzés és kisokos)
+                        </Button>
                       </div>
                     </div>
                   </div>
+                )}
+
+                {/* ── ILOLIT SAFEVISIT: BIZTONSÁG ÉS MEGTEKINTÉSI FELTÉTELEK ── */}
+                {section === "safevisit" && (
+                  <SafeVisitOwnerPanel
+                    property={activeProperty}
+                    viewings={ownerViewings}
+                    getToken={() => getToken()}
+                    onRefresh={refreshAll}
+                    onReportViewing={(v) => setReportTargetViewing(v)}
+                  />
                 )}
 
                 {/* ── 2. HIRDETÉS SZERKESZTÉSE ── */}
@@ -1856,7 +1915,7 @@ export default function RealEstateAdmin() {
             <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl">
               <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
                 <Flag className="h-4 w-4 text-emerald-600" />
-                Probléma jelentése
+                Visszaélés jelentése
               </h3>
               <p className="mt-1 text-xs text-slate-500">
                 Érdeklődő: <strong>{reportTargetViewing.requesterName}</strong> ({reportTargetViewing.date}{" "}
@@ -1864,26 +1923,31 @@ export default function RealEstateAdmin() {
               </p>
 
               <form onSubmit={handleSubmitAbuseReport} className="mt-4 space-y-4">
-                <div className="space-y-1.5">
+                <div className="max-h-64 space-y-1.5 overflow-y-auto pr-1">
                   <span className="block text-xs font-bold text-slate-700">Jelentés oka *</span>
                   {ABUSE_REPORT_REASONS.map((r) => (
                     <label
                       key={r.code}
-                      className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${
+                      className={`flex cursor-pointer items-start justify-between gap-2 rounded-xl border px-3 py-2 text-xs transition ${
                         reportReasonCode === r.code
                           ? "border-emerald-600 bg-emerald-50/50 font-bold text-slate-950"
                           : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                       }`}
                     >
-                      <input
-                        type="radio"
-                        name="abuseReasonCode"
-                        value={r.code}
-                        checked={reportReasonCode === r.code}
-                        onChange={() => setReportReasonCode(r.code)}
-                        className="accent-emerald-600"
-                      />
-                      <span>{r.label}</span>
+                      <span className="flex items-start gap-2">
+                        <input
+                          type="radio"
+                          name="abuseReasonCode"
+                          value={r.code}
+                          checked={reportReasonCode === r.code}
+                          onChange={() => setReportReasonCode(r.code)}
+                          className="mt-0.5 accent-emerald-600"
+                        />
+                        <span>{r.label}</span>
+                      </span>
+                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                        {r.category === "condition_unmet" ? "Feltétel" : "Visszaélés"}
+                      </span>
                     </label>
                   ))}
                 </div>
@@ -1925,6 +1989,13 @@ export default function RealEstateAdmin() {
             </div>
           </div>
         )}
+
+        {/* Auto-shown post-activation ILOLIT SafeVisit Guide Modal (#2, #3, #4) */}
+        <SafeVisitGuideModal
+          open={safeVisitGuideOpen}
+          onClose={() => setSafeVisitGuideOpen(false)}
+          onOpenSettings={() => setSection("safevisit")}
+        />
       </main>
     </Layout>
   );

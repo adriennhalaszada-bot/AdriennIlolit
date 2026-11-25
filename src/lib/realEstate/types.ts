@@ -70,6 +70,64 @@ export interface RequesterTrustProfile {
   restrictedUntil?: string | null;
 }
 
+export interface SafeVisitSettings {
+  /** Mandatory baseline: always true */
+  requireVerifiedPhone: boolean;
+  /** Owner chooses whether to request visual inspection of valid photo ID on arrival */
+  requirePhotoIdOnArrival: boolean;
+  /** Automatic one-time 6-digit viewing code & QR token (included in base listing fee) */
+  enableSafeVisitCode: boolean;
+  /** Owner requires requester to declare accompanying persons count beforehand */
+  requireCompanionsDisclosure: boolean;
+}
+
+export type SafeVisitIdCheckResult = "MATCHED" | "NOT_SHOWN" | "MISMATCH" | "DENIED_SAFETY";
+export type SafeVisitStage =
+  | "SCHEDULED"
+  | "CODE_VERIFIED"
+  | "ARRIVED_IN_PROGRESS"
+  | "COMPLETED"
+  | "NO_SHOW"
+  | "DENIED_ENTRY"
+  | "INTERRUPTED";
+
+export interface SafeVisitSummary {
+  codeStatus: "ACTIVE" | "USED" | "INVALIDATED";
+  validFrom: string;
+  validUntil: string;
+  windowBeforeMinutes: number;
+  windowAfterMinutes: number;
+  verifiedAt: string | null;
+  usedAt: string | null;
+  verifiedMethod?: "manual_code" | "qr_token";
+  idCheckRequired: boolean;
+  idCheckResult: SafeVisitIdCheckResult | null;
+  idCheckAt: string | null;
+  visitStage: SafeVisitStage;
+  arrivedAt: string | null;
+  outcome: "COMPLETED" | "NO_SHOW" | "DENIED_ENTRY" | "INTERRUPTED" | null;
+  outcomeAt: string | null;
+  outcomeNote?: string | null;
+}
+
+export interface SafeVisitPass {
+  code: string | null;
+  qrToken: string | null;
+  codeStatus: "ACTIVE" | "USED" | "INVALIDATED";
+  validFrom: string;
+  validUntil: string;
+  requesterName: string;
+  phoneVerified: boolean;
+  declarationsAccepted: boolean;
+  agentExclusionAccepted: boolean;
+  photoIdRequired: boolean;
+  companionsRequired?: boolean;
+  companionsDisclosureRequired?: boolean;
+  companionsCount?: number;
+  coverImage?: string;
+  visitStage: SafeVisitStage;
+}
+
 export interface ViewingDeclarationLog {
   version: string;
   acceptedAt: string;
@@ -77,6 +135,7 @@ export interface ViewingDeclarationLog {
   purposeAccepted?: boolean;
   ownerRuleAccepted?: boolean;
   legalConsequencesAccepted?: boolean;
+  photoIdDeclarationAccepted?: boolean;
   legalNoticeViewed?: boolean;
 }
 
@@ -254,6 +313,8 @@ export interface RealEstateProperty {
   verifiedBuyersOnly?: boolean;
   /** Distinguishes private sellers from future official agency partner accounts. */
   sellerAccountType?: "private" | "agency_partner";
+  /** ILOLIT SafeVisit viewing security settings (included in base fee). */
+  safeVisitSettings?: SafeVisitSettings;
   transactionType: TransactionType;
   category: PropertyCategory;
   subtype: string;
@@ -299,8 +360,12 @@ export interface ViewingRequest {
   requesterName: string;
   requesterPhoneVerified: boolean;
   viewingPurpose?: ViewingPurpose;
+  companionsCount?: number;
   declarationLog?: ViewingDeclarationLog;
   requesterTrustProfile?: RequesterTrustProfile;
+  safeVisit?: SafeVisitSummary;
+  /** Only populated in test mode for simulated test requesters so owners can test code verification. */
+  testVerificationPreviewCode?: string;
   slotId: string;
   date: string;
   startTime: string;
@@ -338,6 +403,7 @@ export interface ApprovedViewingDetails {
   ownerPhone?: string | null;
   approvedAt: string;
   addressUnlockedAt: string;
+  safeVisitPass?: SafeVisitPass | null;
 }
 
 export interface AuditLogEntry {

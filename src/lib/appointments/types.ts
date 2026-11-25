@@ -1,3 +1,5 @@
+import type { SafeVisitPass } from "@/lib/realEstate/types";
+
 export type UnifiedAppointmentType = "SERVICE" | "PROPERTY_VIEWING" | "VEHICLE_VIEWING";
 
 export type UnifiedAppointmentStatus =
@@ -97,6 +99,7 @@ export interface UnifiedAppointmentDetails {
   seller_phone: string | null;
   seller_message: string | null;
   instructions: string | null;
+  safe_visit_pass?: SafeVisitPass | null;
   vehicle_basics?: {
     brand: string;
     model: string;

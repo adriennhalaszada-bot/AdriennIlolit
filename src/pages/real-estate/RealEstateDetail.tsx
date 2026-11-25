@@ -8,6 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import { realEstateApi } from "@/lib/realEstate/api";
 import {
   ABUSE_REPORT_REASONS,
+  PHOTO_ID_DECLARATION_TEXT,
+  PHOTO_ID_PRIVACY_NOTE,
   STATUS_LABELS,
   VIEWING_DECLARATION_TEXT,
   VIEWING_DECLARATION_VERSION,
@@ -21,6 +23,7 @@ import {
 import type { ApprovedViewingDetails, ViewingPurpose } from "@/lib/realEstate/types";
 import { PhoneVerificationModal } from "@/components/realestate/PhoneVerificationModal";
 import { ApproximateLocationMap } from "@/components/realestate/ApproximateLocationMap";
+import { SafeVisitPassCard } from "@/components/realestate/SafeVisitPassCard";
 import {
   AntiSolicitationLegalModal,
   type LegalDeclarationAcceptPayload,
@@ -38,6 +41,8 @@ import {
   Flag,
   Heart,
   Home,
+  IdCard,
+  KeyRound,
   Layers,
   Leaf,
   Loader2,
@@ -49,6 +54,7 @@ import {
   Send,
   Share2,
   ShieldCheck,
+  Users,
   Video,
   X,
 } from "lucide-react";
@@ -69,6 +75,8 @@ export default function RealEstateDetail() {
   const [requesterName, setRequesterName] = useState("");
   const [viewingPurpose, setViewingPurpose] = useState<ViewingPurpose | "">("");
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
+  const [companionsCount, setCompanionsCount] = useState<string>("");
+  const [photoIdDeclarationAccepted, setPhotoIdDeclarationAccepted] = useState(false);
   const [viewingMessage, setViewingMessage] = useState("");
   const [reminder24h, setReminder24h] = useState(true);
   const [reminder2h, setReminder2h] = useState(true);
@@ -225,6 +233,13 @@ export default function RealEstateDetail() {
         declarationLegalConsequencesAccepted: legalPayload?.declarationLegalConsequencesAccepted ?? false,
         legalNoticeViewed: legalPayload?.legalNoticeViewed ?? false,
         declarationVersion: VIEWING_DECLARATION_VERSION,
+        companionsCount:
+          property.safeVisitSettings?.requireCompanionsDisclosure && companionsCount !== ""
+            ? Number(companionsCount)
+            : undefined,
+        photoIdDeclarationAccepted: property.safeVisitSettings?.requirePhotoIdOnArrival
+          ? photoIdDeclarationAccepted
+          : undefined,
         message: viewingMessage.trim() || undefined,
         reminder24hEnabled: reminder24h,
         reminder2hEnabled: reminder2h,
@@ -234,6 +249,8 @@ export default function RealEstateDetail() {
       setSelectedSlotId("");
       setViewingPurpose("");
       setDeclarationAccepted(false);
+      setCompanionsCount("");
+      setPhotoIdDeclarationAccepted(false);
       setViewingMessage("");
       queryClient.invalidateQueries({ queryKey: ["real-estate-property", id] });
       queryClient.invalidateQueries({ queryKey: ["real-estate-my-property-viewings", id] });
@@ -265,6 +282,22 @@ export default function RealEstateDetail() {
     if (noAgents && viewingPurpose === "real_estate_agent") {
       toast({
         title: "A hirdető ehhez az ingatlanhoz nem fogad ingatlanközvetítői megkeresést.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (property.safeVisitSettings?.requireCompanionsDisclosure && companionsCount === "") {
+      toast({
+        title: "Add meg a kísérők létszámát",
+        description: "A hirdető kérte a kísérők előzetes bejelentését (válassz 0-t, ha egyedül érkezel).",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (property.safeVisitSettings?.requirePhotoIdOnArrival && !photoIdDeclarationAccepted) {
+      toast({
+        title: "A fényképes igazolványra vonatkozó feltétel elfogadása kötelező",
+        description: "Jelöld be a külön nyilatkozatot a megtekintési kérelem elküldéséhez.",
         variant: "destructive",
       });
       return;
@@ -891,6 +924,41 @@ export default function RealEstateDetail() {
                 )}
               </div>
 
+              {/* Active ILOLIT SafeVisit Viewing Conditions (#6) — shows ONLY active conditions for this listing */}
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 text-xs">
+                <p className="font-bold text-slate-900">Az ingatlan megtekintésének feltételei</p>
+                <ul className="space-y-1.5 text-slate-700">
+                  <li className="flex items-start gap-2">
+                    <Phone className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700" />
+                    <span>Ellenőrzött mobiltelefonszám (SMS-kóddal)</span>
+                  </li>
+                  {property.safeVisitSettings?.enableSafeVisitCode !== false && (
+                    <li className="flex items-start gap-2">
+                      <KeyRound className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700" />
+                      <span>Egyedi 6 jegyű megtekintési kód / QR-kód bemutatása érkezéskor (ILOLIT SafeVisit)</span>
+                    </li>
+                  )}
+                  {property.safeVisitSettings?.requirePhotoIdOnArrival && (
+                    <li className="flex items-start gap-2">
+                      <IdCard className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700" />
+                      <span>Érvényes fényképes igazolvány bemutatása szemrevételezés céljából érkezéskor</span>
+                    </li>
+                  )}
+                  {property.safeVisitSettings?.requireCompanionsDisclosure && (
+                    <li className="flex items-start gap-2">
+                      <Users className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-700" />
+                      <span>Kísérők számának előzetes bejelentése</span>
+                    </li>
+                  )}
+                  {(property.agentInquiryPolicy || "no_agents") === "no_agents" && (
+                    <li className="flex items-start gap-2">
+                      <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-700" />
+                      <span>Ingatlanközvetítői és üzletszerzési megkeresések kizárva</span>
+                    </li>
+                  )}
+                </ul>
+              </div>
+
               {/* Instant Live Buyer Confirmation Card for this property */}
               {!property.isOwner && latestBuyerViewing && (
                 <div
@@ -1020,6 +1088,19 @@ export default function RealEstateDetail() {
                           )}
                           {inlineDetails.exactAddress.viewingInstructions && (
                             <p className="text-slate-600">{inlineDetails.exactAddress.viewingInstructions}</p>
+                          )}
+                          {inlineDetails.safeVisitPass && (
+                            <div className="pt-2">
+                              <SafeVisitPassCard
+                                pass={inlineDetails.safeVisitPass}
+                                propertyTitle={property.title}
+                                coverImage={property.photos?.[0]?.url}
+                                exactAddressText={`${inlineDetails.exactAddress.postalCode} ${inlineDetails.exactAddress.city}${inlineDetails.exactAddress.district ? `, ${inlineDetails.exactAddress.district}` : ""}, ${inlineDetails.exactAddress.streetName} ${inlineDetails.exactAddress.streetType} ${inlineDetails.exactAddress.houseNumber}`}
+                                date={inlineDetails.date}
+                                startTime={inlineDetails.startTime}
+                                endTime={inlineDetails.endTime}
+                              />
+                            </div>
                           )}
                         </div>
                       )}
@@ -1265,6 +1346,47 @@ export default function RealEstateDetail() {
                       )}
                   </div>
 
+                  {/* Optional Companions Disclosure when required by owner */}
+                  {property.safeVisitSettings?.requireCompanionsDisclosure && (
+                    <label className="block rounded-xl border border-slate-200 bg-white p-3.5 text-xs font-bold text-slate-900">
+                      Hány kísérővel érkezel a megtekintésre? *
+                      <select
+                        value={companionsCount}
+                        onChange={(e) => setCompanionsCount(e.target.value)}
+                        required
+                        className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-900 outline-none focus:border-emerald-600"
+                      >
+                        <option value="">Válassz...</option>
+                        <option value="0">Egyedül érkezem (0 kísérő)</option>
+                        <option value="1">1 kísérővel érkezem</option>
+                        <option value="2">2 kísérővel érkezem</option>
+                        <option value="3">3 kísérővel érkezem</option>
+                        <option value="4">4 vagy több kísérővel</option>
+                      </select>
+                    </label>
+                  )}
+
+                  {/* Separate mandatory unchecked Photo-ID declaration when required by owner (#6) */}
+                  {property.safeVisitSettings?.requirePhotoIdOnArrival && (
+                    <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/70 p-3.5">
+                      <span className="flex items-center gap-1.5 text-xs font-bold text-amber-950">
+                        <IdCard className="h-4 w-4 text-amber-700" />
+                        Fényképes igazolvány bemutatása érkezéskor *
+                      </span>
+                      <label className="flex cursor-pointer items-start gap-2.5 text-xs leading-relaxed text-slate-800">
+                        <input
+                          type="checkbox"
+                          checked={photoIdDeclarationAccepted}
+                          onChange={(e) => setPhotoIdDeclarationAccepted(e.target.checked)}
+                          className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-600"
+                          required
+                        />
+                        <span>{PHOTO_ID_DECLARATION_TEXT}</span>
+                      </label>
+                      <p className="pl-6 text-[11px] leading-relaxed text-amber-900/90">{PHOTO_ID_PRIVACY_NOTE}</p>
+                    </div>
+                  )}
+
                   {/* For allow_agents properties, keep inline declaration; for no_agents properties, clicking the button opens the mandatory 3-checkbox legal modal (#4, #5, #6) */}
                   {(property.agentInquiryPolicy || "no_agents") === "allow_agents" ? (
                     <div className="rounded-xl border border-slate-200 bg-white p-3.5">
@@ -1292,6 +1414,8 @@ export default function RealEstateDetail() {
                     disabled={
                       !selectedSlotId ||
                       !viewingPurpose ||
+                      (property.safeVisitSettings?.requireCompanionsDisclosure && companionsCount === "") ||
+                      (property.safeVisitSettings?.requirePhotoIdOnArrival && !photoIdDeclarationAccepted) ||
                       ((property.agentInquiryPolicy || "no_agents") === "allow_agents" && !declarationAccepted) ||
                       ((property.agentInquiryPolicy || "no_agents") === "no_agents" &&
                         viewingPurpose === "real_estate_agent") ||

@@ -159,10 +159,12 @@ export const realEstateApi = {
     requesterProfileComplete?: boolean;
     requesterAccountCreatedAt?: string;
     viewingPurpose: ViewingPurpose;
+    companionsCount?: number;
     declarationAccepted: boolean;
     declarationPurposeAccepted?: boolean;
     declarationOwnerRuleAccepted?: boolean;
     declarationLegalConsequencesAccepted?: boolean;
+    photoIdDeclarationAccepted?: boolean;
     legalNoticeViewed?: boolean;
     declarationVersion: string;
     message?: string;
@@ -229,6 +231,67 @@ export const realEstateApi = {
     return customFetch<{ deleted: boolean; id: string }>(
       `/api/real-estate/viewings/${encodeURIComponent(viewingId)}`,
       { method: "DELETE" },
+    );
+  },
+
+  // ILOLIT SafeVisit owner on-site verification & visit lifecycle
+  verifySafeVisitCode(viewingId: string, payload: { code?: string; qrToken?: string }) {
+    return customFetch<{
+      valid: boolean;
+      title: string;
+      disclaimer?: string;
+      guidance?: string;
+      reason?: string;
+      requesterName?: string;
+      phoneVerified?: boolean;
+      date?: string;
+      startTime?: string;
+      endTime?: string;
+      declarationsAccepted?: boolean;
+      agentExclusionAccepted?: boolean;
+      bookingApproved?: boolean;
+      idCheckRequired?: boolean;
+      companionsCount?: number;
+    }>(`/api/real-estate/viewings/${encodeURIComponent(viewingId)}/verify-code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  recordVisualIdCheck(
+    viewingId: string,
+    result: "MATCHED" | "NOT_SHOWN" | "MISMATCH" | "DENIED_SAFETY",
+  ) {
+    return customFetch<ViewingRequest>(
+      `/api/real-estate/viewings/${encodeURIComponent(viewingId)}/id-check`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ result }),
+      },
+    );
+  },
+
+  recordArrival(viewingId: string) {
+    return customFetch<ViewingRequest>(
+      `/api/real-estate/viewings/${encodeURIComponent(viewingId)}/arrival`,
+      { method: "POST" },
+    );
+  },
+
+  recordVisitOutcome(
+    viewingId: string,
+    outcome: "COMPLETED" | "NO_SHOW" | "DENIED_ENTRY" | "INTERRUPTED",
+    note?: string,
+  ) {
+    return customFetch<ViewingRequest>(
+      `/api/real-estate/viewings/${encodeURIComponent(viewingId)}/outcome`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outcome, note }),
+      },
     );
   },
 

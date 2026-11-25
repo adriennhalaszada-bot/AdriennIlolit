@@ -10,6 +10,7 @@ import {
 } from "@/lib/appointments/types";
 import { formatHuf } from "@/lib/realEstate/config";
 import { ApproximateLocationMap } from "@/components/realestate/ApproximateLocationMap";
+import { SafeVisitPassCard } from "@/components/realestate/SafeVisitPassCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -535,6 +536,18 @@ export function PropertyViewingsSection({ highlightAppointmentId }: PropertyView
                         )}
                       </div>
                     </div>
+
+                    {details.safe_visit_pass && (
+                      <SafeVisitPassCard
+                        pass={details.safe_visit_pass}
+                        propertyTitle={a.title}
+                        coverImage={a.cover_image}
+                        exactAddressText={details.exact_address_text}
+                        date={details.date}
+                        startTime={details.start_time}
+                        endTime={details.end_time}
+                      />
+                    )}
 
                     <div className="grid grid-cols-1 gap-3 rounded-xl border border-emerald-200 bg-white p-4 text-sm sm:grid-cols-2">
                       <div>

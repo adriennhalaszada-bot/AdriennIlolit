@@ -8,11 +8,15 @@ import {
   type UnifiedNotificationCategory,
   type UnifiedNotificationRecord,
 } from "../../_shared/unifiedNotifications";
+import { createSafeVisitCredentials, decryptSafeVisitSecret } from "../../_shared/safeVisit";
 
 interface Env {
   MEDIA_BUCKET: R2Bucket;
   CLERK_SECRET_KEY: string;
   VAPID_PUBLIC_KEY?: string;
+  SAFEVISIT_SECRET?: string;
+  SAFEVISIT_WINDOW_BEFORE_MIN?: string;
+  SAFEVISIT_WINDOW_AFTER_MIN?: string;
 }
 
 type Context = EventContext<Env, string, Record<string, unknown>>;
@@ -351,30 +355,40 @@ async function getAllUnifiedForUser(env: Env, userId: string) {
 
   items.sort((a, b) => String(b.updated_at || b.created_at).localeCompare(String(a.updated_at || a.created_at)));
 
-  // Auto-generate deduplicated 24h / 2h reminder notifications for upcoming confirmed buyer viewings
+  // Auto-generate deduplicated 24h / 2h reminder notifications for upcoming CONFIRMED viewings (both buyer & seller)
+  // NEVER emitted for cancelled, rejected, or revoked viewings!
   const reminderEmissions: Promise<any>[] = [];
   for (const item of items) {
-    if (item.role !== "buyer" || item.status !== "CONFIRMED") continue;
-    const cat: UnifiedNotificationCategory =
-      item.appointment_type === "PROPERTY_VIEWING"
-        ? "INGATLAN"
-        : item.appointment_type === "VEHICLE_VIEWING"
-          ? "JARMU"
-          : "SZOLGALTATAS";
-    const typeText =
-      item.appointment_type === "PROPERTY_VIEWING"
-        ? "ingatlanmegtekintésed"
-        : item.appointment_type === "VEHICLE_VIEWING"
-          ? "járműmegtekintésed"
-          : "szolgáltatási időpontod";
+    if (item.status !== "CONFIRMED") continue;
+    const isBuyerRole = item.role === "buyer";
+    const isProperty = item.appointment_type === "PROPERTY_VIEWING";
+    const cat: UnifiedNotificationCategory = isProperty
+      ? "INGATLAN"
+      : item.appointment_type === "VEHICLE_VIEWING"
+        ? "JARMU"
+        : "SZOLGALTATAS";
+    const typeText = isProperty
+      ? "ingatlanmegtekintésed"
+      : item.appointment_type === "VEHICLE_VIEWING"
+        ? "járműmegtekintésed"
+        : "szolgáltatási időpontod";
+
+    const buyerSafeVisitHint =
+      isBuyerRole && isProperty
+        ? " Ne feledd magaddal vinni az egyedi megtekintési kódodat és – amennyiben a hirdető előírta – érvényes fényképes igazolványodat."
+        : "";
+    const sellerSafeVisitHint =
+      !isBuyerRole && isProperty
+        ? " Érkezéskor ellenőrizheted az érdeklődő egyedi megtekintési kódját az Ingatlan Admin felületén."
+        : "";
 
     if (item.reminder_24h_due) {
       reminderEmissions.push(
         emitUnifiedNotification(env, userId, {
           category: cat,
           eventType: "APPOINTMENT_REMINDER_24H",
-          title: `Holnap ${typeText} lesz`,
-          body: `${item.start_time} – ${item.approx_location || item.city || item.title}`,
+          title: isBuyerRole ? `Holnap ${typeText} lesz` : `Holnap megtekintésre érkezik érdeklődő`,
+          body: `${item.start_time} – ${item.approx_location || item.city || item.title}.${buyerSafeVisitHint}${sellerSafeVisitHint}`,
           appointmentId: item.appointment_id,
           appointmentType: item.appointment_type,
           listingId: item.listing_id,
@@ -384,9 +398,9 @@ async function getAllUnifiedForUser(env: Env, userId: string) {
           startTime: item.start_time,
           shortLocation: item.approx_location || item.city,
           deepLink: item.deep_link,
-          webUrl: item.web_url,
+          webUrl: isBuyerRole ? item.web_url : isProperty ? `/real-estate/admin/${item.listing_id}` : item.web_url,
           popupRequired: false,
-          dedupeKey: `rem24:${item.appointment_id}:${item.date}:${item.start_time}`,
+          dedupeKey: `rem24:${item.role}:${item.appointment_id}:${item.date}:${item.start_time}`,
         }),
       );
     }
@@ -395,8 +409,10 @@ async function getAllUnifiedForUser(env: Env, userId: string) {
         emitUnifiedNotification(env, userId, {
           category: cat,
           eventType: "APPOINTMENT_REMINDER_2H",
-          title: `2 órán belül kezdődik a(z) ${typeText}`,
-          body: `${item.start_time} – ${item.approx_location || item.city || item.title}`,
+          title: isBuyerRole
+            ? `2 órán belül kezdődik a(z) ${typeText}`
+            : `2 órán belül megtekintési időpontod lesz`,
+          body: `${item.start_time} – ${item.approx_location || item.city || item.title}.${buyerSafeVisitHint}${sellerSafeVisitHint}`,
           appointmentId: item.appointment_id,
           appointmentType: item.appointment_type,
           listingId: item.listing_id,
@@ -406,9 +422,9 @@ async function getAllUnifiedForUser(env: Env, userId: string) {
           startTime: item.start_time,
           shortLocation: item.approx_location || item.city,
           deepLink: item.deep_link,
-          webUrl: item.web_url,
+          webUrl: isBuyerRole ? item.web_url : isProperty ? `/real-estate/admin/${item.listing_id}` : item.web_url,
           popupRequired: true,
-          dedupeKey: `rem2:${item.appointment_id}:${item.date}:${item.start_time}`,
+          dedupeKey: `rem2:${item.role}:${item.appointment_id}:${item.date}:${item.start_time}`,
         }),
       );
     }
@@ -958,6 +974,47 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       const prop = await readJson<any>(env, `${REAL_ESTATE_PROPERTY_PREFIX}${reRec.propertyId}.json`);
       if (!prop || prop.status === "DELETED") return json({ error: "Az ingatlan már nem érhető el." }, 404);
 
+      let safeVisitPass: any = null;
+      const svSettings = {
+        requireVerifiedPhone: true,
+        requirePhotoIdOnArrival: Boolean(prop.safeVisitSettings?.requirePhotoIdOnArrival),
+        enableSafeVisitCode: prop.safeVisitSettings?.enableSafeVisitCode !== false,
+        requireCompanionsDisclosure: Boolean(prop.safeVisitSettings?.requireCompanionsDisclosure),
+      };
+      if (isBuyer && svSettings.enableSafeVisitCode) {
+        if (!reRec.safeVisit) {
+          const creds = await createSafeVisitCredentials(env, {
+            viewingId: reRec.id,
+            date: reRec.date,
+            startTime: reRec.startTime,
+            endTime: reRec.endTime,
+            idCheckRequired: svSettings.requirePhotoIdOnArrival,
+          });
+          reRec.safeVisit = creds.record;
+          await writeJson(env, `${REAL_ESTATE_VIEWING_PREFIX}${appointmentId}.json`, reRec);
+        }
+        const sv = reRec.safeVisit;
+        const [plainCode, plainQrToken] = await Promise.all([
+          sv.codeStatus === "ACTIVE" ? decryptSafeVisitSecret(env, sv.encryptedCode) : Promise.resolve(null),
+          sv.codeStatus === "ACTIVE" ? decryptSafeVisitSecret(env, sv.encryptedQrToken) : Promise.resolve(null),
+        ]);
+        safeVisitPass = {
+          code: plainCode,
+          qrToken: plainQrToken,
+          codeStatus: sv.codeStatus,
+          validFrom: sv.validFrom,
+          validUntil: sv.validUntil,
+          visitStage: sv.visitStage,
+          requesterName: reRec.requesterName,
+          phoneVerified: Boolean(reRec.requesterPhoneVerified),
+          declarationsAccepted: Boolean(reRec.declarationLog?.purposeAccepted || reRec.declarationLog?.acceptedAt),
+          agentExclusionAccepted: Boolean(reRec.declarationLog?.ownerRuleAccepted),
+          photoIdRequired: Boolean(sv.idCheckRequired || svSettings.requirePhotoIdOnArrival),
+          companionsRequired: svSettings.requireCompanionsDisclosure,
+          companionsCount: reRec.companionsCount,
+        };
+      }
+
       if (isBuyer) {
         await appendRealEstateAudit(env, reRec.propertyId, {
           action: "ADDRESS_ACCESSED",
@@ -965,7 +1022,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           actorName: reRec.requesterName,
           viewingId: reRec.id,
           slotSummary: `${reRec.date} ${reRec.startTime}-${reRec.endTime}`,
-          details: "A jóváhagyott érdeklődő megnyitotta a pontos címet a Fiókom / Megtekintéseim felületen.",
+          details: "A jóváhagyott érdeklődő megnyitotta a pontos címet és a SafeVisit igazolványt a Fiókom / Megtekintéseim felületen.",
         });
       }
 
@@ -998,6 +1055,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         seller_phone: prop.ownerPhoneShareMode === "approved_only" && prop.ownerPhone ? prop.ownerPhone : null,
         seller_message: reRec.ownerResponseNote || null,
         instructions: ea.viewingInstructions || null,
+        safe_visit_pass: safeVisitPass,
       });
     }
 
@@ -1205,7 +1263,10 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       if (reRec.status !== "PROPOSED_NEW_TIME" || !reRec.proposedDate || !reRec.proposedStartTime) {
         return json({ error: "Nincs elfogadható javaslat." }, 409);
       }
-      const phoneRec = await readJson<any>(env, `${PHONE_PREFIX}${userId}.json`);
+      const [phoneRec, prop] = await Promise.all([
+        readJson<any>(env, `${PHONE_PREFIX}${userId}.json`),
+        readJson<any>(env, `${REAL_ESTATE_PROPERTY_PREFIX}${reRec.propertyId}.json`),
+      ]);
       if (!phoneRec?.phoneVerified) return json({ error: "Ellenőrzött telefonszám szükséges." }, 403);
 
       reRec.date = reRec.proposedDate;
@@ -1214,6 +1275,16 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       reRec.status = "APPROVED";
       reRec.approvedAt = now;
       reRec.addressUnlockedAt = now;
+      if (prop?.safeVisitSettings?.enableSafeVisitCode !== false) {
+        const creds = await createSafeVisitCredentials(env, {
+          viewingId: reRec.id,
+          date: reRec.date,
+          startTime: reRec.startTime,
+          endTime: reRec.endTime,
+          idCheckRequired: Boolean(prop?.safeVisitSettings?.requirePhotoIdOnArrival),
+        });
+        reRec.safeVisit = creds.record;
+      }
       reRec.updatedAt = now;
       await writeJson(env, `${REAL_ESTATE_VIEWING_PREFIX}${appointmentId}.json`, reRec);
 
@@ -1364,6 +1435,10 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       if (!isBuyer && !isOwner) return json({ error: "Nincs jogosultságod." }, 403);
       reRec.status = isOwner ? "REVOKED_BY_OWNER" : "CANCELLED_BY_REQUESTER";
       reRec.cancellationReason = reason || undefined;
+      if (reRec.safeVisit) {
+        reRec.safeVisit.codeStatus = "INVALIDATED";
+        reRec.safeVisit.invalidatedAt = now;
+      }
       reRec.updatedAt = now;
       await writeJson(env, `${REAL_ESTATE_VIEWING_PREFIX}${appointmentId}.json`, reRec);
 

@@ -1,5 +1,15 @@
 import { verifyToken } from "@clerk/backend";
 import { buildAppointmentLinks, emitUnifiedNotification } from "../../_shared/unifiedNotifications";
+import {
+  checkSafeVisitVerificationEligibility,
+  createSafeVisitCredentials,
+  decryptSafeVisitSecret,
+  MAX_FAILED_VERIFY_ATTEMPTS,
+  sanitizeSafeVisitForList,
+  timingSafeEqualHex,
+  VERIFY_LOCKOUT_MS,
+  type SafeVisitIdCheckResult,
+} from "../../_shared/safeVisit";
 
 interface Env {
   MEDIA_BUCKET: R2Bucket;
@@ -9,6 +19,9 @@ interface Env {
   TWILIO_ACCOUNT_SID?: string;
   TWILIO_AUTH_TOKEN?: string;
   TWILIO_FROM_NUMBER?: string;
+  SAFEVISIT_SECRET?: string;
+  SAFEVISIT_WINDOW_BEFORE_MIN?: string;
+  SAFEVISIT_WINDOW_AFTER_MIN?: string;
 }
 
 type Context = EventContext<Env, string, Record<string, unknown>>;
@@ -363,6 +376,15 @@ function computeActiveDays(prop: any): number {
  * Never returns exactAddress or billing to non-owners.
  * Removes occupied/blocked slots from public viewings list while showing owner all slots.
  */
+function normalizeSafeVisitSettings(raw?: any) {
+  return {
+    requireVerifiedPhone: true as const,
+    requirePhotoIdOnArrival: Boolean(raw?.requirePhotoIdOnArrival),
+    enableSafeVisitCode: raw?.enableSafeVisitCode !== false,
+    requireCompanionsDisclosure: Boolean(raw?.requireCompanionsDisclosure),
+  };
+}
+
 function sanitizePropertyForViewer(
   prop: any,
   requestingUserId: string | null,
@@ -398,6 +420,7 @@ function sanitizePropertyForViewer(
     agentInquiryPolicy: prop.agentInquiryPolicy === "allow_agents" ? "allow_agents" : "no_agents",
     verifiedBuyersOnly: Boolean(prop.verifiedBuyersOnly),
     sellerAccountType: prop.sellerAccountType === "agency_partner" ? "agency_partner" : "private",
+    safeVisitSettings: normalizeSafeVisitSettings(prop.safeVisitSettings),
     transactionType: prop.transactionType,
     category: prop.category,
     subtype: prop.subtype || "",
@@ -789,6 +812,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       const verifiedBuyersOnly = body.verifiedBuyersOnly === true;
       const sellerAccountType =
         body.sellerAccountType === "agency_partner" ? "agency_partner" : "private";
+      const safeVisitSettings = normalizeSafeVisitSettings(body.safeVisitSettings);
 
       const property = {
         id,
@@ -799,6 +823,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         agentInquiryPolicy,
         verifiedBuyersOnly,
         sellerAccountType,
+        safeVisitSettings,
         transactionType,
         category,
         subtype: safeText(body.subtype, 60),
@@ -912,6 +937,10 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
               ? "agency_partner"
               : "private"
             : existing.sellerAccountType || "private",
+        safeVisitSettings:
+          body.safeVisitSettings !== undefined
+            ? normalizeSafeVisitSettings({ ...(existing.safeVisitSettings || {}), ...body.safeVisitSettings })
+            : normalizeSafeVisitSettings(existing.safeVisitSettings),
         transactionType,
         category: body.category ? safeText(body.category, 40) : existing.category,
         subtype: body.subtype !== undefined ? safeText(body.subtype, 60) : existing.subtype,
@@ -1289,6 +1318,10 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         for (const v of viewings) {
           v.status = "REVOKED_BY_OWNER";
           v.ownerResponseNote = "A hirdető törölte ezt az idősávot.";
+          if (v.safeVisit) {
+            v.safeVisit.codeStatus = "INVALIDATED";
+            v.safeVisit.invalidatedAt = now;
+          }
           v.updatedAt = now;
           await writeJson(env, `${VIEWING_PREFIX}${v.id}.json`, v);
           await pushNotification(env, v.requesterId, {
@@ -1652,14 +1685,25 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
 
       const items = await Promise.all(
         filtered.map(async (v) => {
-          // Privacy: never expose buyer's phone number or phone hash to anyone
-          const { requesterPhoneMasked: _omit, requesterPhoneHash: _omitHash, ...safeViewing } = v;
+          // Privacy: never expose buyer's phone number, phone hash, or raw SafeVisit secrets
+          const { requesterPhoneMasked: _omit, requesterPhoneHash: _omitHash, safeVisit: rawSv, ...safeViewing } = v;
           const isOwner = v.ownerId === userId;
           const trustProfile = isOwner
             ? await buildRequesterTrustProfile(env, v.requesterId, v, allViewings)
             : undefined;
+          let testVerificationPreviewCode: string | undefined;
+          if (
+            isOwner &&
+            String(v.requesterId || "").startsWith("test_requester_") &&
+            rawSv?.codeStatus === "ACTIVE" &&
+            rawSv?.encryptedCode
+          ) {
+            testVerificationPreviewCode = (await decryptSafeVisitSecret(env, rawSv.encryptedCode)) || undefined;
+          }
           return enrichViewingReminders({
             ...safeViewing,
+            safeVisit: sanitizeSafeVisitForList(rawSv),
+            testVerificationPreviewCode,
             role: isOwner ? "owner" : "requester",
             requesterTrustProfile: trustProfile,
           });
@@ -1687,7 +1731,16 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       const declarationOwnerRuleAccepted = body.declarationOwnerRuleAccepted === true;
       const declarationLegalConsequencesAccepted = body.declarationLegalConsequencesAccepted === true;
       const legalNoticeViewed = body.legalNoticeViewed === true;
-      const declarationVersion = safeText(body.declarationVersion, 30) || "2026-11-v2-legal";
+      const photoIdDeclarationAccepted = body.photoIdDeclarationAccepted === true;
+      const companionsCountRaw =
+        body.companionsCount !== undefined && body.companionsCount !== null && body.companionsCount !== ""
+          ? Number(body.companionsCount)
+          : undefined;
+      const companionsCount =
+        companionsCountRaw !== undefined && Number.isInteger(companionsCountRaw) && companionsCountRaw >= 0 && companionsCountRaw <= 10
+          ? companionsCountRaw
+          : undefined;
+      const declarationVersion = safeText(body.declarationVersion, 30) || "2026-11-v3-safevisit";
       const requesterEmailVerified = body.requesterEmailVerified !== false;
       const requesterProfileComplete =
         body.requesterProfileComplete !== undefined
@@ -1774,6 +1827,27 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           {
             error:
               "A megtekintési kérelem elküldéséhez mindhárom kötelező jogi nyilatkozat elfogadása szükséges.",
+          },
+          400,
+        );
+      }
+
+      // Enforce SafeVisit conditions configured by the owner
+      const svSettings = normalizeSafeVisitSettings(prop.safeVisitSettings);
+      if (svSettings.requirePhotoIdOnArrival && !photoIdDeclarationAccepted) {
+        return json(
+          {
+            error:
+              "A megtekintési kérelem elküldéséhez el kell fogadnod a fényképes igazolvány érkezéskori bemutatására vonatkozó feltételt.",
+          },
+          400,
+        );
+      }
+      if (svSettings.requireCompanionsDisclosure && companionsCount === undefined) {
+        return json(
+          {
+            error:
+              "A hirdető kérte a kísérők előzetes bejelentését. Kérjük, add meg, hány kísérővel érkezel (0, ha egyedül).",
           },
           400,
         );
@@ -1922,6 +1996,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         requesterAccountCreatedAt,
         requesterPhoneHash: phoneRec.phoneHash || undefined,
         viewingPurpose,
+        companionsCount,
         declarationLog: {
           version: declarationVersion,
           acceptedAt: now,
@@ -1930,6 +2005,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           ownerRuleAccepted: declarationOwnerRuleAccepted,
           legalConsequencesAccepted: declarationLegalConsequencesAccepted,
           legalNoticeViewed,
+          photoIdDeclarationAccepted: svSettings.requirePhotoIdOnArrival ? photoIdDeclarationAccepted : undefined,
         },
         slotId: slot.id,
         date: slot.date,
@@ -1939,7 +2015,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         message: message || undefined,
         status: "PENDING",
         reminder24hEnabled: body.reminder24hEnabled !== false,
-        reminder2hEnabled: Boolean(body.reminder2hEnabled),
+        reminder2hEnabled: body.reminder2hEnabled !== false,
         createdAt: now,
         updatedAt: now,
       };
@@ -1958,11 +2034,13 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         viewingId: viewing.id,
         acceptedAt: now,
         viewingPurpose,
+        companionsCount,
         declarationVersion,
         purposeAccepted: declarationPurposeAccepted || declarationAccepted,
         ownerRuleAccepted: declarationOwnerRuleAccepted,
         legalConsequencesAccepted: declarationLegalConsequencesAccepted,
         legalNoticeViewed,
+        photoIdDeclarationAccepted: svSettings.requirePhotoIdOnArrival ? photoIdDeclarationAccepted : undefined,
         ipHash,
         sessionMeta: uaShort,
       });
@@ -2023,6 +2101,43 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         return json({ error: "Az ingatlan már nem érhető el." }, 404);
       }
 
+      let safeVisitPass: any = null;
+      const svSettings = normalizeSafeVisitSettings(prop.safeVisitSettings);
+      if (isRequester && svSettings.enableSafeVisitCode) {
+        // Lazily provision SafeVisit code for pre-existing approved bookings that predate SafeVisit
+        if (!viewing.safeVisit) {
+          const creds = await createSafeVisitCredentials(env, {
+            viewingId: viewing.id,
+            date: viewing.date,
+            startTime: viewing.startTime,
+            endTime: viewing.endTime,
+            idCheckRequired: svSettings.requirePhotoIdOnArrival,
+          });
+          viewing.safeVisit = creds.record;
+          await writeJson(env, `${VIEWING_PREFIX}${viewingId}.json`, viewing);
+        }
+        const sv = viewing.safeVisit;
+        const [plainCode, plainQrToken] = await Promise.all([
+          sv.codeStatus === "ACTIVE" ? decryptSafeVisitSecret(env, sv.encryptedCode) : Promise.resolve(null),
+          sv.codeStatus === "ACTIVE" ? decryptSafeVisitSecret(env, sv.encryptedQrToken) : Promise.resolve(null),
+        ]);
+        safeVisitPass = {
+          code: plainCode,
+          qrToken: plainQrToken,
+          codeStatus: sv.codeStatus,
+          validFrom: sv.validFrom,
+          validUntil: sv.validUntil,
+          visitStage: sv.visitStage,
+          requesterName: viewing.requesterName,
+          phoneVerified: Boolean(viewing.requesterPhoneVerified),
+          declarationsAccepted: Boolean(viewing.declarationLog?.purposeAccepted || viewing.declarationLog?.acceptedAt),
+          agentExclusionAccepted: Boolean(viewing.declarationLog?.ownerRuleAccepted),
+          photoIdRequired: Boolean(sv.idCheckRequired || svSettings.requirePhotoIdOnArrival),
+          companionsRequired: svSettings.requireCompanionsDisclosure,
+          companionsCount: viewing.companionsCount,
+        };
+      }
+
       if (isRequester) {
         await appendAudit(env, viewing.propertyId, {
           action: "ADDRESS_ACCESSED",
@@ -2030,7 +2145,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           actorName: viewing.requesterName,
           viewingId: viewing.id,
           slotSummary: `${viewing.date} ${viewing.startTime}-${viewing.endTime}`,
-          details: "A jóváhagyott érdeklődő megnyitotta a pontos címet.",
+          details: "A jóváhagyott érdeklődő megnyitotta a pontos címet és a megtekintési igazolványt.",
         });
       }
 
@@ -2050,6 +2165,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
             : null,
         approvedAt: viewing.approvedAt,
         addressUnlockedAt: viewing.addressUnlockedAt,
+        safeVisitPass,
       });
     }
 
@@ -2075,9 +2191,27 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           return json({ error: "Csak függőben lévő kérelem hagyható jóvá." }, 409);
         }
         // Re-verify requester's phone on server before unlocking address
-        const phoneRec = await readJson<any>(env, `${PHONE_PREFIX}${viewing.requesterId}.json`);
+        const [phoneRec, prop] = await Promise.all([
+          readJson<any>(env, `${PHONE_PREFIX}${viewing.requesterId}.json`),
+          readJson<any>(env, `${PROPERTY_PREFIX}${viewing.propertyId}.json`),
+        ]);
         if (!phoneRec?.phoneVerified) {
           return json({ error: "Az érdeklődő telefonszáma nincs ellenőrizve." }, 409);
+        }
+        const svSettings = normalizeSafeVisitSettings(prop?.safeVisitSettings);
+        let testPreviewCode: string | undefined;
+        if (svSettings.enableSafeVisitCode) {
+          const creds = await createSafeVisitCredentials(env, {
+            viewingId: viewing.id,
+            date: viewing.date,
+            startTime: viewing.startTime,
+            endTime: viewing.endTime,
+            idCheckRequired: svSettings.requirePhotoIdOnArrival,
+          });
+          viewing.safeVisit = creds.record;
+          if (String(viewing.requesterId || "").startsWith("test_requester_")) {
+            testPreviewCode = creds.plainCode;
+          }
         }
         viewing.status = "APPROVED";
         viewing.approvedAt = now;
@@ -2094,7 +2228,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
             targetUserId: viewing.requesterId,
             viewingId: viewing.id,
             slotSummary: `${viewing.date} ${viewing.startTime}-${viewing.endTime}`,
-            details: "Hirdető jóváhagyta a megtekintést.",
+            details: "Hirdető jóváhagyta a megtekintést; egyedi SafeVisit megtekintési kód legenerálva.",
           }),
           appendAudit(env, viewing.propertyId, {
             action: "ADDRESS_UNLOCKED",
@@ -2104,10 +2238,11 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
             slotSummary: `${viewing.date} ${viewing.startTime}-${viewing.endTime}`,
             details: "A pontos cím jogosultsága megnyílt az ellenőrzött érdeklődő számára.",
           }),
+          // Privacy-by-design: lock-screen push NEVER includes exact street address or 6-digit code
           pushNotification(env, viewing.requesterId, {
             type: "VIEWING_APPROVED",
-            title: "Megtekintésed visszaigazolva",
-            body: `Jó hír! A hirdető elfogadta az ingatlan megtekintési kérelmedet (${viewing.date} ${viewing.startTime}).`,
+            title: "Ingatlanmegtekintésed visszaigazolva!",
+            body: "A hirdető jóváhagyta megtekintési kérelmedet. A pontos helyszín, az időpont és az egyedi megtekintési kód a Fiókom menüpontban érhető el.",
             propertyId: viewing.propertyId,
             viewingId: viewing.id,
             listingTitle: viewing.propertyTitle,
@@ -2116,11 +2251,20 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
             startTime: viewing.startTime,
             shortLocation: viewing.propertyPublicLocation,
             popupRequired: true,
-            pushTitle: "Megtekintés visszaigazolva",
-            pushBody: `Az ingatlan megtekintését a hirdető visszaigazolta. ${viewing.date} ${viewing.startTime}. Koppints a részletekért.`,
+            pushTitle: "Ingatlanmegtekintésed visszaigazolva!",
+            pushBody:
+              "A hirdető jóváhagyta megtekintési kérelmedet. A pontos helyszín, az időpont és az egyedi megtekintési kód a Fiókom menüpontban érhető el.",
           }),
         ]);
-        return json(enrichViewingReminders({ ...viewing, role: "owner" }));
+        const { safeVisit: rawSv, requesterPhoneHash: _h, ...safeResp } = viewing;
+        return json(
+          enrichViewingReminders({
+            ...safeResp,
+            safeVisit: sanitizeSafeVisitForList(rawSv),
+            testVerificationPreviewCode: testPreviewCode,
+            role: "owner",
+          }),
+        );
       }
 
       if (ownerAction === "PROPOSE_NEW_TIME") {
@@ -2140,6 +2284,10 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         viewing.proposedNote = note || undefined;
         viewing.approvedAt = undefined;
         viewing.addressUnlockedAt = undefined;
+        if (viewing.safeVisit) {
+          viewing.safeVisit.codeStatus = "INVALIDATED";
+          viewing.safeVisit.invalidatedAt = now;
+        }
         viewing.updatedAt = now;
         await writeJson(env, `${VIEWING_PREFIX}${viewingId}.json`, viewing);
 
@@ -2169,7 +2317,8 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
             pushBody: `A hirdető másik megtekintési időpontot javasolt (${proposedDate} ${proposedStartTime}). Koppints az elfogadáshoz.`,
           }),
         ]);
-        return json(enrichViewingReminders({ ...viewing, role: "owner" }));
+        const { safeVisit: rawSv, requesterPhoneHash: _h, ...safeResp } = viewing;
+        return json(enrichViewingReminders({ ...safeResp, safeVisit: sanitizeSafeVisitForList(rawSv), role: "owner" }));
       }
 
       if (ownerAction === "REJECT") {
@@ -2178,6 +2327,10 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         }
         viewing.status = "REJECTED";
         viewing.ownerResponseNote = note || undefined;
+        if (viewing.safeVisit) {
+          viewing.safeVisit.codeStatus = "INVALIDATED";
+          viewing.safeVisit.invalidatedAt = now;
+        }
         viewing.updatedAt = now;
         await writeJson(env, `${VIEWING_PREFIX}${viewingId}.json`, viewing);
 
@@ -2205,7 +2358,8 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
             popupRequired: true,
           }),
         ]);
-        return json(enrichViewingReminders({ ...viewing, role: "owner" }));
+        const { safeVisit: rawSv, requesterPhoneHash: _h, ...safeResp } = viewing;
+        return json(enrichViewingReminders({ ...safeResp, safeVisit: sanitizeSafeVisitForList(rawSv), role: "owner" }));
       }
 
       if (ownerAction === "REVOKE") {
@@ -2214,6 +2368,10 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         }
         viewing.status = "REVOKED_BY_OWNER";
         viewing.ownerResponseNote = note || "A hirdető visszavonta a megtekintés jóváhagyását.";
+        if (viewing.safeVisit) {
+          viewing.safeVisit.codeStatus = "INVALIDATED";
+          viewing.safeVisit.invalidatedAt = now;
+        }
         viewing.updatedAt = now;
         await writeJson(env, `${VIEWING_PREFIX}${viewingId}.json`, viewing);
 
@@ -2225,7 +2383,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
             targetUserId: viewing.requesterId,
             viewingId: viewing.id,
             slotSummary: `${viewing.date} ${viewing.startTime}-${viewing.endTime}`,
-            details: note || "Hirdető visszavonta a jóváhagyást; a pontos cím hozzáférése megszűnt.",
+            details: note || "Hirdető visszavonta a jóváhagyást; a pontos cím és a megtekintési kód érvénytelenítve lett.",
           }),
           pushNotification(env, viewing.requesterId, {
             type: "VIEWING_REVOKED",
@@ -2241,7 +2399,8 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
             popupRequired: true,
           }),
         ]);
-        return json(enrichViewingReminders({ ...viewing, role: "owner" }));
+        const { safeVisit: rawSv, requesterPhoneHash: _h, ...safeResp } = viewing;
+        return json(enrichViewingReminders({ ...safeResp, safeVisit: sanitizeSafeVisitForList(rawSv), role: "owner" }));
       }
 
       return json({ error: "Érvénytelen művelet." }, 400);
@@ -2256,7 +2415,10 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       if (viewing.status !== "PROPOSED_NEW_TIME" || !viewing.proposedDate || !viewing.proposedStartTime) {
         return json({ error: "Nincs elfogadható új időpont-javaslat." }, 409);
       }
-      const phoneRec = await readJson<any>(env, `${PHONE_PREFIX}${userId}.json`);
+      const [phoneRec, prop] = await Promise.all([
+        readJson<any>(env, `${PHONE_PREFIX}${userId}.json`),
+        readJson<any>(env, `${PROPERTY_PREFIX}${viewing.propertyId}.json`),
+      ]);
       if (!phoneRec?.phoneVerified) {
         return json({ error: "Ellenőrzött telefonszám szükséges." }, 403);
       }
@@ -2268,6 +2430,17 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       viewing.status = "APPROVED";
       viewing.approvedAt = now;
       viewing.addressUnlockedAt = now;
+      const svSettings = normalizeSafeVisitSettings(prop?.safeVisitSettings);
+      if (svSettings.enableSafeVisitCode) {
+        const creds = await createSafeVisitCredentials(env, {
+          viewingId: viewing.id,
+          date: viewing.date,
+          startTime: viewing.startTime,
+          endTime: viewing.endTime,
+          idCheckRequired: svSettings.requirePhotoIdOnArrival,
+        });
+        viewing.safeVisit = creds.record;
+      }
       viewing.updatedAt = now;
       await writeJson(env, `${VIEWING_PREFIX}${viewingId}.json`, viewing);
 
@@ -2279,7 +2452,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           actorName: viewing.requesterName,
           viewingId: viewing.id,
           slotSummary: `${viewing.date} ${viewing.startTime}-${viewing.endTime}`,
-          details: "Az érdeklődő elfogadta a hirdető által javasolt új időpontot; a pontos cím megnyílt.",
+          details: "Az érdeklődő elfogadta a hirdető által javasolt új időpontot; új SafeVisit kód generálva.",
         }),
         pushNotification(env, viewing.ownerId, {
           type: "VIEWING_APPROVED",
@@ -2290,10 +2463,11 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         }),
       ]);
 
-      return json(enrichViewingReminders({ ...viewing, role: "requester" }));
+      const { safeVisit: rawSv, requesterPhoneHash: _h, ...safeResp } = viewing;
+      return json(enrichViewingReminders({ ...safeResp, safeVisit: sanitizeSafeVisitForList(rawSv), role: "requester" }));
     }
 
-    // PATCH /api/real-estate/viewings/:id/cancel (Requester cancels; frees slot automatically)
+    // PATCH /api/real-estate/viewings/:id/cancel (Requester cancels; frees slot automatically & invalidates code)
     if (method === "PATCH" && viewingId && action === "cancel") {
       const viewing = await readJson<any>(env, `${VIEWING_PREFIX}${viewingId}.json`);
       if (!viewing || viewing.requesterId !== userId) {
@@ -2305,6 +2479,10 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
 
       const now = new Date().toISOString();
       viewing.status = "CANCELLED_BY_REQUESTER";
+      if (viewing.safeVisit) {
+        viewing.safeVisit.codeStatus = "INVALIDATED";
+        viewing.safeVisit.invalidatedAt = now;
+      }
       viewing.updatedAt = now;
       await writeJson(env, `${VIEWING_PREFIX}${viewingId}.json`, viewing);
 
@@ -2316,7 +2494,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           actorName: viewing.requesterName,
           viewingId: viewing.id,
           slotSummary: `${viewing.date} ${viewing.startTime}-${viewing.endTime}`,
-          details: "Az érdeklődő lemondta a megtekintést; az idősáv automatikusan felszabadult.",
+          details: "Az érdeklődő lemondta a megtekintést; az idősáv felszabadult és a megtekintési kód érvénytelenítve lett.",
         }),
         pushNotification(env, viewing.ownerId, {
           type: "VIEWING_CANCELLED",
@@ -2327,7 +2505,365 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         }),
       ]);
 
-      return json(enrichViewingReminders({ ...viewing, role: "requester" }));
+      const { safeVisit: rawSv, requesterPhoneHash: _h, ...safeResp } = viewing;
+      return json(enrichViewingReminders({ ...safeResp, safeVisit: sanitizeSafeVisitForList(rawSv), role: "requester" }));
+    }
+
+    // =========================================================================
+    // ILOLIT SAFEVISIT — OWNER ON-SITE VERIFICATION, ID CHECK, ARRIVAL & OUTCOME
+    // =========================================================================
+
+    // POST /api/real-estate/viewings/:id/verify-code (Atomic single-use verification by owner)
+    if (method === "POST" && viewingId && action === "verify-code") {
+      const viewingKey = `${VIEWING_PREFIX}${viewingId}.json`;
+      const obj = await env.MEDIA_BUCKET.get(viewingKey);
+      if (!obj) return json({ error: "A megtekintés nem található." }, 404);
+      let viewing: any;
+      try {
+        viewing = await obj.json();
+      } catch {
+        return json({ error: "A megtekintés adatai nem olvashatók." }, 500);
+      }
+      if (!viewing || viewing.ownerId !== userId) {
+        return json({ error: "Csak a hirdető ellenőrizheti a megtekintési kódot." }, 403);
+      }
+
+      const body = await context.request.json<any>().catch(() => ({}));
+      const rawCode = safeText(body.code, 20).replace(/\s+/g, "");
+      const rawQrToken = safeText(body.qrToken, 120);
+      if (!rawCode && !rawQrToken) {
+        return json({ error: "Add meg a 6 jegyű megtekintési kódot vagy olvasd be a QR-kódot." }, 400);
+      }
+
+      const isTestRequester = String(viewing.requesterId || "").startsWith("test_requester_");
+      const nowMs = Date.now();
+      const nowIso = new Date(nowMs).toISOString();
+
+      const eligibility = checkSafeVisitVerificationEligibility(
+        viewing.status,
+        viewing.safeVisit,
+        nowMs,
+        isTestRequester,
+      );
+
+      if (!eligibility.ok) {
+        const guidanceMap: Record<string, string> = {
+          not_approved: "A foglalás nem jóváhagyott állapotban van, vagy időközben lemondásra került.",
+          missing: "Ehhez a foglaláshoz nincs aktív megtekintési kód.",
+          invalidated: "Ez a megtekintési kód lemondás vagy módosítás miatt érvénytelenítésre került.",
+          used: "Ezt a megtekintési kódot már korábban felhasználták.",
+          locked: "Túl sok hibás próbálkozás miatt a kódellenőrzés ideiglenesen (15 percre) zárolva van.",
+          too_early: "A kód érvényességi időablaka még nem kezdődött el. Kérjük, próbáld meg a megtekintéshez közelebb.",
+          expired: "A kód érvényességi időablaka lejárt.",
+        };
+        await appendAudit(env, viewing.propertyId, {
+          action: "SAFEVISIT_VERIFY_FAILED",
+          actorId: userId,
+          targetUserId: viewing.requesterId,
+          viewingId: viewing.id,
+          slotSummary: `${viewing.date} ${viewing.startTime}-${viewing.endTime}`,
+          details: `Kódellenőrzés sikertelen (${eligibility.reason}).`,
+        });
+        return json(
+          {
+            valid: false,
+            reason: eligibility.reason,
+            title: "A megtekintési kód nem érvényes.",
+            guidance: `${guidanceMap[eligibility.reason] || ""} Kérjük, ellenőrizd a foglalás adatait, szükség esetén ne engedj be ismeretlen személyt, és egyeztess a fiókodban.`,
+          },
+          eligibility.reason === "locked" ? 429 : 400,
+        );
+      }
+
+      const sv = viewing.safeVisit;
+      let matched = false;
+      let methodUsed: "manual_code" | "qr_token" = "manual_code";
+      if (rawQrToken) {
+        methodUsed = "qr_token";
+        const qrHash = await sha256Hex(`sv-qr:${viewing.id}:${rawQrToken}`);
+        matched = timingSafeEqualHex(qrHash, String(sv.qrTokenHash || ""));
+      } else {
+        if (!/^\d{6}$/.test(rawCode)) {
+          return json(
+            {
+              valid: false,
+              reason: "invalid_format",
+              title: "A megtekintési kód nem érvényes.",
+              guidance: "A megtekintési kód pontosan 6 számjegyből áll. Kérjük, ellenőrizd a megadott számokat.",
+            },
+            400,
+          );
+        }
+        const codeHash = await sha256Hex(`sv-code:${viewing.id}:${rawCode}`);
+        matched = timingSafeEqualHex(codeHash, String(sv.codeHash || ""));
+      }
+
+      if (!matched) {
+        sv.failedAttempts = Number(sv.failedAttempts || 0) + 1;
+        if (sv.failedAttempts >= MAX_FAILED_VERIFY_ATTEMPTS) {
+          sv.lockedUntil = new Date(nowMs + VERIFY_LOCKOUT_MS).toISOString();
+        }
+        viewing.updatedAt = nowIso;
+        await writeJson(env, viewingKey, viewing);
+        await appendAudit(env, viewing.propertyId, {
+          action: "SAFEVISIT_VERIFY_FAILED",
+          actorId: userId,
+          targetUserId: viewing.requesterId,
+          viewingId: viewing.id,
+          slotSummary: `${viewing.date} ${viewing.startTime}-${viewing.endTime}`,
+          details: `Hibás megtekintési kód (${sv.failedAttempts}/${MAX_FAILED_VERIFY_ATTEMPTS}).`,
+        });
+        const remaining = Math.max(0, MAX_FAILED_VERIFY_ATTEMPTS - sv.failedAttempts);
+        return json(
+          {
+            valid: false,
+            reason: sv.lockedUntil ? "locked" : "mismatch",
+            title: "A megtekintési kód nem érvényes.",
+            guidance: sv.lockedUntil
+              ? "5 hibás próbálkozás után az ellenőrzés 15 percre zárolásra került. Szükség esetén ellenőrizd a foglalás adatait a fiókodban."
+              : `A megadott kód nem egyezik ehhez a foglaláshoz tartozó kóddal (hátralévő próbálkozások: ${remaining}). Kérjük, ellenőrizd a foglalás adatait, és ne engedj be ellenőrizetlen személyt.`,
+          },
+          sv.lockedUntil ? 429 : 400,
+        );
+      }
+
+      // Single-use atomic consumption with R2 conditional put (etagMatches)
+      sv.codeStatus = "USED";
+      sv.verifiedAt = nowIso;
+      sv.usedAt = nowIso;
+      sv.verifiedMethod = methodUsed;
+      sv.visitStage = "CODE_VERIFIED";
+      sv.failedAttempts = 0;
+      sv.lockedUntil = null;
+      viewing.updatedAt = nowIso;
+
+      const putResult = await env.MEDIA_BUCKET.put(viewingKey, JSON.stringify(viewing), {
+        httpMetadata: { contentType: "application/json" },
+        onlyIf: { etagMatches: obj.etag },
+      });
+
+      if (!putResult) {
+        return json(
+          {
+            valid: false,
+            reason: "used",
+            title: "A megtekintési kód nem érvényes.",
+            guidance: "A kódot időközben már felhasználták egy másik kérésben.",
+          },
+          409,
+        );
+      }
+
+      await appendAudit(env, viewing.propertyId, {
+        action: "SAFEVISIT_CODE_VERIFIED",
+        actorId: userId,
+        targetUserId: viewing.requesterId,
+        viewingId: viewing.id,
+        slotSummary: `${viewing.date} ${viewing.startTime}-${viewing.endTime}`,
+        details: `Egyedi megtekintési kód sikeresen ellenőrizve és felhasználva (${methodUsed === "qr_token" ? "QR-kód" : "6 jegyű kód"}).`,
+      });
+
+      return json({
+        valid: true,
+        title: "Érvényes megtekintési kód",
+        disclaimer:
+          "A kód az adott foglaláshoz való hozzáférést igazolja. A megjelent személy személyazonosságának ellenőrzésére önmagában nem alkalmas.",
+        requesterName: viewing.requesterName,
+        phoneVerified: Boolean(viewing.requesterPhoneVerified),
+        date: viewing.date,
+        startTime: viewing.startTime,
+        endTime: viewing.endTime,
+        declarationsAccepted: Boolean(viewing.declarationLog?.purposeAccepted || viewing.declarationLog?.acceptedAt),
+        agentExclusionAccepted: Boolean(viewing.declarationLog?.ownerRuleAccepted),
+        bookingApproved: true,
+        idCheckRequired: Boolean(sv.idCheckRequired),
+        companionsCount: viewing.companionsCount,
+        safeVisit: sanitizeSafeVisitForList(sv),
+      });
+    }
+
+    // POST /api/real-estate/viewings/:id/id-check (Owner records visual ID check outcome ONLY — NO ID data stored!)
+    if (method === "POST" && viewingId && action === "id-check") {
+      const viewingKey = `${VIEWING_PREFIX}${viewingId}.json`;
+      const viewing = await readJson<any>(env, viewingKey);
+      if (!viewing || viewing.ownerId !== userId) {
+        return json({ error: "A megtekintés nem található." }, 404);
+      }
+
+      const body = await context.request.json<any>().catch(() => ({}));
+      // Strict privacy-by-design server enforcement: reject any forbidden personal ID fields
+      const forbiddenKeys = [
+        "idNumber",
+        "documentNumber",
+        "idPhoto",
+        "documentCopy",
+        "photoData",
+        "imageBase64",
+        "birthDate",
+        "mothersName",
+        "idAddress",
+        "biometric",
+      ];
+      for (const k of forbiddenKeys) {
+        if (body[k] !== undefined && body[k] !== null && body[k] !== "") {
+          return json(
+            {
+              error:
+                "Adatvédelmi okokból igazolványkép, okmányszám vagy egyéb személyes okmányadat feltöltése és tárolása szigorúan tilos.",
+            },
+            400,
+          );
+        }
+      }
+
+      const result = safeText(body.result, 30) as SafeVisitIdCheckResult;
+      const allowedResults = new Set<SafeVisitIdCheckResult>([
+        "MATCHED",
+        "NOT_SHOWN",
+        "MISMATCH",
+        "DENIED_SAFETY",
+      ]);
+      if (!allowedResults.has(result)) {
+        return json({ error: "Érvénytelen személyazonosság-ellenőrzési státusz." }, 400);
+      }
+      if (!viewing.safeVisit) {
+        return json({ error: "Ehhez a megtekintéshez nincs aktív SafeVisit nyilvántartás." }, 409);
+      }
+
+      const nowIso = new Date().toISOString();
+      viewing.safeVisit.idCheckResult = result;
+      viewing.safeVisit.idCheckAt = nowIso;
+      if (result !== "MATCHED") {
+        viewing.safeVisit.visitStage = "DENIED_ENTRY";
+        viewing.safeVisit.outcome = "DENIED_ENTRY";
+        viewing.safeVisit.outcomeAt = nowIso;
+      }
+      viewing.updatedAt = nowIso;
+      await writeJson(env, viewingKey, viewing);
+
+      await appendAudit(env, viewing.propertyId, {
+        action: "SAFEVISIT_ID_CHECK_RECORDED",
+        actorId: userId,
+        targetUserId: viewing.requesterId,
+        viewingId: viewing.id,
+        slotSummary: `${viewing.date} ${viewing.startTime}-${viewing.endTime}`,
+        details: `Helyszíni szemrevételezéses igazolvány-ellenőrzés rögzítve (eredmény: ${result}; okmányadat nem került tárolásra).`,
+      });
+
+      return json({
+        ok: true,
+        safeVisit: sanitizeSafeVisitForList(viewing.safeVisit),
+      });
+    }
+
+    // POST /api/real-estate/viewings/:id/arrival (Owner marks "Megérkezés rögzítése")
+    if (method === "POST" && viewingId && action === "arrival") {
+      const viewingKey = `${VIEWING_PREFIX}${viewingId}.json`;
+      const viewing = await readJson<any>(env, viewingKey);
+      if (!viewing || viewing.ownerId !== userId) {
+        return json({ error: "A megtekintés nem található." }, 404);
+      }
+      if (viewing.status !== "APPROVED" || !viewing.safeVisit) {
+        return json({ error: "Csak jóváhagyott megtekintésnél rögzíthető megérkezés." }, 409);
+      }
+      if (!viewing.safeVisit.verifiedAt) {
+        return json({ error: "A megérkezés rögzítése előtt ellenőrizd a megtekintési kódot." }, 409);
+      }
+      if (viewing.safeVisit.idCheckRequired && viewing.safeVisit.idCheckResult !== "MATCHED") {
+        return json(
+          { error: "Az igazolvány szemrevételezéses egyezésének visszaigazolása szükséges a beléptetéshez." },
+          409,
+        );
+      }
+
+      const nowIso = new Date().toISOString();
+      viewing.safeVisit.visitStage = "ARRIVED_IN_PROGRESS";
+      viewing.safeVisit.arrivedAt = nowIso;
+      viewing.updatedAt = nowIso;
+      await writeJson(env, viewingKey, viewing);
+
+      await appendAudit(env, viewing.propertyId, {
+        action: "SAFEVISIT_ARRIVAL_RECORDED",
+        actorId: userId,
+        targetUserId: viewing.requesterId,
+        viewingId: viewing.id,
+        slotSummary: `${viewing.date} ${viewing.startTime}-${viewing.endTime}`,
+        details: "Hirdető rögzítette az érdeklődő megérkezését (Megérkezett – megtekintés folyamatban).",
+      });
+
+      return json({
+        ok: true,
+        safeVisit: sanitizeSafeVisitForList(viewing.safeVisit),
+      });
+    }
+
+    // POST /api/real-estate/viewings/:id/outcome (Owner records final outcome with timestamp)
+    if (method === "POST" && viewingId && action === "outcome") {
+      const viewingKey = `${VIEWING_PREFIX}${viewingId}.json`;
+      const viewing = await readJson<any>(env, viewingKey);
+      if (!viewing || viewing.ownerId !== userId) {
+        return json({ error: "A megtekintés nem található." }, 404);
+      }
+      const body = await context.request.json<any>().catch(() => ({}));
+      const outcome = safeText(body.outcome, 30) as "COMPLETED" | "NO_SHOW" | "DENIED_ENTRY" | "INTERRUPTED";
+      const note = safeText(body.note, 500);
+      const allowedOutcomes = new Set(["COMPLETED", "NO_SHOW", "DENIED_ENTRY", "INTERRUPTED"]);
+      if (!allowedOutcomes.has(outcome)) {
+        return json({ error: "Érvénytelen megtekintési záró státusz." }, 400);
+      }
+
+      const nowIso = new Date().toISOString();
+      if (!viewing.safeVisit) {
+        viewing.safeVisit = {
+          codeStatus: "INVALIDATED",
+          codeHash: "",
+          qrTokenHash: "",
+          encryptedCode: "",
+          encryptedQrToken: "",
+          validFrom: nowIso,
+          validUntil: nowIso,
+          windowBeforeMinutes: 30,
+          windowAfterMinutes: 60,
+          failedAttempts: 0,
+          lockedUntil: null,
+          verifiedAt: null,
+          usedAt: null,
+          idCheckRequired: false,
+          idCheckResult: null,
+          idCheckAt: null,
+          visitStage: outcome,
+          arrivedAt: null,
+          outcome,
+          outcomeAt: nowIso,
+          outcomeNote: note || null,
+          createdAt: nowIso,
+        };
+      } else {
+        viewing.safeVisit.visitStage = outcome;
+        viewing.safeVisit.outcome = outcome;
+        viewing.safeVisit.outcomeAt = nowIso;
+        viewing.safeVisit.outcomeNote = note || null;
+        if (outcome !== "COMPLETED" && viewing.safeVisit.codeStatus === "ACTIVE") {
+          viewing.safeVisit.codeStatus = "INVALIDATED";
+          viewing.safeVisit.invalidatedAt = nowIso;
+        }
+      }
+      viewing.updatedAt = nowIso;
+      await writeJson(env, viewingKey, viewing);
+
+      await appendAudit(env, viewing.propertyId, {
+        action: "SAFEVISIT_OUTCOME_RECORDED",
+        actorId: userId,
+        targetUserId: viewing.requesterId,
+        viewingId: viewing.id,
+        slotSummary: `${viewing.date} ${viewing.startTime}-${viewing.endTime}`,
+        details: `Megtekintés lezárva: ${outcome}${note ? ` – ${note}` : ""}`,
+      });
+
+      return json({
+        ok: true,
+        safeVisit: sanitizeSafeVisitForList(viewing.safeVisit),
+      });
     }
 
     // DELETE /api/real-estate/viewings/:id (Manually delete old or cancelled/rejected/revoked viewings)
@@ -2424,6 +2960,12 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const targetUserId = safeText(body.targetUserId, 120) || undefined;
+    const conditionUnmetCodes = new Set([
+      "refused_photo_id",
+      "invalid_or_missing_code",
+      "unannounced_companions",
+    ]);
+    const reportCategory = conditionUnmetCodes.has(reasonCode) ? "condition_unmet" : "intentional_abuse";
     const report = {
       id,
       reporterId: userId,
@@ -2431,6 +2973,7 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       viewingId: safeText(body.viewingId, 120) || undefined,
       targetUserId,
       reasonCode,
+      reportCategory,
       reason,
       details: safeText(body.details, 2000) || undefined,
       // Single owner report NEVER causes automatic permanent ban — goes to moderation review

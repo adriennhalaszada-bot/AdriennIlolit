@@ -85,6 +85,9 @@ export default function RealEstateCreateWizard() {
   const [agentInquiryPolicy, setAgentInquiryPolicy] = useState<AgentInquiryPolicy>("no_agents");
   const [verifiedBuyersOnly, setVerifiedBuyersOnly] = useState(false);
   const [sellerAccountType, setSellerAccountType] = useState<"private" | "agency_partner">("private");
+  const [safeVisitPhotoId, setSafeVisitPhotoId] = useState(false);
+  const [safeVisitCodeEnabled, setSafeVisitCodeEnabled] = useState(true);
+  const [safeVisitCompanions, setSafeVisitCompanions] = useState(false);
 
   // Step 2
   const [ownerPhoneShareMode, setOwnerPhoneShareMode] = useState<"none" | "approved_only">("none");
@@ -156,6 +159,11 @@ export default function RealEstateCreateWizard() {
     setAgentInquiryPolicy(existingProp.agentInquiryPolicy || "no_agents");
     setVerifiedBuyersOnly(Boolean(existingProp.verifiedBuyersOnly));
     setSellerAccountType(existingProp.sellerAccountType || "private");
+    if (existingProp.safeVisitSettings) {
+      setSafeVisitPhotoId(Boolean(existingProp.safeVisitSettings.requirePhotoIdOnArrival));
+      setSafeVisitCodeEnabled(existingProp.safeVisitSettings.enableSafeVisitCode !== false);
+      setSafeVisitCompanions(Boolean(existingProp.safeVisitSettings.requireCompanionsDisclosure));
+    }
     if (existingProp.specs) setSpecs(existingProp.specs);
     if (existingProp.rentalTerms) setRentalTerms(existingProp.rentalTerms);
     if (existingProp.sustainability) setSustainability(existingProp.sustainability);
@@ -230,6 +238,12 @@ export default function RealEstateCreateWizard() {
     agentInquiryPolicy,
     verifiedBuyersOnly,
     sellerAccountType,
+    safeVisitSettings: {
+      requireVerifiedPhone: true as const,
+      requirePhotoIdOnArrival: safeVisitPhotoId,
+      enableSafeVisitCode: safeVisitCodeEnabled,
+      requireCompanionsDisclosure: safeVisitCompanions,
+    },
     transactionType,
     category,
     subtype,
@@ -270,7 +284,7 @@ export default function RealEstateCreateWizard() {
           title: "Teszt aktiválás kész (fizetés nélkül)",
           description: "Megnyitjuk a Saját Ingatlan Admin felületet.",
         });
-        setLocation(`/real-estate/admin/${savedId}`);
+        setLocation(`/real-estate/admin/${savedId}?activated=1`);
         return;
       }
 
@@ -284,7 +298,7 @@ export default function RealEstateCreateWizard() {
       const checkout = await realEstateApi.startListingCheckout(savedId);
       if (checkout.activated) {
         toast({ title: "Ingatlanhirdetés aktiválva – megnyitjuk a Saját Ingatlan Admint" });
-        setLocation(`/real-estate/admin/${savedId}`);
+        setLocation(`/real-estate/admin/${savedId}?activated=1`);
         return;
       }
       if (checkout.checkoutUrl) {
@@ -562,6 +576,70 @@ export default function RealEstateCreateWizard() {
                       </span>
                     </span>
                   </label>
+
+                  {/* ILOLIT SafeVisit Viewing Safety Conditions (#5) */}
+                  <div className="space-y-2.5 border-t border-slate-200 pt-3.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-slate-900">
+                        ILOLIT SafeVisit – Megtekintési biztonsági feltételek
+                      </span>
+                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                        Alapdíj része · Külön díj nélkül
+                      </span>
+                    </div>
+
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 px-3.5 py-2.5 text-xs text-slate-700 flex items-center justify-between gap-2">
+                      <span>
+                        <strong className="text-slate-900">Ellenőrzött telefonszám</strong> – kötelező alapvédelem minden megtekintéshez
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-800 shrink-0">Aktív</span>
+                    </div>
+
+                    <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 bg-white p-3 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={safeVisitCodeEnabled}
+                        onChange={(e) => setSafeVisitCodeEnabled(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 accent-emerald-600"
+                      />
+                      <span>
+                        <strong className="block text-slate-900">Egyedi megtekintési kód és QR-kód</strong>
+                        <span className="mt-0.5 block text-slate-500">
+                          Jóváhagyott megtekintéseknél egyszer használatos 6 jegyű kód készül, amelyet érkezéskor ellenőrizhetsz.
+                        </span>
+                      </span>
+                    </label>
+
+                    <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 bg-white p-3 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={safeVisitPhotoId}
+                        onChange={(e) => setSafeVisitPhotoId(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 accent-emerald-600"
+                      />
+                      <span>
+                        <strong className="block text-slate-900">Fényképes igazolvány bemutatása érkezéskor</strong>
+                        <span className="mt-0.5 block text-slate-500">
+                          Előzetesen tájékoztatja az érdeklődőt, hogy érkezéskor érvényes fényképes igazolvány szemrevételezését kérheted (fotó vagy másolat nem készülhet).
+                        </span>
+                      </span>
+                    </label>
+
+                    <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 bg-white p-3 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={safeVisitCompanions}
+                        onChange={(e) => setSafeVisitCompanions(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 accent-emerald-600"
+                      />
+                      <span>
+                        <strong className="block text-slate-900">Kísérők előzetes bejelentése</strong>
+                        <span className="mt-0.5 block text-slate-500">
+                          A foglalás előtt az érdeklődőnek meg kell adnia, hány kísérővel érkezik.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
 
                   {/* Account type indicator for official agency partner path (#17) */}
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3 text-xs">
