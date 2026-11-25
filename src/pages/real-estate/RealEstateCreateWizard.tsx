@@ -505,23 +505,6 @@ export default function RealEstateCreateWizard() {
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <button
                       type="button"
-                      onClick={() => setAgentInquiryPolicy("no_agents")}
-                      className={`rounded-2xl border-2 p-4 text-left transition ${
-                        agentInquiryPolicy === "no_agents"
-                          ? "border-emerald-600 bg-white ring-1 ring-emerald-600/20"
-                          : "border-slate-200 bg-white hover:border-slate-300"
-                      }`}
-                    >
-                      <p className="text-xs font-bold text-slate-950">
-                        Nem kérek ingatlanközvetítői megkeresést
-                      </p>
-                      <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-                        Magánhirdetőknek ajánlott alapbeállítás. Kizárólag valódi vevői vagy bérlői érdeklődést fogadsz.
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
                       onClick={() => setAgentInquiryPolicy("allow_agents")}
                       className={`rounded-2xl border-2 p-4 text-left transition ${
                         agentInquiryPolicy === "allow_agents"
@@ -530,20 +513,36 @@ export default function RealEstateCreateWizard() {
                       }`}
                     >
                       <p className="text-xs font-bold text-slate-950">
-                        Fogadok ingatlanközvetítői megkeresést
+                        Fogadok ingatlanközvetítői megkereséseket.
                       </p>
                       <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-                        Engedélyezed, hogy ingatlanközvetítők is jelentkezzenek megtekintésre vagy együttműködésre.
+                        Engedélyezi, hogy ingatlanközvetítők is jelentkezzenek megtekintésre vagy együttműködésre.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAgentInquiryPolicy("no_agents")}
+                      className={`rounded-2xl border-2 p-4 text-left transition ${
+                        agentInquiryPolicy === "no_agents"
+                          ? "border-emerald-600 bg-white ring-1 ring-emerald-600/20"
+                          : "border-slate-200 bg-white hover:border-slate-300"
+                      }`}
+                    >
+                      <p className="text-xs font-bold text-slate-950">
+                        Nem fogadok ingatlanközvetítői megkereséseket.
+                      </p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
+                        Magánhirdetőknek ajánlott alapértelmezett beállítás.
                       </p>
                     </button>
                   </div>
 
-                  {agentInquiryPolicy === "no_agents" && (
-                    <p className="rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 py-2.5 text-xs font-medium text-emerald-950">
-                      A megtekintési rendszerben csak valódi vevői vagy bérlői érdeklődést fogadunk, a kéretlen
-                      üzletszerzés pedig jelenthető.
-                    </p>
-                  )}
+                  <p className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-xs leading-relaxed text-slate-700">
+                    Amennyiben nem fogad ingatlanközvetítői megkereséseket, az ingatlan személyes megtekintését
+                    kizárólag valós vásárlási vagy bérlési szándékkal rendelkező érdeklődők kérhetik. Az
+                    ingatlanközvetítői, ügyfélszerzési és egyéb üzletszerzési célú megkeresések tilosak.
+                  </p>
 
                   {/* Optional stricter verification filter (#18) */}
                   <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 bg-white p-3.5 text-xs">

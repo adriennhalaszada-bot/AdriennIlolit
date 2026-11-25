@@ -74,6 +74,10 @@ export interface ViewingDeclarationLog {
   version: string;
   acceptedAt: string;
   purpose: ViewingPurpose;
+  purposeAccepted?: boolean;
+  ownerRuleAccepted?: boolean;
+  legalConsequencesAccepted?: boolean;
+  legalNoticeViewed?: boolean;
 }
 
 export interface AbuseReportRecord {

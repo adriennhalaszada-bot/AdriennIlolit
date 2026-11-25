@@ -897,35 +897,39 @@ export default function RealEstateAdmin() {
                         />
                       </label>
 
-                      {/* Agent Inquiry Policy & Verified Buyers Only (always editable, #1, #18) */}
+                      {/* Agent Inquiry Policy & Verified Buyers Only (always editable, #2) */}
                       <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-                          <div className="text-xs">
-                            <p className="font-bold text-slate-900">Ingatlanközvetítői megkeresések</p>
-                            <p className="text-slate-500">
-                              Te döntöd el, fogadsz-e ingatlanközvetítői megkeresést.
-                            </p>
-                          </div>
-                          <div className="inline-flex shrink-0 rounded-xl border border-slate-200 bg-white p-1 text-xs font-bold">
-                            <button
-                              type="button"
-                              onClick={() => setEditAgentPolicy("no_agents")}
-                              className={`rounded-lg px-3 py-1.5 transition ${
-                                editAgentPolicy === "no_agents" ? "bg-emerald-600 text-white" : "text-slate-600"
-                              }`}
-                            >
-                              Nem kérek közvetítőt
-                            </button>
+                        <div className="space-y-2">
+                          <p className="text-xs font-bold text-slate-900">Ingatlanközvetítői megkeresések</p>
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                             <button
                               type="button"
                               onClick={() => setEditAgentPolicy("allow_agents")}
-                              className={`rounded-lg px-3 py-1.5 transition ${
-                                editAgentPolicy === "allow_agents" ? "bg-emerald-600 text-white" : "text-slate-600"
+                              className={`rounded-xl border-2 px-3.5 py-2.5 text-left text-xs font-bold transition ${
+                                editAgentPolicy === "allow_agents"
+                                  ? "border-emerald-600 bg-white text-slate-950"
+                                  : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                               }`}
                             >
-                              Fogadok közvetítőt
+                              Fogadok ingatlanközvetítői megkereséseket.
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditAgentPolicy("no_agents")}
+                              className={`rounded-xl border-2 px-3.5 py-2.5 text-left text-xs font-bold transition ${
+                                editAgentPolicy === "no_agents"
+                                  ? "border-emerald-600 bg-white text-slate-950"
+                                  : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                              }`}
+                            >
+                              Nem fogadok ingatlanközvetítői megkereséseket.
                             </button>
                           </div>
+                          <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] leading-relaxed text-slate-600">
+                            Amennyiben nem fogad ingatlanközvetítői megkereséseket, az ingatlan személyes megtekintését
+                            kizárólag valós vásárlási vagy bérlési szándékkal rendelkező érdeklődők kérhetik. Az
+                            ingatlanközvetítői, ügyfélszerzési és egyéb üzletszerzési célú megkeresések tilosak.
+                          </p>
                         </div>
                         <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
                           <input
@@ -1335,7 +1339,11 @@ export default function RealEstateAdmin() {
                                         )}
                                         {v.declarationLog && (
                                           <span className="rounded-lg border border-emerald-200 bg-emerald-50/70 px-2.5 py-1 font-semibold text-emerald-800">
-                                            Nyilatkozat elfogadva ({v.declarationLog.version})
+                                            {v.declarationLog.purposeAccepted &&
+                                            v.declarationLog.ownerRuleAccepted &&
+                                            v.declarationLog.legalConsequencesAccepted
+                                              ? `3/3 jogi nyilatkozat dokumentálva (${v.declarationLog.version})`
+                                              : `Nyilatkozat elfogadva (${v.declarationLog.version})`}
                                           </span>
                                         )}
                                       </div>

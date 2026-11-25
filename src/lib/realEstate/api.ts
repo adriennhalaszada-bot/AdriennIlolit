@@ -160,6 +160,10 @@ export const realEstateApi = {
     requesterAccountCreatedAt?: string;
     viewingPurpose: ViewingPurpose;
     declarationAccepted: boolean;
+    declarationPurposeAccepted?: boolean;
+    declarationOwnerRuleAccepted?: boolean;
+    declarationLegalConsequencesAccepted?: boolean;
+    legalNoticeViewed?: boolean;
     declarationVersion: string;
     message?: string;
     reminder24hEnabled?: boolean;

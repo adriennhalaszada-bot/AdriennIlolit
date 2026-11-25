@@ -22,6 +22,10 @@ import type { ApprovedViewingDetails, ViewingPurpose } from "@/lib/realEstate/ty
 import { PhoneVerificationModal } from "@/components/realestate/PhoneVerificationModal";
 import { ApproximateLocationMap } from "@/components/realestate/ApproximateLocationMap";
 import {
+  AntiSolicitationLegalModal,
+  type LegalDeclarationAcceptPayload,
+} from "@/components/realestate/AntiSolicitationLegalModal";
+import {
   AlertTriangle,
   ArrowLeft,
   BedDouble,
@@ -71,6 +75,7 @@ export default function RealEstateDetail() {
   const [submittingViewing, setSubmittingViewing] = useState(false);
   const [viewingSubmitted, setViewingSubmitted] = useState(false);
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
+  const [legalModalOpen, setLegalModalOpen] = useState(false);
   const [inlineDetails, setInlineDetails] = useState<ApprovedViewingDetails | null>(null);
   const [loadingInlineDetails, setLoadingInlineDetails] = useState(false);
   const [respondingBuyerAction, setRespondingBuyerAction] = useState(false);
@@ -193,37 +198,8 @@ export default function RealEstateDetail() {
     }
   };
 
-  const handleSubmitViewing = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!property || !selectedSlotId) return;
-    if (!viewingPurpose) {
-      toast({
-        title: "Válaszd ki a megtekintés célját",
-        description: "A megtekintési kérelem előtt kötelező megjelölni a megtekintés célját.",
-        variant: "destructive",
-      });
-      return;
-    }
-    const noAgents = (property.agentInquiryPolicy || "no_agents") === "no_agents";
-    if (noAgents && viewingPurpose === "real_estate_agent") {
-      toast({
-        title: "A hirdető ehhez az ingatlanhoz nem fogad ingatlanközvetítői megkeresést.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!declarationAccepted) {
-      toast({
-        title: "A nyilatkozat elfogadása kötelező",
-        description: "A folytatáshoz pipáld be a valódi érdeklődésről szóló nyilatkozatot.",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!phoneStatus?.phoneVerified) {
-      setPhoneModalOpen(true);
-      return;
-    }
+  const submitViewingToServer = async (legalPayload?: LegalDeclarationAcceptPayload) => {
+    if (!property || !selectedSlotId || !viewingPurpose) return;
 
     const nameToSend = requesterName.trim() || user?.fullName || user?.username || "ILOLIT érdeklődő";
     const emailVerified = Boolean(
@@ -244,11 +220,16 @@ export default function RealEstateDetail() {
         requesterAccountCreatedAt: accountCreatedAt,
         viewingPurpose,
         declarationAccepted: true,
+        declarationPurposeAccepted: legalPayload?.declarationPurposeAccepted ?? true,
+        declarationOwnerRuleAccepted: legalPayload?.declarationOwnerRuleAccepted ?? false,
+        declarationLegalConsequencesAccepted: legalPayload?.declarationLegalConsequencesAccepted ?? false,
+        legalNoticeViewed: legalPayload?.legalNoticeViewed ?? false,
         declarationVersion: VIEWING_DECLARATION_VERSION,
         message: viewingMessage.trim() || undefined,
         reminder24hEnabled: reminder24h,
         reminder2hEnabled: reminder2h,
       });
+      setLegalModalOpen(false);
       setViewingSubmitted(true);
       setSelectedSlotId("");
       setViewingPurpose("");
@@ -267,6 +248,47 @@ export default function RealEstateDetail() {
     } finally {
       setSubmittingViewing(false);
     }
+  };
+
+  const handleSubmitViewing = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!property || !selectedSlotId) return;
+    if (!viewingPurpose) {
+      toast({
+        title: "Válaszd ki a megtekintés célját",
+        description: "A megtekintési kérelem előtt kötelező megjelölni a megtekintés célját.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const noAgents = (property.agentInquiryPolicy || "no_agents") === "no_agents";
+    if (noAgents && viewingPurpose === "real_estate_agent") {
+      toast({
+        title: "A hirdető ehhez az ingatlanhoz nem fogad ingatlanközvetítői megkeresést.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!phoneStatus?.phoneVerified) {
+      setPhoneModalOpen(true);
+      return;
+    }
+
+    // Mandatory 3-checkbox legal modal whenever the seller prohibits agent inquiries (#4, #5, #6)
+    if (noAgents) {
+      setLegalModalOpen(true);
+      return;
+    }
+
+    if (!declarationAccepted) {
+      toast({
+        title: "A nyilatkozat elfogadása kötelező",
+        description: "A folytatáshoz pipáld be a nyilatkozatot.",
+        variant: "destructive",
+      });
+      return;
+    }
+    await submitViewingToServer();
   };
 
   const handleSendInquiry = async (e: React.FormEvent) => {
@@ -355,6 +377,15 @@ export default function RealEstateDetail() {
         onVerified={() => {
           refetchPhone();
           toast({ title: "Telefonszámod sikeresen igazolva" });
+        }}
+      />
+
+      <AntiSolicitationLegalModal
+        isOpen={legalModalOpen}
+        submitting={submittingViewing}
+        onClose={() => setLegalModalOpen(false)}
+        onConfirm={(payload) => {
+          void submitViewingToServer(payload);
         }}
       />
 
@@ -803,12 +834,37 @@ export default function RealEstateDetail() {
             />
           </div>
 
-          {/* RIGHT COLUMN: Viewing Booking Card + Message to Owner */}
-          <aside className="space-y-6 lg:col-span-4">
-            <div
-              id="viewing-booking-card"
-              className="sticky top-24 space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs"
-            >
+          {/* RIGHT COLUMN: Prominent Warning (#3) + Viewing Booking Card + Message to Owner */}
+          <aside className="space-y-4 lg:col-span-4">
+            <div className="sticky top-24 space-y-4">
+              {/* Prominent Warning directly above the booking section (#3) */}
+              {(property.agentInquiryPolicy || "no_agents") === "no_agents" && (
+                <div className="space-y-2.5 rounded-2xl border-2 border-rose-300 bg-rose-50 p-5 shadow-xs">
+                  <div className="flex items-start gap-2.5">
+                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-700" />
+                    <h2 className="text-sm font-black tracking-tight text-rose-950 sm:text-base">
+                      A HIRDETŐ INGATLANKÖZVETÍTŐI MEGKERESÉST NEM FOGAD!
+                    </h2>
+                  </div>
+                  <p className="text-xs leading-relaxed text-rose-950">
+                    A hirdető az ingatlanában kizárólag valós vásárlási vagy bérlési szándékkal rendelkező
+                    érdeklődőket fogad.
+                  </p>
+                  <p className="text-xs font-bold leading-relaxed text-rose-950">
+                    Ingatlanközvetítői megbízás megszerzése, közvetítői szolgáltatás felajánlása, ügyfélszerzés vagy
+                    egyéb üzletszerzés céljából az ingatlan személyes megtekintése nem engedélyezett.
+                  </p>
+                  <p className="border-t border-rose-200 pt-2 text-xs font-semibold leading-relaxed text-rose-900">
+                    A tilalom megsértése az ILOLIT platformról történő kizárást, valamint további jogi
+                    következményeket vonhat maga után.
+                  </p>
+                </div>
+              )}
+
+              <div
+                id="viewing-booking-card"
+                className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-xs"
+              >
               <div>
                 <h2 className="text-xl font-black text-slate-950">Szeretnéd személyesen megnézni?</h2>
                 <p className="mt-1 text-xs leading-relaxed text-slate-600">
@@ -1209,27 +1265,34 @@ export default function RealEstateDetail() {
                       )}
                   </div>
 
-                  {/* Mandatory Unchecked Declaration Checkbox (#4) */}
-                  <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-                    <span className="block text-xs font-bold text-slate-900">Nyilatkozat *</span>
-                    <label className="mt-2 flex cursor-pointer items-start gap-2.5 text-xs leading-relaxed text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={declarationAccepted}
-                        onChange={(e) => setDeclarationAccepted(e.target.checked)}
-                        className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-600"
-                        required
-                      />
-                      <span>{VIEWING_DECLARATION_TEXT}</span>
-                    </label>
-                  </div>
+                  {/* For allow_agents properties, keep inline declaration; for no_agents properties, clicking the button opens the mandatory 3-checkbox legal modal (#4, #5, #6) */}
+                  {(property.agentInquiryPolicy || "no_agents") === "allow_agents" ? (
+                    <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+                      <span className="block text-xs font-bold text-slate-900">Nyilatkozat *</span>
+                      <label className="mt-2 flex cursor-pointer items-start gap-2.5 text-xs leading-relaxed text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={declarationAccepted}
+                          onChange={(e) => setDeclarationAccepted(e.target.checked)}
+                          className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-600"
+                          required
+                        />
+                        <span>{VIEWING_DECLARATION_TEXT}</span>
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] font-medium text-slate-700">
+                      A <strong>„Megtekintési időpontot kérek”</strong> gomb megnyomásakor kötelező jogi nyilatkozati
+                      ablak nyílik meg. Mindhárom nyilatkozat elfogadása nélkül a kérelem nem küldhető el.
+                    </div>
+                  )}
 
                   <Button
                     type="submit"
                     disabled={
                       !selectedSlotId ||
                       !viewingPurpose ||
-                      !declarationAccepted ||
+                      ((property.agentInquiryPolicy || "no_agents") === "allow_agents" && !declarationAccepted) ||
                       ((property.agentInquiryPolicy || "no_agents") === "no_agents" &&
                         viewingPurpose === "real_estate_agent") ||
                       submittingViewing
@@ -1279,6 +1342,7 @@ export default function RealEstateDetail() {
                   )}
                 </div>
               )}
+            </div>
             </div>
           </aside>
         </div>

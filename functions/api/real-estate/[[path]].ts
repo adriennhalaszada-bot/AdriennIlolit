@@ -1683,7 +1683,11 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       const message = safeText(body.message, 1000);
       const viewingPurpose = safeText(body.viewingPurpose, 40);
       const declarationAccepted = body.declarationAccepted === true;
-      const declarationVersion = safeText(body.declarationVersion, 30) || "2026-11-v1";
+      const declarationPurposeAccepted = body.declarationPurposeAccepted === true;
+      const declarationOwnerRuleAccepted = body.declarationOwnerRuleAccepted === true;
+      const declarationLegalConsequencesAccepted = body.declarationLegalConsequencesAccepted === true;
+      const legalNoticeViewed = body.legalNoticeViewed === true;
+      const declarationVersion = safeText(body.declarationVersion, 30) || "2026-11-v2-legal";
       const requesterEmailVerified = body.requesterEmailVerified !== false;
       const requesterProfileComplete =
         body.requesterProfileComplete !== undefined
@@ -1754,12 +1758,24 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         return json({ error: "Kiadó ingatlannál nem választható vásárlási cél." }, 400);
       }
 
-      // Enforce seller's agent inquiry policy
+      // Enforce seller's agent inquiry policy & mandatory 3-part legal declaration when no_agents
       const agentPolicy = prop.agentInquiryPolicy === "allow_agents" ? "allow_agents" : "no_agents";
       if (agentPolicy === "no_agents" && viewingPurpose === "real_estate_agent") {
         return json(
           { error: "A hirdető ehhez az ingatlanhoz nem fogad ingatlanközvetítői megkeresést." },
           403,
+        );
+      }
+      if (
+        agentPolicy === "no_agents" &&
+        (!declarationPurposeAccepted || !declarationOwnerRuleAccepted || !declarationLegalConsequencesAccepted)
+      ) {
+        return json(
+          {
+            error:
+              "A megtekintési kérelem elküldéséhez mindhárom kötelező jogi nyilatkozat elfogadása szükséges.",
+          },
+          400,
         );
       }
 
@@ -1910,6 +1926,10 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
           version: declarationVersion,
           acceptedAt: now,
           purpose: viewingPurpose,
+          purposeAccepted: declarationPurposeAccepted || declarationAccepted,
+          ownerRuleAccepted: declarationOwnerRuleAccepted,
+          legalConsequencesAccepted: declarationLegalConsequencesAccepted,
+          legalNoticeViewed,
         },
         slotId: slot.id,
         date: slot.date,
@@ -1939,6 +1959,10 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         acceptedAt: now,
         viewingPurpose,
         declarationVersion,
+        purposeAccepted: declarationPurposeAccepted || declarationAccepted,
+        ownerRuleAccepted: declarationOwnerRuleAccepted,
+        legalConsequencesAccepted: declarationLegalConsequencesAccepted,
+        legalNoticeViewed,
         ipHash,
         sessionMeta: uaShort,
       });

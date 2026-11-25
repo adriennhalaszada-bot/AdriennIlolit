@@ -9,10 +9,10 @@ import type {
   ViewingStatus,
 } from "./types";
 
-export const VIEWING_DECLARATION_VERSION = "2026-11-v1";
+export const VIEWING_DECLARATION_VERSION = "2026-11-v2-legal";
 
 export const VIEWING_DECLARATION_TEXT =
-  "Kijelentem, hogy a megtekintést valódi vevői vagy bérlői érdeklődés céljából kérem, és nem ingatlanközvetítői megbízás megszerzése, szolgáltatás értékesítése vagy más üzletszerzési célból.";
+  "Kijelentem, hogy az ingatlan megtekintését kizárólag valós vásárlási vagy bérlési szándékkal kérem, és a jelen megtekintés során nem ingatlanközvetítőként, közvetítői megbízás megszerzése, ügyfélszerzés vagy egyéb üzletszerzési célból járok el.";
 
 export const REAL_ESTATE_COMMUNITY_RULE_TEXT =
   "Az ingatlanmegtekintési rendszer nem használható kéretlen ingatlanközvetítői megbízásszerzésre, szolgáltatásértékesítésre, tömeges üzletszerzésre vagy más, a hirdető által nem kért kereskedelmi megkeresésre.";
