@@ -184,6 +184,25 @@ export async function emitUnifiedNotification(
   const next = [record, ...existing].slice(0, 250);
   await writeJson(env, key, next);
 
+  // Immediately bump per-user realtime event state so connected clients update in 0-2.5s
+  try {
+    const userEvtKey = `data/system/events/user/${userId}.json`;
+    const prevEvt = (await readJson<any>(env, userEvtKey)) || { userId, version: 0, domains: {} };
+    const nextVer = Number(prevEvt.version || 0) + 1;
+    await writeJson(env, userEvtKey, {
+      userId,
+      version: nextVer,
+      domains: {
+        ...(prevEvt.domains || {}),
+        notifications: Number(prevEvt.domains?.notifications || 0) + 1,
+        ...(record.appointmentId ? { appointments: Number(prevEvt.domains?.appointments || 0) + 1 } : {}),
+      },
+      updatedAt: new Date().toISOString(),
+    });
+  } catch {
+    // Non-fatal
+  }
+
   if (options?.sendPush !== false) {
     await dispatchDevicePush(env, userId, {
       title: options?.pushTitle || record.title,

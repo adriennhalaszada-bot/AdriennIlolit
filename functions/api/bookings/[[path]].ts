@@ -1,5 +1,6 @@
 import { verifyToken } from "@clerk/backend";
 import { emitUnifiedNotification } from "../../_shared/unifiedNotifications";
+import { publishDomainEvent } from "../../_shared/realtimeAutomation";
 
 interface Env {
   MEDIA_BUCKET: R2Bucket;
@@ -50,6 +51,12 @@ async function writeBooking(env: Env, booking: any): Promise<void> {
   await env.MEDIA_BUCKET.put(`${BOOKING_PREFIX}${booking.id}.json`, JSON.stringify(booking), {
     httpMetadata: { contentType: "application/json" },
     customMetadata: { customerId: booking.customerId, providerOwnerId: booking.providerOwnerId },
+  });
+  await publishDomainEvent(env, {
+    domain: "bookings",
+    action: "booking_updated",
+    entityId: booking.id,
+    targetUserIds: [booking.customerId, booking.providerOwnerId].filter(Boolean),
   });
 }
 

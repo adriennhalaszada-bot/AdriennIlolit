@@ -9,6 +9,7 @@
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "deploy": "wrangler pages deploy dist/public --project-name ilolit",
+    "deploy:cron": "wrangler deploy --config workers/ilolit-cron/wrangler.jsonc",
     "pretypecheck": "pnpm build:api-client",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check": "pnpm typecheck && pnpm build"

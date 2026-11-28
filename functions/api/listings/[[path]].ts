@@ -1,3 +1,9 @@
+import {
+  isScheduledForFuture,
+  isTimestampExpired,
+  publishDomainEvent,
+} from "../../_shared/realtimeAutomation";
+
 interface Env {
   MEDIA_BUCKET: R2Bucket;
   CLERK_SECRET_KEY: string;
@@ -248,9 +254,16 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     const condition = url.searchParams.get("condition");
     const listingType = url.searchParams.get("listingType");
     const requestedStatus = url.searchParams.get("status");
+    const nowMs = Date.now();
     records = records.filter((listing: any) => {
       if (mine && listing.userId !== requestingUserId) return false;
-      if (!mine && (listing.status !== "ACTIVE" || listing.isSold)) return false;
+      const expiredNow = isTimestampExpired(listing.expiresAt, nowMs);
+      const scheduledFuture = listing.status === "SCHEDULED" && isScheduledForFuture(listing.scheduledPublishAt, nowMs);
+      const effectivelyActive =
+        (listing.status === "ACTIVE" || (listing.status === "SCHEDULED" && !scheduledFuture)) &&
+        !expiredNow &&
+        !listing.isSold;
+      if (!mine && !effectivelyActive) return false;
       if (mine && requestedStatus && requestedStatus !== "ALL" && listing.status !== requestedStatus) return false;
       if (categorySlug && listing.category?.slug !== categorySlug) return false;
       if (subcategorySlug && listing.subcategory?.slug !== subcategorySlug) return false;
@@ -285,6 +298,12 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     const listingId = crypto.randomUUID();
     const listing = normalizeListing(input, listingId, userId);
     await writeListing(context.env, listing);
+    await publishDomainEvent(context.env, {
+      domain: "listings",
+      action: "created",
+      entityId: listingId,
+      targetUserIds: [userId],
+    });
     return json(listing, 201);
   }
 
@@ -295,6 +314,12 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     const input = await context.request.json<any>();
     const listing = normalizeListing(input, id, userId, existing);
     await writeListing(context.env, listing);
+    await publishDomainEvent(context.env, {
+      domain: "listings",
+      action: "updated",
+      entityId: id,
+      targetUserIds: [userId],
+    });
     return json(listing);
   }
 
@@ -303,6 +328,12 @@ export async function onRequest(context: PagesContext): Promise<Response> {
     if (!existing) return json({ error: "A hirdetés nem található." }, 404);
     if (existing.userId !== userId) return json({ error: "Nincs jogosultságod a törléshez." }, 403);
     await context.env.MEDIA_BUCKET.delete(`${LISTING_PREFIX}${id}.json`);
+    await publishDomainEvent(context.env, {
+      domain: "listings",
+      action: "deleted",
+      entityId: id,
+      targetUserIds: [userId],
+    });
     return json({ success: true });
   }
 

@@ -1,4 +1,5 @@
 import { verifyToken } from "@clerk/backend";
+import { markStripeEventProcessed, publishDomainEvent } from "../../_shared/realtimeAutomation";
 
 interface Env {
   MEDIA_BUCKET: R2Bucket;
@@ -221,14 +222,24 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       return json({ error: "Érvénytelen Stripe-aláírás." }, 400);
     }
     const event = JSON.parse(payload);
+    // Strict idempotency guard: never process the same Stripe event twice
+    if (event?.id && !(await markStripeEventProcessed(context.env, String(event.id), String(event.type || "")))) {
+      return json({ received: true, deduplicated: true });
+    }
     const object = event?.data?.object || {};
     if (event.type === "checkout.session.completed" && object.metadata?.kind === "booking_deposit" && object.metadata?.bookingId) {
-      await updateBookingPayment(context.env, object.metadata.bookingId, {
+      const updatedBooking = await updateBookingPayment(context.env, object.metadata.bookingId, {
         status: object.payment_status === "paid" ? "paid" : "pending",
         amount: Number(object.amount_total || 0),
         stripeCheckoutSessionId: object.id || "",
         stripePaymentIntentId: object.payment_intent || "",
         paidAt: object.payment_status === "paid" ? new Date().toISOString() : undefined,
+      });
+      await publishDomainEvent(context.env, {
+        domain: "payments",
+        action: "booking_deposit_paid",
+        entityId: object.metadata.bookingId,
+        targetUserIds: [updatedBooking?.customerId, updatedBooking?.providerOwnerId].filter(Boolean),
       });
     } else if (event.type === "checkout.session.completed" && object.metadata?.kind === "listing_promotion" && object.metadata?.listingId) {
       await activateListingPromotion(context.env, object.metadata.listingId, Number(object.metadata.days) === 7 ? 7 : 1, {
@@ -238,10 +249,36 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         stripePaymentIntentId: object.payment_intent || "",
         paidAt: object.payment_status === "paid" ? new Date().toISOString() : undefined,
       });
+      await publishDomainEvent(context.env, {
+        domain: "listings",
+        action: "promotion_activated",
+        entityId: object.metadata.listingId,
+      });
     } else if (event.type === "checkout.session.completed" && object.metadata?.kind === "marketplace_purchase" && object.metadata?.transactionId) {
-      if (object.payment_status === "paid") await completeMarketplacePayment(context.env, object.metadata.transactionId, object);
+      if (object.payment_status === "paid") {
+        const tx = await completeMarketplacePayment(context.env, object.metadata.transactionId, object);
+        await publishDomainEvent(context.env, {
+          domain: "payments",
+          action: "marketplace_paid",
+          entityId: object.metadata.transactionId,
+          targetUserIds: [tx?.buyerId, tx?.sellerId].filter(Boolean),
+        });
+        await publishDomainEvent(context.env, {
+          domain: "listings",
+          action: "sold",
+          entityId: tx?.listingId,
+        });
+      }
     } else if (event.type === "checkout.session.completed" && object.metadata?.kind === "real_estate_listing" && object.metadata?.propertyId) {
-      if (object.payment_status === "paid") await activateRealEstateListing(context.env, object.metadata.propertyId, object);
+      if (object.payment_status === "paid") {
+        const prop = await activateRealEstateListing(context.env, object.metadata.propertyId, object);
+        await publishDomainEvent(context.env, {
+          domain: "real_estate",
+          action: "activated_paid",
+          entityId: object.metadata.propertyId,
+          targetUserIds: [prop?.ownerId].filter(Boolean),
+        });
+      }
     } else if (event.type === "checkout.session.completed" && object.client_reference_id) {
       await updateSubscription(context.env, object.client_reference_id, {
         status: "active",
@@ -251,6 +288,13 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         checkoutSessionId: object.id || "",
         activatedAt: new Date().toISOString(),
       });
+      await publishDomainEvent(context.env, {
+        domain: "subscriptions",
+        action: "activated",
+        entityId: object.client_reference_id,
+        targetUserIds: [object.client_reference_id],
+      });
+      await publishDomainEvent(context.env, { domain: "providers", action: "subscription_active" });
     }
     if (event.type === "customer.subscription.deleted" && object.metadata?.ownerId) {
       await updateSubscription(context.env, object.metadata.ownerId, {
@@ -260,6 +304,13 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         stripeSubscriptionId: object.id || "",
         cancelledAt: new Date().toISOString(),
       });
+      await publishDomainEvent(context.env, {
+        domain: "subscriptions",
+        action: "cancelled",
+        entityId: object.metadata.ownerId,
+        targetUserIds: [object.metadata.ownerId],
+      });
+      await publishDomainEvent(context.env, { domain: "providers", action: "subscription_cancelled" });
     }
     if (event.type === "customer.subscription.updated" && object.metadata?.ownerId) {
       const status = ["active", "trialing", "past_due", "unpaid"].includes(object.status) ? object.status : "inactive";
@@ -272,6 +323,13 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         cancelAtPeriodEnd: object.cancel_at_period_end === true,
         updatedAt: new Date().toISOString(),
       });
+      await publishDomainEvent(context.env, {
+        domain: "subscriptions",
+        action: "updated",
+        entityId: object.metadata.ownerId,
+        targetUserIds: [object.metadata.ownerId],
+      });
+      await publishDomainEvent(context.env, { domain: "providers", action: "subscription_updated" });
     }
     return json({ received: true });
   }

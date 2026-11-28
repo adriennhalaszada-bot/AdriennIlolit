@@ -1,5 +1,6 @@
 import { verifyToken } from "@clerk/backend";
 import { buildAppointmentLinks, emitUnifiedNotification } from "../../_shared/unifiedNotifications";
+import { publishDomainEvent, type RealtimeDomain } from "../../_shared/realtimeAutomation";
 
 interface Env {
   MEDIA_BUCKET: R2Bucket;
@@ -72,6 +73,30 @@ async function writeJson(env: Env, key: string, value: unknown, customMetadata?:
     httpMetadata: { contentType: "application/json" },
     customMetadata,
   });
+  let domain: RealtimeDomain | null = null;
+  let privateOnly = false;
+  if (key.startsWith(VEHICLE_PREFIX)) domain = "vehicles";
+  else if (key.startsWith(BOOKING_PREFIX)) {
+    domain = "appointments";
+    privateOnly = true;
+  } else if (key.startsWith(MESSAGE_PREFIX)) {
+    domain = "messages";
+    privateOnly = true;
+  } else if (key.startsWith(FAVORITE_PREFIX) || key.startsWith(SAVED_SEARCH_PREFIX)) {
+    domain = "favorites";
+    privateOnly = true;
+  }
+  if (domain) {
+    const rec = value as any;
+    const targets = [rec?.ownerId, rec?.requesterId, customMetadata?.ownerId].filter(Boolean);
+    await publishDomainEvent(env, {
+      domain,
+      action: "updated",
+      entityId: rec?.id,
+      targetUserIds: targets.length ? targets : undefined,
+      privateOnly,
+    });
+  }
 }
 
 async function listJsonPrefix<T = any>(env: Env, prefix: string): Promise<T[]> {

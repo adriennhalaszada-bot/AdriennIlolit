@@ -1,5 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
+  // ILOLIT Cloudflare Pages fő projekt konfiguráció.
+  // Társ Cloudflare Cron Worker (* * * * *): workers/ilolit-cron/wrangler.jsonc
   "name": "ilolit",
   "pages_build_output_dir": "./dist/public",
   "compatibility_date": "2026-08-22",

@@ -1,4 +1,5 @@
 import { verifyToken } from "@clerk/backend";
+import { isSubscriptionActiveNow, publishDomainEvent } from "../../_shared/realtimeAutomation";
 
 interface Env {
   MEDIA_BUCKET: R2Bucket;
@@ -143,13 +144,19 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
         return json({ error: "Publikáláshoz legalább egy szolgáltatás és egy aktív idősáv szükséges." }, 400);
       }
       const beautySubscriptionRequired = provider.category === "Szépség- és egészségipar";
-      const subscriptionActive = provider.subscription?.status === "active" || provider.subscription?.status === "trialing";
+      const subscriptionActive = isSubscriptionActiveNow(provider.subscription);
       if (provider.isPublished && beautySubscriptionRequired && !subscriptionActive) {
         return json({ error: "A szépségipari profil közzétételéhez aktív előfizetés szükséges." }, 402);
       }
       await context.env.MEDIA_BUCKET.put(`${PREFIX}${id}.json`, JSON.stringify(provider), {
         httpMetadata: { contentType: "application/json" },
         customMetadata: { owner: ownerId, updatedAt: provider.updatedAt },
+      });
+      await publishDomainEvent(context.env, {
+        domain: "providers",
+        action: "updated",
+        entityId: id,
+        targetUserIds: [ownerId],
       });
       return json(provider);
     }
@@ -158,7 +165,11 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
 
   if (method === "GET" && route[0]) {
     const provider = await readProvider(context.env, route[0]);
-    if (!provider || !provider.isPublished) return json({ error: "A szolgáltató nem található." }, 404);
+    const expiredSub =
+      provider?.category === "Szépség- és egészségipar" &&
+      provider?.subscription &&
+      !isSubscriptionActiveNow(provider.subscription);
+    if (!provider || !provider.isPublished || expiredSub) return json({ error: "A szolgáltató nem található." }, 404);
     // Contact details and the exact address remain private by default. A later
     // explicit provider opt-in may expose selected business contact channels.
     const { ownerId: _ownerId, email: _email, phone: _phone, address: _address, profileImages: _profileImages, subscription: _subscription, ...publicProvider } = provider;
@@ -166,10 +177,19 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
   }
 
   if (method === "GET") {
+    const nowMs = Date.now();
     const listed = await context.env.MEDIA_BUCKET.list({ prefix: PREFIX, limit: 500 });
     const providers = (await Promise.all(listed.objects.map((object) =>
       readProvider(context.env, object.key.slice(PREFIX.length, -5)),
-    ))).filter((provider) => provider?.isPublished).map(({ ownerId: _ownerId, email: _email, phone: _phone, address: _address, profileImages: _profileImages, subscription: _subscription, ...provider }) => provider);
+    )))
+      .filter((provider) => {
+        if (!provider?.isPublished) return false;
+        if (provider.category === "Szépség- és egészségipar" && provider.subscription && !isSubscriptionActiveNow(provider.subscription, nowMs)) {
+          return false;
+        }
+        return true;
+      })
+      .map(({ ownerId: _ownerId, email: _email, phone: _phone, address: _address, profileImages: _profileImages, subscription: _subscription, ...provider }) => provider);
     return json({ items: providers, total: providers.length });
   }
 

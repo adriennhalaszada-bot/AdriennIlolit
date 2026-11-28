@@ -5,6 +5,7 @@ import { useGetMe } from "@workspace/api-client-react";
 import { Layout } from "@/components/layout/Layout";
 import { useUnifiedAppointments } from "@/context/UnifiedAppointmentsContext";
 import { useNotifications } from "@/context/NotificationsContext";
+import { useRealtimeSync } from "@/context/RealtimeSyncContext";
 import {
   APPOINTMENT_STATUS_META,
   formatHuDate,
@@ -117,6 +118,7 @@ export function Dashboard({ forcedTab, highlightAppointmentId }: DashboardProps 
     refreshAll,
   } = useUnifiedAppointments();
   const { unreadCount: legacyUnread } = useNotifications();
+  const { isDeveloper } = useRealtimeSync();
   const totalUnreadNotifications = unifiedUnread + legacyUnread;
 
   const [activeTab, setActiveTab] = useState<DashboardTabId>(() =>
@@ -310,6 +312,25 @@ export function Dashboard({ forcedTab, highlightAppointmentId }: DashboardProps 
                   badge={totalUnreadNotifications}
                   onClick={() => navigateTab("notifications")}
                 />
+
+                {/* Kizárólag fejlesztői jogosultsággal látható Rendszerüzemeltetés menü */}
+                {isDeveloper && (
+                  <div className="mt-2 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-2">
+                    <div className="px-2 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-800">
+                      Rendszerüzemeltetés
+                    </div>
+                    <Link
+                      href="/admin/system-ops"
+                      className="mt-1 flex w-full items-center justify-between rounded-xl bg-white px-3 py-2 text-left text-xs font-bold text-slate-900 shadow-2xs transition hover:bg-emerald-600 hover:text-white"
+                    >
+                      <span className="flex items-center gap-2 truncate">
+                        <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        <span className="truncate">Háttérfolyamatok és Cloudflare automatizálás</span>
+                      </span>
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                    </Link>
+                  </div>
+                )}
 
                 <button
                   type="button"

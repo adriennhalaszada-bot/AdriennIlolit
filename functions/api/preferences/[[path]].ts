@@ -1,4 +1,5 @@
 import { verifyToken } from "@clerk/backend";
+import { publishDomainEvent } from "../../_shared/realtimeAutomation";
 
 interface Env {
   MEDIA_BUCKET: R2Bucket;
@@ -75,6 +76,12 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     await context.env.MEDIA_BUCKET.put(key, JSON.stringify(body), {
       httpMetadata: { contentType: "application/json" },
       customMetadata: { owner: ownerId, section: requestedSection, updatedAt: new Date().toISOString() },
+    });
+    await publishDomainEvent(context.env, {
+      domain: requestedSection === "notifications" ? "notifications" : "favorites",
+      action: `${requestedSection}_updated`,
+      targetUserIds: [ownerId],
+      privateOnly: true,
     });
     return json({ success: true });
   }

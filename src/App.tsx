@@ -43,6 +43,7 @@ import { ShopPage } from "./pages/ShopPage";
 import { BusinessCommissionDashboard } from "./pages/BusinessCommissionDashboard";
 import { AdminCategoriesPage } from "./pages/AdminCategories";
 import { AdminDisputes } from "./pages/AdminDisputes";
+import DeveloperSystemOps from "./pages/DeveloperSystemOps";
 import { MediaManagerPage } from "./pages/MediaManagerPage";
 import RealEstate from "./pages/RealEstate";
 import RealEstateCreateWizard from "./pages/real-estate/RealEstateCreateWizard";
@@ -59,6 +60,7 @@ import { FavoritesProvider } from "./context/FavoritesContext";
 import { SavedSearchesProvider } from "./context/SavedSearchesContext";
 import { NotificationsProvider } from "./context/NotificationsContext";
 import { UnifiedAppointmentsProvider } from "./context/UnifiedAppointmentsContext";
+import { RealtimeSyncProvider } from "./context/RealtimeSyncContext";
 import { ComparisonProvider } from "./context/ComparisonContext";
 import {
   PropertyAppointmentDeepLink,
@@ -382,6 +384,8 @@ function AppRouterInner() {
       <Route path="/beauty/roadmap"><Redirect to="/beauty" /></Route>
       <Route path="/admin/categories" component={AdminCategoriesPage} />
       <Route path="/admin/disputes" component={AdminDisputes} />
+      <Route path="/admin/system-ops" component={DeveloperSystemOps} />
+      <Route path="/system-ops" component={DeveloperSystemOps} />
 
       <Route path="/checkout/success" component={CheckoutSuccess} />
       <Route path="/checkout/cancel" component={CheckoutCancel} />
@@ -491,7 +495,7 @@ class SafeClerkProvider extends Component<{ children: ReactNode }, { hasError: b
 
 function AutoCacheInvalidator() {
   useEffect(() => {
-    const CURRENT_VER = "v10.0_20261125_vehicles_module";
+    const CURRENT_VER = "v11.0_20261128_realtime_cron_automation";
     const saved = localStorage.getItem("ilolit_app_ver");
     if (saved !== CURRENT_VER) {
       localStorage.setItem("ilolit_app_ver", CURRENT_VER);
@@ -535,7 +539,9 @@ function App() {
                     >
                       <SafeClerkTokenSetter />
                       <UnifiedAppointmentsProvider>
-                        <AppRouterInner />
+                        <RealtimeSyncProvider>
+                          <AppRouterInner />
+                        </RealtimeSyncProvider>
                       </UnifiedAppointmentsProvider>
                     </ClerkProvider>
                   </ErrorBoundary>

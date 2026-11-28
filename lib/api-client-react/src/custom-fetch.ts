@@ -326,6 +326,23 @@ async function parseSuccessBody(
   }
 }
 
+function inferRealtimeDomainFromUrl(url: string): string | null {
+  const path = url.toLowerCase();
+  if (path.includes("/api/listings")) return "listings";
+  if (path.includes("/api/real-estate")) return "real_estate";
+  if (path.includes("/api/vehicles")) return "vehicles";
+  if (path.includes("/api/providers")) return "providers";
+  if (path.includes("/api/bookings")) return "bookings";
+  if (path.includes("/api/appointments")) return "appointments";
+  if (path.includes("/api/conversations")) return "messages";
+  if (path.includes("/api/preferences")) return "favorites";
+  if (path.includes("/api/billing") || path.includes("/api/transactions")) return "payments";
+  if (path.includes("/api/system/ops")) return "system_ops";
+  if (path.includes("/api/system/coupons")) return "coupons";
+  if (path.includes("/api/auth") || path.includes("/api/users")) return "profile";
+  return null;
+}
+
 export async function customFetch<T = unknown>(
   input: RequestInfo | URL,
   options: CustomFetchOptions = {},
@@ -363,8 +380,9 @@ export async function customFetch<T = unknown>(
   }
 
   const requestInfo = { method, url: resolveUrl(input) };
+  const fetchCacheMode: RequestCache | undefined = init.cache ?? "no-store";
 
-  let response = await fetch(input, { ...init, method, headers });
+  let response = await fetch(input, { ...init, method, headers, cache: fetchCacheMode });
 
   // Clerk session tokens are short lived. A tab left open for a while can
   // therefore receive a 401 even though the user is still signed in. Refresh
@@ -374,7 +392,7 @@ export async function customFetch<T = unknown>(
     const freshToken = await _authTokenGetter({ skipCache: true });
     if (freshToken) {
       headers.set("authorization", `Bearer ${freshToken}`);
-      response = await fetch(input, { ...init, method, headers });
+      response = await fetch(input, { ...init, method, headers, cache: fetchCacheMode });
     }
   }
 
@@ -383,5 +401,15 @@ export async function customFetch<T = unknown>(
     throw new ApiError(response, errorData, requestInfo);
   }
 
-  return (await parseSuccessBody(response, responseType, requestInfo)) as T;
+  const parsed = (await parseSuccessBody(response, responseType, requestInfo)) as T;
+
+  // Immediate client-side & cross-tab cache invalidation on every successful mutation
+  if (method !== "GET" && method !== "HEAD" && typeof window !== "undefined") {
+    const domain = inferRealtimeDomainFromUrl(requestInfo.url);
+    if (domain) {
+      window.dispatchEvent(new CustomEvent("ilolit:local-mutation", { detail: { domain, method, url: requestInfo.url } }));
+    }
+  }
+
+  return parsed;
 }

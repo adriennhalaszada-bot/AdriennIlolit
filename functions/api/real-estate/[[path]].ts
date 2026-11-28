@@ -1,5 +1,6 @@
 import { verifyToken } from "@clerk/backend";
 import { buildAppointmentLinks, emitUnifiedNotification } from "../../_shared/unifiedNotifications";
+import { publishDomainEvent, type RealtimeDomain } from "../../_shared/realtimeAutomation";
 import {
   checkSafeVisitVerificationEligibility,
   createSafeVisitCredentials,
@@ -234,6 +235,30 @@ async function writeJson(
     httpMetadata: { contentType: "application/json" },
     customMetadata,
   });
+  let domain: RealtimeDomain | null = null;
+  let privateOnly = false;
+  if (key.startsWith(PROPERTY_PREFIX)) domain = "real_estate";
+  else if (key.startsWith(VIEWING_PREFIX)) {
+    domain = "appointments";
+    privateOnly = true;
+  } else if (key.startsWith(MESSAGE_PREFIX)) {
+    domain = "messages";
+    privateOnly = true;
+  } else if (key.startsWith(FAVORITE_PREFIX)) {
+    domain = "favorites";
+    privateOnly = true;
+  }
+  if (domain) {
+    const rec = value as any;
+    const targets = [rec?.ownerId, rec?.requesterId, customMetadata?.ownerId].filter(Boolean);
+    await publishDomainEvent(env, {
+      domain,
+      action: "updated",
+      entityId: rec?.id,
+      targetUserIds: targets.length ? targets : undefined,
+      privateOnly,
+    });
+  }
 }
 
 function safeText(value: unknown, max: number): string {

@@ -1,4 +1,6 @@
 import { verifyToken } from "@clerk/backend";
+import { emitUnifiedNotification } from "../../_shared/unifiedNotifications";
+import { publishDomainEvent } from "../../_shared/realtimeAutomation";
 
 interface Env { MEDIA_BUCKET: R2Bucket; CLERK_SECRET_KEY: string }
 type Context = EventContext<Env, string, Record<string, unknown>>;
@@ -92,6 +94,22 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       createdAt: now,
     };
     await save(context.env, conversation);
+    await emitUnifiedNotification(context.env, listing.userId, {
+      category: "PIACTER",
+      eventType: "GENERAL",
+      title: "Új üzeneted érkezett",
+      body: `Érdeklődő üzenetet küldött: ${listing.title || "Hirdetés"}.`,
+      listingId,
+      webUrl: `/messages/${conversation.id}`,
+      popupRequired: false,
+    });
+    await publishDomainEvent(context.env, {
+      domain: "messages",
+      action: "conversation_created",
+      entityId: conversation.id,
+      targetUserIds: [currentUserId, listing.userId],
+      privateOnly: true,
+    });
     return json(publicConversation(conversation, currentUserId), 201);
   }
 
@@ -109,6 +127,25 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     const message = { id: crypto.randomUUID(), content, contentType: "text", senderId: currentUserId, readBy: [currentUserId], createdAt: new Date().toISOString() };
     conversation.messages = [...(conversation.messages ?? []), message].slice(-1000);
     await save(context.env, conversation);
+    const recipientId = conversation.buyerId === currentUserId ? conversation.sellerId : conversation.buyerId;
+    if (recipientId) {
+      await emitUnifiedNotification(context.env, recipientId, {
+        category: "PIACTER",
+        eventType: "GENERAL",
+        title: "Új üzenet",
+        body: content.slice(0, 120),
+        listingId: conversation.listingId,
+        webUrl: `/messages/${conversation.id}`,
+        popupRequired: false,
+      });
+    }
+    await publishDomainEvent(context.env, {
+      domain: "messages",
+      action: "message_sent",
+      entityId: conversation.id,
+      targetUserIds: [conversation.buyerId, conversation.sellerId].filter(Boolean),
+      privateOnly: true,
+    });
     return json(message, 201);
   }
 
@@ -118,6 +155,13 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
       readBy: message.readBy?.includes(currentUserId) ? message.readBy : [...(message.readBy ?? []), currentUserId],
     }));
     await save(context.env, conversation);
+    await publishDomainEvent(context.env, {
+      domain: "messages",
+      action: "marked_read",
+      entityId: conversation.id,
+      targetUserIds: [currentUserId],
+      privateOnly: true,
+    });
     return json({ success: true });
   }
 

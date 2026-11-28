@@ -1,4 +1,5 @@
 import { verifyToken } from "@clerk/backend";
+import { publishDomainEvent } from "../../_shared/realtimeAutomation";
 
 interface Env { MEDIA_BUCKET: R2Bucket; CLERK_SECRET_KEY: string }
 type Context = EventContext<Env, string, Record<string, unknown>>;
@@ -81,6 +82,19 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     tx.confirmedAt = new Date().toISOString();
     tx.updatedAt = tx.confirmedAt;
     await write(context.env, tx);
+    await publishDomainEvent(context.env, {
+      domain: "payments",
+      action: "transaction_completed",
+      entityId: tx.id,
+      targetUserIds: [tx.buyerId, tx.sellerId].filter(Boolean),
+    });
+    await publishDomainEvent(context.env, {
+      domain: "commissions",
+      action: "commission_accrued",
+      entityId: tx.id,
+      targetUserIds: [tx.sellerId].filter(Boolean),
+      privateOnly: true,
+    });
     return json(tx);
   }
 
@@ -94,6 +108,12 @@ export const onRequest: PagesFunction<Env> = async (rawContext) => {
     tx.dispute = { reason, openedBy: ownerId, openedAt: new Date().toISOString(), status: "OPEN" };
     tx.updatedAt = new Date().toISOString();
     await write(context.env, tx);
+    await publishDomainEvent(context.env, {
+      domain: "payments",
+      action: "transaction_disputed",
+      entityId: tx.id,
+      targetUserIds: [tx.buyerId, tx.sellerId].filter(Boolean),
+    });
     return json(tx);
   }
 
